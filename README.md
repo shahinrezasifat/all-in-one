@@ -1,12 +1,18 @@
 <p align="center">
-  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="All in One Android media app logo" width="112">
+  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="All in One app logo" width="96">
 </p>
 
-# All in One
+<h1 align="center">All in One</h1>
 
-[Download Android APK](https://github.com/shahinrezasifat1999/all-in-one/releases/latest)
+<p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
-All in One is a Flutter Android app for downloading videos from supported websites, streaming movies from integrated providers, and keeping personal media in a PIN- or fingerprint-protected vault. Use the built-in browser to detect downloadable media, choose a source in the movie player, and organize saved files in one app.
+<p align="center">
+  <a href="https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/all-in-one-v1.0.3.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.3 directly" width="300"></a>
+</p>
+
+<p align="center">
+  Android 7.0+ · <a href="#android-screenshots">See the app</a> · <a href="#download-and-install-on-android">Install guide</a> · <a href="https://github.com/shahinrezasifat1999/all-in-one/releases/latest">All APK variants</a>
+</p>
 
 ## What can you do with All in One?
 
@@ -22,7 +28,16 @@ All in One is useful if you regularly switch between a web browser, a video down
 
 ## Android screenshots
 
-Captured in the Android app. Click an image to inspect the full screenshot.
+### Home and Movies
+
+| Home | Movies |
+| :---: | :---: |
+| [<img src="docs/media/home-video-discovery.jpg" alt="Home screen with the video link field, platform shortcuts, and trending videos" width="250">](docs/media/home-video-discovery.jpg) | [<img src="docs/media/movies-catalog.jpg" alt="Main Movies screen with a featured title, catalog categories, and trending movies" width="250">](docs/media/movies-catalog.jpg) |
+| Paste a video link or open a platform shortcut. | Browse featured titles, movies, series, anime, and genres. |
+
+### Downloads and Vault
+
+Click any screenshot to view it at full size.
 
 | YouTube 4K picker | YouTube audio options | Active download |
 | :---: | :---: | :---: |
@@ -34,8 +49,6 @@ Captured in the Android app. Click an image to inspect the full screenshot.
 
 The YouTube images show the formats listed for that video. The download and Vault images use the same demo MP4 served from the emulator's local test server. Movie sources and available resolutions vary by title and provider.
 
-[View the Home screen with its video link field, platform shortcuts, and trending feed](docs/media/home-video-discovery.jpg).
-
 <details>
 <summary>Play the animated app tour</summary>
 
@@ -45,7 +58,7 @@ The YouTube images show the formats listed for that video. The download and Vaul
 
 ## Download and install on Android
 
-1. Open the latest release and download the APK from **Assets**. [Latest Android release](https://github.com/shahinrezasifat1999/all-in-one/releases/latest)
+1. Select **Download Android APK** above for the universal build. [Direct APK download](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/all-in-one-v1.0.3.apk)
 2. Open the APK and follow Android’s install prompts. **Android 7.0 or later (API 24+)** is required.
 3. Open **All in One**. Set up the Private Vault from the app if you want to protect personal media.
 
