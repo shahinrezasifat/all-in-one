@@ -40,6 +40,19 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "snaptube_pure/app_update"
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "getInstalledVersion") {
+                @Suppress("DEPRECATION")
+                val info = packageManager.getPackageInfo(packageName, 0)
+                result.success(info.versionName)
+            } else {
+                result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "snaptube_pure/vault_auth"
         ).setMethodCallHandler { call, result ->
             if (call.method == "authenticate") authenticateVault(result)

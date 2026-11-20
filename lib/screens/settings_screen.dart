@@ -1,7 +1,10 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/app_update_service.dart';
 import '../services/download_manager.dart';
 import '../services/image_cache_service.dart';
 import '../services/movie_repository_service.dart';
@@ -17,6 +20,25 @@ import 'zangetsu_providers_hub_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  static const String _githubUsername = 'shahinrezasifat1999';
+  static const String _githubProfile = 'https://github.com/$_githubUsername';
+
+  Future<void> _openGithub(BuildContext context) async {
+    try {
+      if (await launchUrl(
+        Uri.parse(_githubProfile),
+        mode: LaunchMode.externalApplication,
+      )) {
+        return;
+      }
+    } on PlatformException {
+      // no handler installed
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Could not open GitHub.')));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +94,7 @@ class SettingsScreen extends StatelessWidget {
                     24 + MediaQuery.paddingOf(context).bottom,
                   ),
                   children: [
-                    _developerCard(accent, isDark),
+                    _developerCard(context, accent, isDark),
                     const SizedBox(height: 24),
 
                     _sectionTitle(
@@ -382,105 +404,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
 
-                    _glass(
-                      isDark: isDark,
-                      accent: accent,
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.primaryGradient,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: const Icon(
-                                  Icons.bolt_rounded,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'All in One',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.accentGold.withValues(
-                                    alpha: .14,
-                                  ),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppColors.accentGold.withValues(
-                                      alpha: .3,
-                                    ),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'v7.67.0',
-                                  style: TextStyle(
-                                    color: AppColors.accentGold,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'Download videos from the web, stream movies from integrated sources, and protect personal media in a private vault with biometric unlock.',
-                          ),
-                          const SizedBox(height: 14),
-                          _aboutLine(
-                            Icons.layers_rounded,
-                            'Flutter Cross-Platform',
-                            'Linux · Android · PC · Web',
-                            secondaryText,
-                          ),
-                          const SizedBox(height: 10),
-                          _aboutLine(
-                            Icons.verified_rounded,
-                            '100% Unlocked',
-                            'No ads · No tracking · No paywalls',
-                            secondaryText,
-                          ),
-                          const SizedBox(height: 8),
-                          const Divider(),
-                          Material(
-                            type: MaterialType.transparency,
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                Icons.person_outline,
-                                color: accent,
-                              ),
-                              title: const Text('Developer'),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => const DeveloperScreen(),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _aboutCard(context, accent, isDark, secondaryText),
                   ],
                 ),
               ),
@@ -632,47 +556,261 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _aboutLine(
-    IconData icon,
-    String title,
-    String subtitle,
+  // ---------------------------------------------------------------------------
+  // About card — modern, tidy, with a clear developer entry
+  // ---------------------------------------------------------------------------
+  Widget _aboutCard(
+    BuildContext context,
+    Color accent,
+    bool isDark,
     Color secondaryText,
   ) {
-    return Row(
-      children: [
-        Icon(icon, size: 17, color: AppColors.accentGreen),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return _glass(
+      isDark: isDark,
+      accent: accent,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: .28),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.bolt_rounded,
+                  color: Colors.white,
+                  size: 25,
                 ),
               ),
-              Text(
-                subtitle,
-                style: TextStyle(color: secondaryText, fontSize: 11),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'All in One',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        color: isDark
+                            ? Colors.white
+                            : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Media Browser & Downloader',
+                      style: TextStyle(
+                        color: secondaryText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FutureBuilder<String?>(
+                future: installedAndroidVersion,
+                builder: (context, snapshot) {
+                  final version = snapshot.data;
+                  if (version == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      'v$version',
+                      style: const TextStyle(
+                        color: AppColors.accentGold,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 14),
+          Text(
+            'Download videos from the web, stream movies from integrated '
+            'sources, and protect personal media in a private vault with '
+            'biometric unlock.',
+            style: TextStyle(color: secondaryText, fontSize: 12.5, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _aboutFeature(
+                  Icons.layers_rounded,
+                  'Cross-Platform',
+                  'Android · PC · Web',
+                  accent,
+                  secondaryText,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _aboutFeature(
+                  Icons.verified_rounded,
+                  '100% Unlocked',
+                  'No ads · No tracking',
+                  AppColors.accentGreen,
+                  secondaryText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DeveloperScreen(),
+                ),
+              ),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: accent.withValues(alpha: .22)),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 17,
+                      backgroundColor: accent.withValues(alpha: .16),
+                      child: Icon(
+                        Icons.person_outline_rounded,
+                        size: 17,
+                        color: accent,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Developer',
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.lightTextPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            'Profile, GitHub & contact',
+                            style: TextStyle(
+                              color: secondaryText,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded, color: accent),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aboutFeature(
+    IconData icon,
+    String title,
+    String subtitle,
+    Color color,
+    Color secondaryText,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: .18)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: secondaryText, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ---------------------------------------------------------------------------
   // Modern developer profile card
   // ---------------------------------------------------------------------------
-  Widget _developerCard(Color accent, bool isDark) {
+  Widget _developerCard(BuildContext context, Color accent, bool isDark) {
     final secondary = isDark
         ? AppColors.darkTextSecondary
         : AppColors.lightTextSecondary;
     final nameColor = isDark ? Colors.white : AppColors.lightTextPrimary;
 
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openGithub(context),
+        borderRadius: BorderRadius.circular(26),
+        child: _developerCardBody(accent, isDark, secondary, nameColor),
+      ),
+    );
+  }
+
+  Widget _developerCardBody(
+    Color accent,
+    bool isDark,
+    Color secondary,
+    Color nameColor,
+  ) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(26),
       child: Stack(
@@ -685,8 +823,8 @@ class SettingsScreen extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: isDark
-                    ? [const Color(0x1C7957CE), const Color(0x141420)]
-                    : [const Color(0xECF0FF), const Color(0xFFFDF4F7)],
+                    ? [const Color(0xFF1C7957), const Color(0xFF141420)]
+                    : [const Color(0xFFECF0FF), const Color(0xFFFDF4F7)],
               ),
               borderRadius: BorderRadius.circular(26),
               border: Border.all(color: accent.withValues(alpha: .24)),
@@ -794,23 +932,44 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.favorite_rounded,
-                      size: 13,
-                      color: AppColors.accentRed,
+                // GitHub link — forced LTR so the URL never renders reversed
+                // under a Bengali/RTL locale.
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Built with care for the community',
-                      style: TextStyle(
-                        color: secondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: .10),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: accent.withValues(alpha: .20)),
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        Icon(Icons.code_rounded, size: 15, color: accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'github.com/$_githubUsername',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.open_in_new_rounded,
+                          size: 14,
+                          color: accent,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

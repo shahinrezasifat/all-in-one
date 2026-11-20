@@ -19,6 +19,12 @@ flutter run
 
 To build a release APK, run `flutter build apk --release`. To publish under your own signing key, configure `android/key.properties` locally.
 
+### Android updates
+
+On startup, All in One checks the latest GitHub Release. If its version is newer than the installed version, the app displays the release notes and requires an update before continuing. **Update Now** opens the APK download in the browser. Android handles the installation. If the check is unavailable, the app starts normally.
+
+For each new release, increase the version and build number in `pubspec.yaml`, sign the APK with the same key as the previous release, and attach the universal APK to a GitHub Release tagged `v<version>` (for example, `v1.0.2`). [GitHub Releases](https://github.com/shahinrezasifat1999/all-in-one/releases)
+
 On Android, the bundled `ytdlp_flutter` package uses youtubedl-android to run yt-dlp. The downloader uses FFmpeg for merging and QuickJS for JavaScript processing. [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [youtubedl-android](https://github.com/JunkFood02/youtubedl-android)
 
 ## Developer

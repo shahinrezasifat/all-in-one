@@ -13,7 +13,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
-      final developerTile = find.widgetWithText(ListTile, 'Developer');
+      final developerTile = find.text('Developer');
       for (
         var scroll = 0;
         scroll < 12 && developerTile.hitTestable().evaluate().isEmpty;

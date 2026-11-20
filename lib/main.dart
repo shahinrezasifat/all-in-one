@@ -23,6 +23,7 @@ import 'services/virtual_folder_service.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'widgets/storage_permission_gate.dart';
+import 'widgets/startup_update_gate.dart';
 import 'widgets/youtube_popup_player.dart';
 
 import 'dart:io';
@@ -111,7 +112,9 @@ class TubPureApp extends StatelessWidget {
               PointerDeviceKind.trackpad,
             },
           ),
-          home: const StoragePermissionGate(child: MainNavigationScreen()),
+          home: const StartupUpdateGate(
+            child: StoragePermissionGate(child: MainNavigationScreen()),
+          ),
         );
       },
     );

@@ -6,6 +6,7 @@ import 'package:snaptube_pure/screens/home_screen.dart';
 void main() {
   testWidgets('Tub Pure smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(const TubPureApp());
+    await tester.pump(const Duration(seconds: 2));
     expect(find.byType(TubPureApp), findsOneWidget);
   });
 
