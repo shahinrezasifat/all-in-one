@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:pub_semver/pub_semver.dart';
 
-const _repository = 'shahinrezasifat1999/all-in-one';
+const _repository = 'shahinrezasifat/all-in-one';
 const _updateChannel = MethodChannel('snaptube_pure/app_update');
 
 class AppUpdate {

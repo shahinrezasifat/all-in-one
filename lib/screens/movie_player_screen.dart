@@ -10,6 +10,7 @@ import '../models/movie_model.dart';
 import '../services/download_manager.dart';
 import '../services/extractor_service.dart';
 import '../services/permission_service.dart';
+import '../services/playback_controls.dart';
 import '../services/player_service.dart';
 import '../services/preference_service.dart';
 import '../services/stream_fallback_service.dart';
@@ -86,6 +87,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   // Gesture Controls (MX Player Style)
   double _brightness = 0.75;
   double _volume = 0.80;
+  double _volumeHud = 0.80;
+  final _playbackControls = PlaybackControls();
+  bool _brightnessGesture = false;
+  bool _firstVerticalUpdate = true;
   bool _showBrightnessHud = false;
   bool _showVolumeHud = false;
   bool _showSeekHud = false;
@@ -217,6 +222,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
   @override
   void dispose() {
+    unawaited(_playbackControls.restoreBrightness());
     _videoController?.removeListener(_videoListener);
     _videoController?.dispose();
     _hudDismissTimer?.cancel();
@@ -846,16 +852,24 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   }
 
   // MX Player Vertical Swipe Gestures
-  void _onVerticalDragUpdate(DragUpdateDetails details, double screenWidth) {
+  Future<void> _onVerticalDragUpdate(DragUpdateDetails details) async {
     if (_isLocked) return;
 
-    final isRightSide = details.globalPosition.dx > (screenWidth / 2);
-    final delta = -details.primaryDelta! / 250;
+    final isRightSide = _brightnessGesture;
+    final delta = -(details.primaryDelta ?? 0) / 250;
+    final first = _firstVerticalUpdate;
+    _firstVerticalUpdate = false;
+    final systemLevel = await _playbackControls.adjust(
+      brightness: isRightSide,
+      delta: delta,
+      first: first,
+    );
+    if (!mounted || _isLocked) return;
 
     if (isRightSide) {
       // Right side: Brightness
       setState(() {
-        _brightness = (_brightness + delta).clamp(0.05, 1.0);
+        _brightness = systemLevel ?? (_brightness + delta).clamp(0.05, 1.0);
         _showBrightnessHud = true;
         _showVolumeHud = false;
         _showSeekHud = false;
@@ -863,12 +877,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     } else {
       // Left side: Volume
       setState(() {
-        _volume = (_volume + delta).clamp(0.0, 1.0);
+        if (systemLevel == null) _volume = (_volume + delta).clamp(0.0, 1.0);
+        _volumeHud = systemLevel ?? _volume;
         _showVolumeHud = true;
         _showBrightnessHud = false;
         _showSeekHud = false;
       });
-      _videoController?.setVolume(_volume);
+      if (systemLevel == null) _videoController?.setVolume(_volume);
     }
 
     _hudDismissTimer?.cancel();
@@ -938,8 +953,11 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: _toggleControls,
-              onVerticalDragUpdate: (details) =>
-                  _onVerticalDragUpdate(details, size.width),
+              onVerticalDragStart: (details) {
+                _brightnessGesture = details.localPosition.dx >= size.width / 2;
+                _firstVerticalUpdate = true;
+              },
+              onVerticalDragUpdate: _onVerticalDragUpdate,
               onHorizontalDragUpdate: _onHorizontalDragUpdate,
               onHorizontalDragEnd: _onHorizontalDragEnd,
               child: Row(
@@ -994,12 +1012,12 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           if (_showVolumeHud)
             Center(
               child: _buildHudCard(
-                icon: _volume == 0
+                icon: _volumeHud == 0
                     ? Icons.volume_off_rounded
                     : Icons.volume_up_rounded,
                 label: 'Volume',
-                value: _volume,
-                percentage: '${(_volume * 100).toInt()}%',
+                value: _volumeHud,
+                percentage: '${(_volumeHud * 100).toInt()}%',
               ),
             ),
           if (_showSeekHud)

@@ -22,7 +22,7 @@ import 'zangetsu_providers_hub_screen.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static const String _githubUsername = 'shahinrezasifat1999';
+  static const String _githubUsername = 'shahinrezasifat';
   static const String _githubProfile = 'https://github.com/$_githubUsername';
 
   Future<void> _openGithub(BuildContext context) async {

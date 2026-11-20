@@ -9,7 +9,7 @@ import 'package:http/testing.dart';
 import 'package:snaptube_pure/services/app_update_service.dart';
 import 'package:snaptube_pure/widgets/startup_update_gate.dart';
 
-const _releases = 'https://github.com/shahinrezasifat1999/all-in-one/releases';
+const _releases = 'https://github.com/shahinrezasifat/all-in-one/releases';
 const _release = '$_releases/tag/v1.10.0';
 const _apk = '$_releases/download/v1.10.0/all-in-one.apk';
 
@@ -21,7 +21,7 @@ MockClient _githubRelease({
   return MockClient((request) async {
     expect(
       request.url.toString(),
-      'https://api.github.com/repos/shahinrezasifat1999/all-in-one/releases/latest',
+      'https://api.github.com/repos/shahinrezasifat/all-in-one/releases/latest',
     );
     return http.Response.bytes(
       utf8.encode(

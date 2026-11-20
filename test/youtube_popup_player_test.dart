@@ -21,6 +21,15 @@ void main() {
     final orientations = <Object?>[];
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const playbackControls = MethodChannel('snaptube_pure/playback_controls');
+    final playbackCalls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(playbackControls, (call) async {
+      playbackCalls.add(call);
+      return call.method == 'brightness' ? 0.65 : 0.4;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(playbackControls, null),
+    );
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'SystemChrome.setPreferredOrientations') {
         orientations.add(call.arguments);
@@ -78,6 +87,15 @@ void main() {
     );
 
     final y = tester.getCenter(find.byTooltip('Pause')).dy;
+    for (final (x, method) in [(345.0, 'brightness'), (45.0, 'volume')]) {
+      final gesture = await tester.startGesture(Offset(x, y));
+      await gesture.moveBy(const Offset(0, -25));
+      await gesture.moveBy(const Offset(0, -25));
+      await gesture.up();
+      await tester.pump();
+      expect(playbackCalls.last.method, method);
+      expect(playbackCalls.last.arguments['delta'], greaterThan(0));
+    }
     final right = await tester.startGesture(Offset(45, y));
     await right.moveBy(const Offset(28, 0));
     await right.moveBy(const Offset(80, 0));
@@ -137,5 +155,6 @@ void main() {
     player.toggleLoop();
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 100));
+    expect(playbackCalls.last.method, 'restoreBrightness');
   });
 }

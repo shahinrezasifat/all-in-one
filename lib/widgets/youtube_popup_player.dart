@@ -12,6 +12,7 @@ import '../services/bookmark_service.dart';
 import '../services/download_manager.dart';
 import '../services/system_ui_service.dart';
 import '../services/player_service.dart';
+import '../services/playback_controls.dart';
 import '../services/search_service.dart';
 import '../theme/app_colors.dart';
 import 'analyze_download_flow.dart';
@@ -136,6 +137,9 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
   }
 
   void _restoreOrientationIfHidden() {
+    if (!PlayerService.instance.isExpanded) {
+      unawaited(_playbackControls.restoreBrightness());
+    }
     if (_fullscreen && !PlayerService.instance.isExpanded)
       _setFullscreen(false);
   }
@@ -180,6 +184,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
   bool _isDisliked = false;
 
   // On-screen HUD state for MX-player style swipe gestures
+  final _playbackControls = PlaybackControls();
+  bool _brightnessGesture = false;
+  bool _firstVerticalUpdate = true;
+  double _volumeHud = 0.8;
   bool _showBrightnessHUD = false;
   bool _showVolumeHUD = false;
   Timer? _hudTimer;
@@ -208,6 +216,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
   @override
   void dispose() {
     PlayerService.instance.removeListener(_restoreOrientationIfHidden);
+    unawaited(_playbackControls.restoreBrightness());
     if (_fullscreen) unawaited(_requestOrientation(false));
     _hudTimer?.cancel();
     _doubleTapTimer?.cancel();
@@ -1160,39 +1169,52 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
             onHorizontalDragCancel: !canSeek
                 ? null
                 : () => _finishSeek(player, commit: false),
-            onVerticalDragUpdate: player.isLocked
+            onVerticalDragStart: player.isLocked
                 ? null
                 : (details) {
+                    _brightnessGesture =
+                        details.localPosition.dx >= surfaceWidth / 2;
+                    _firstVerticalUpdate = true;
+                  },
+            onVerticalDragUpdate: player.isLocked
+                ? null
+                : (details) async {
                     if (_pinching) return;
-                    final isLeft = details.localPosition.dx < surfaceWidth / 2;
+                    final brightness = _brightnessGesture;
+                    final first = _firstVerticalUpdate;
+                    _firstVerticalUpdate = false;
                     final delta =
-                        -details.primaryDelta! / (surfaceHeight * 0.7);
-
-                    if (isLeft) {
-                      // Adjust Brightness
-                      final newB = (player.brightness + delta).clamp(0.0, 1.0);
-                      player.setBrightness(newB);
-                      setState(() {
-                        _showBrightnessHUD = true;
-                        _showVolumeHUD = false;
-                      });
-                      _hudTimer?.cancel();
-                      _hudTimer = Timer(const Duration(milliseconds: 1400), () {
-                        if (mounted) setState(() => _showBrightnessHUD = false);
-                      });
-                    } else {
-                      // Adjust Volume
-                      final newV = (player.volume + delta).clamp(0.0, 1.0);
-                      player.setVolume(newV);
-                      setState(() {
-                        _showVolumeHUD = true;
-                        _showBrightnessHUD = false;
-                      });
-                      _hudTimer?.cancel();
-                      _hudTimer = Timer(const Duration(milliseconds: 1400), () {
-                        if (mounted) setState(() => _showVolumeHUD = false);
-                      });
+                        -(details.primaryDelta ?? 0) / (surfaceHeight * 0.7);
+                    final level = await _playbackControls.adjust(
+                      brightness: brightness,
+                      delta: delta,
+                      first: first,
+                    );
+                    if (!mounted || !player.isExpanded || player.isLocked) {
+                      return;
                     }
+                    if (brightness) {
+                      player.setBrightness(
+                        level ?? (player.brightness + delta).clamp(0.0, 1.0),
+                      );
+                    } else {
+                      if (level == null)
+                        player.setVolume(player.volume + delta);
+                      _volumeHud = level ?? player.volume;
+                    }
+                    setState(() {
+                      _showBrightnessHUD = brightness;
+                      _showVolumeHUD = !brightness;
+                    });
+                    _hudTimer?.cancel();
+                    _hudTimer = Timer(const Duration(milliseconds: 1400), () {
+                      if (mounted) {
+                        setState(() {
+                          _showBrightnessHUD = false;
+                          _showVolumeHUD = false;
+                        });
+                      }
+                    });
                   },
             onLongPressStart: player.isLocked
                 ? null
@@ -1356,10 +1378,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
                     ),
                   ),
 
-                // 4. ON-SCREEN GESTURE HUD (Brightness Left / Volume Right)
+                // 4. ON-SCREEN GESTURE HUD
                 if (_showBrightnessHUD)
                   Positioned(
-                    left: 20,
+                    right: 20,
                     top: 0,
                     bottom: 0,
                     child: Center(
@@ -1416,7 +1438,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
 
                 if (_showVolumeHUD)
                   Positioned(
-                    right: 20,
+                    left: 20,
                     top: 0,
                     bottom: 0,
                     child: Center(
@@ -1433,9 +1455,9 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              player.volume > 0.5
+                              _volumeHud > 0.5
                                   ? Icons.volume_up_rounded
-                                  : (player.volume > 0
+                                  : (_volumeHud > 0
                                         ? Icons.volume_down_rounded
                                         : Icons.volume_off_rounded),
                               color: AppColors.primary,
@@ -1450,7 +1472,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
                                 child: RotatedBox(
                                   quarterTurns: 3,
                                   child: LinearProgressIndicator(
-                                    value: player.volume,
+                                    value: _volumeHud,
                                     backgroundColor: Colors.white24,
                                     valueColor:
                                         const AlwaysStoppedAnimation<Color>(
@@ -1462,7 +1484,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '${(player.volume * 100).toInt()}%',
+                              '${(_volumeHud * 100).toInt()}%',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,

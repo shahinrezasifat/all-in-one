@@ -111,6 +111,17 @@ class _BrowserScreenState extends State<BrowserScreen> {
   String? _engineError;
   Timer? _mediaWatcher;
   String _mediaSrc = '';
+  bool _mediaDetected = false;
+  bool _mediaDownloadDismissed = false;
+  bool _checkingForMedia = false;
+  int _mediaPageRevision = 0;
+
+  void _resetMediaDetection() {
+    _mediaSrc = '';
+    _mediaDetected = false;
+    _mediaDownloadDismissed = false;
+    _mediaPageRevision++;
+  }
 
   /// Real web rendering on platforms with an initialized WebView controller.
   /// On platforms without an embedded web engine, shows the safe media extractor preview.
@@ -169,25 +180,35 @@ class _BrowserScreenState extends State<BrowserScreen> {
     setState(() {
       _currentUrl = url;
       _addressCtrl.text = url;
-      _mediaSrc = '';
+      _resetMediaDetection();
     });
     _controller?.loadRequest(Uri.parse(url));
   }
 
   static const String _mediaCheckJs = r'''
 (function() {
-  try {
-    var href = location.href || '';
-    var vids = document.querySelectorAll('video');
-    for (var i = 0; i < vids.length; i++) {
-      var v = vids[i];
-      if (!v.paused && v.ended === false && v.readyState > 0) {
-        var src = v.currentSrc || v.src || '';
-        return 'PLAYING|' + src + '|' + href;
+  function findPlaying(root) {
+    var videos = root.querySelectorAll('video');
+    for (var i = 0; i < videos.length; i++) {
+      var video = videos[i];
+      if (!video.paused && !video.ended) {
+        return { src: video.currentSrc || video.src || '' };
       }
     }
-    return 'NONE|' + href;
-  } catch (e) { return 'NONE|'; }
+    var frames = root.querySelectorAll('iframe');
+    for (var j = 0; j < frames.length; j++) {
+      try {
+        var child = frames[j].contentDocument;
+        var playing = child && findPlaying(child);
+        if (playing) return playing;
+      } catch (_) {}
+    }
+    return null;
+  }
+  return JSON.stringify({
+    href: location.href,
+    video: findPlaying(document)
+  });
 })();
 ''';
 
@@ -330,7 +351,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 _currentUrl = url;
                 _addressCtrl.text = url;
                 // A new navigation invalidates the previous page's media.
-                _mediaSrc = '';
+                _resetMediaDetection();
               });
               controller
                   .runJavaScript(AdBlockerService.instance.getResponsiveScreenScript())
@@ -409,24 +430,38 @@ class _BrowserScreenState extends State<BrowserScreen> {
           }
         }).catchError((_) {});
       }
-      if (_pageLoading) return;
+      if (_pageLoading || _checkingForMedia) return;
+      _checkingForMedia = true;
+      final revision = _mediaPageRevision;
       try {
-        final res = await c.runJavaScriptReturningResult(_mediaCheckJs);
-        final value = res.toString().replaceAll(RegExp(r'^"|"$'), '');
-        final parts = value.split('|');
-        final playing = parts.isNotEmpty && parts[0] == 'PLAYING';
-        final src = playing && parts.length > 1 ? parts[1] : '';
-        // SPA sites (YouTube, etc.) change location.href without firing a page
-        // load, so keep the omnibox in sync from the live href unless the user
-        // is editing it.
-        final href = parts.length > 2 ? parts[2] : (parts.length > 1 ? parts[1] : '');
-        if (!mounted) return;
+        final raw = await c
+            .runJavaScriptReturningResult(_mediaCheckJs)
+            .timeout(const Duration(seconds: 3));
+        if (!mounted || revision != _mediaPageRevision) return;
+        final state = jsonDecode(_decodeJsResult(raw));
+        if (state is! Map<String, dynamic>) return;
+        final href = state['href'];
+        if (href is! String) return;
         _syncPageUrl(href);
-        final current = _currentUrl;
-        if (href == current && playing && src.startsWith('http') && src != _mediaSrc) {
-          setState(() => _mediaSrc = src);
+        if (href != _currentUrl) return;
+        final video = state['video'];
+        if (video is! Map<String, dynamic>) return;
+        final source = video['src'];
+        final uri = source is String ? Uri.tryParse(source) : null;
+        final directSource = uri != null && const ['http', 'https'].contains(uri.scheme)
+            ? uri.toString() : '';
+        if (!_mediaDetected || (directSource.isNotEmpty && directSource != _mediaSrc)) {
+          setState(() {
+            _mediaDetected = true;
+            _mediaSrc = directSource;
+            _mediaDownloadDismissed = false;
+          });
         }
-      } catch (_) {}
+      } catch (_) {
+        // A page may navigate or dispose its document during detection.
+      } finally {
+        _checkingForMedia = false;
+      }
     });
   }
 
@@ -466,7 +501,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
     }
     setState(() {
       _currentUrl = url;
-      _mediaSrc = '';
+      _resetMediaDetection();
       if (!_addressFocus.hasFocus) _addressCtrl.text = url;
     });
   }
@@ -1317,6 +1352,31 @@ class _BrowserScreenState extends State<BrowserScreen> {
                                 ? _buildWebPlaceholder(isDark)
                                 : WebViewWidget(controller: _controller!),
                           ),
+                          if (_mediaDetected && !_mediaDownloadDismissed)
+                            Material(
+                              color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                              child: ListTile(
+                                leading: const Icon(Icons.video_library_outlined),
+                                title: const Text('Video detected'),
+                                subtitle: const Text('Open available download formats'),
+                                onTap: _isExtracting ? null : _extractCurrentPage,
+                                trailing: Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Download detected video',
+                                      onPressed: _isExtracting ? null : _extractCurrentPage,
+                                      icon: const Icon(Icons.download_rounded),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Dismiss video download',
+                                      onPressed: () => setState(() => _mediaDownloadDismissed = true),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),

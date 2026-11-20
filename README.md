@@ -7,7 +7,7 @@
 <p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
 <p align="center">
-  <a href="https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.3 for ARM64, 86 MB" width="300"></a>
+  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.4/split-all-in-one-v1.0.4-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.4 for ARM64, 86 MB" width="300"></a>
 </p>
 
 <p align="center">
@@ -62,10 +62,10 @@ The YouTube images show the formats listed for that video. The download and Vaul
 
 | Android APK | Download size | Device |
 | --- | ---: | --- |
-| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-arm64-v8a.apk) | 86.3 MB | Most modern Android phones and tablets |
-| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-armeabi-v7a.apk) | 86.4 MB | Older 32-bit ARM devices |
-| [x86_64](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-x86_64.apk) | 88.8 MB | Compatible Intel or AMD Android devices and emulators |
-| [Universal](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/all-in-one-v1.0.3.apk) | 228.6 MB | Contains all three CPU architectures in one installer |
+| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.4/split-all-in-one-v1.0.4-arm64-v8a.apk) | ~86 MB | Most modern Android phones and tablets |
+| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.4/split-all-in-one-v1.0.4-armeabi-v7a.apk) | ~86 MB | Older 32-bit ARM devices |
+| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.4/split-all-in-one-v1.0.4-x86_64.apk) | ~89 MB | Compatible Intel or AMD Android devices and emulators |
+| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.4/all-in-one-v1.0.4.apk) | ~229 MB | Contains all three CPU architectures in one installer |
 
 Each architecture-specific APK includes the app and the media engines for its CPU. The listed size is the APK download size. Installed storage usage can be higher.
 
@@ -97,7 +97,7 @@ flutter run
 flutter build apk --release
 ```
 
-For a new APK release, increase both the version and Android build number in `pubspec.yaml`, sign with the same key used for the previous release, and attach the universal APK to a GitHub Release tagged `v<version>`. [GitHub Releases](https://github.com/shahinrezasifat1999/all-in-one/releases)
+For a new APK release, increase both the version and Android build number in `pubspec.yaml`, sign with the same key used for the previous release, and attach the universal APK to a GitHub Release tagged `v<version>`. [GitHub Releases](https://github.com/shahinrezasifat/all-in-one/releases)
 
 ## Developer
 
@@ -124,7 +124,7 @@ He is the Founder, CEO & Director of **Motion Work** (Production House & Digital
 
 - Email — [motionworkofficial@gmail.com](mailto:motionworkofficial@gmail.com)
 - Website — [Motion Work](https://motionwork-tali.top)
-- GitHub — [@shahinrezasifat1999](https://github.com/shahinrezasifat1999)
+- GitHub — [@shahinrezasifat](https://github.com/shahinrezasifat)
 - YouTube — [@SHAHINREZASIFAT2025](https://www.youtube.com/@SHAHINREZASIFAT2025)
 - Facebook — [Shahin Reza Sifat](https://www.facebook.com/Shahin.Reza.Sifat1997/)
 - WhatsApp — [+8801766522499](https://wa.me/8801766522499)

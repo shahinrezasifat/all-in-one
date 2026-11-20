@@ -4,6 +4,7 @@ import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
 import android.os.CancellationSignal
+import android.media.AudioManager
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -11,6 +12,8 @@ import android.media.MediaMuxer
 import android.media.MediaScannerConnection
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -19,6 +22,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
+import kotlin.math.roundToInt
 
 /**
  * Native stream-copy muxer.
@@ -33,10 +37,73 @@ class MainActivity : FlutterActivity() {
     private val channelName = "snaptube_pure/media_mux"
     private val scanChannelName = "snaptube_pure/media_scan"
     private val systemUiChannelName = "snaptube_pure/system_ui"
+    private var brightnessOwner: Int? = null
+    private var mediaVolumeTarget = 0.0
+    private var lastMediaVolume: Int? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         CloudStreamRuntime.attach(this, flutterEngine.dartExecutor.binaryMessenger)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "snaptube_pure/playback_controls"
+        ).setMethodCallHandler { call, result ->
+            val owner = call.argument<Int>("owner")
+            val delta = call.argument<Double>("delta")
+            when (call.method) {
+                "brightness" -> {
+                    if (owner == null || delta == null || !delta.isFinite()) {
+                        result.error("invalid_gesture", "Missing brightness gesture", null)
+                        return@setMethodCallHandler
+                    }
+                    val attributes = window.attributes
+                    val initialBrightness = attributes.screenBrightness.takeIf { it >= 0f }
+                        ?: (Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128) / 255f)
+                    val brightness = (initialBrightness + delta).coerceIn(0.02, 1.0)
+                    attributes.screenBrightness = brightness.toFloat()
+                    window.attributes = attributes
+                    brightnessOwner = owner
+                    result.success(brightness)
+                }
+                "restoreBrightness" -> {
+                    if (owner != null && brightnessOwner == owner) {
+                        val attributes = window.attributes
+                        attributes.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        window.attributes = attributes
+                        brightnessOwner = null
+                    }
+                    result.success(null)
+                }
+                "volume" -> {
+                    if (delta == null || !delta.isFinite()) {
+                        result.error("invalid_gesture", "Missing volume gesture", null)
+                        return@setMethodCallHandler
+                    }
+                    val audio = getSystemService(AudioManager::class.java)
+                    val stream = AudioManager.STREAM_MUSIC
+                    val current = audio.getStreamVolume(stream)
+                    val max = audio.getStreamMaxVolume(stream)
+                    if (max <= 0 || audio.isVolumeFixed) {
+                        result.success(null)
+                        return@setMethodCallHandler
+                    }
+                    if (current != lastMediaVolume || call.argument<Boolean>("first") == true) {
+                        mediaVolumeTarget = current.toDouble()
+                    }
+                    mediaVolumeTarget = (mediaVolumeTarget + delta * max).coerceIn(0.0, max.toDouble())
+                    val target = mediaVolumeTarget.roundToInt()
+                    try {
+                        if (target != current) audio.setStreamVolume(stream, target, 0)
+                        lastMediaVolume = audio.getStreamVolume(stream)
+                        result.success(lastMediaVolume!!.toDouble() / max)
+                    } catch (_: SecurityException) {
+                        result.success(null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,

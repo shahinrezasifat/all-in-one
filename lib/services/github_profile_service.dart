@@ -30,7 +30,7 @@ class GithubProfile {
 class GithubProfileService {
   GithubProfileService._();
 
-  static const String username = 'shahinrezasifat1999';
+  static const String username = 'shahinrezasifat';
   static const String profileUrl = 'https://github.com/$username';
 
   static GithubProfile? _cache;
