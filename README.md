@@ -7,11 +7,11 @@
 <p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
 <p align="center">
-  <a href="https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/all-in-one-v1.0.3.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.3 directly" width="300"></a>
+  <a href="https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.3 for ARM64, 86 MB" width="300"></a>
 </p>
 
 <p align="center">
-  Android 7.0+ · <a href="#android-screenshots">See the app</a> · <a href="#download-and-install-on-android">Install guide</a> · <a href="https://github.com/shahinrezasifat1999/all-in-one/releases/latest">All APK variants</a>
+  Android 7.0+ · <a href="#android-screenshots">See the app</a> · <a href="#download-and-install-on-android">Install guide</a> · <a href="#choose-a-build">Other Android devices</a>
 </p>
 
 ## What can you do with All in One?
@@ -58,9 +58,20 @@ The YouTube images show the formats listed for that video. The download and Vaul
 
 ## Download and install on Android
 
-1. Select **Download Android APK** above for the universal build. [Direct APK download](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/all-in-one-v1.0.3.apk)
+### Choose a build
+
+| Android APK | Download size | Device |
+| --- | ---: | --- |
+| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-arm64-v8a.apk) | 86.3 MB | Most modern Android phones and tablets |
+| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-armeabi-v7a.apk) | 86.4 MB | Older 32-bit ARM devices |
+| [x86_64](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/split-all-in-one-v1.0.3-x86_64.apk) | 88.8 MB | Compatible Intel or AMD Android devices and emulators |
+| [Universal](https://github.com/shahinrezasifat1999/all-in-one/releases/download/v1.0.3/all-in-one-v1.0.3.apk) | 228.6 MB | Contains all three CPU architectures in one installer |
+
+Each architecture-specific APK includes the app and the media engines for its CPU. The listed size is the APK download size. Installed storage usage can be higher.
+
+1. Download the APK for your device. The main download button is for ARM64.
 2. Open the APK and follow Android’s install prompts. **Android 7.0 or later (API 24+)** is required.
-3. Open **All in One**. Set up the Private Vault from the app if you want to protect personal media.
+3. Open **All in One**. Set up the Private Vault if you want to protect personal media.
 
 ## Built with Flutter and Dart
 
