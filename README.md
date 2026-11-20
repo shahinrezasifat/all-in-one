@@ -1,35 +1,73 @@
-# All in One
+<p align="center">
+  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="All in One Android media app logo" width="112">
+</p>
 
-All in One is a universal media downloader and multi-source movie streaming app built with Flutter. It combines web and social video downloads, an integrated movie player, and a private media vault.
+# All in One — Android Video Downloader, Movie Player & Private Vault
 
-## Key features
+**English** · [বাংলা](README.bn.md) · [Download Android APK](https://github.com/shahinrezasifat1999/all-in-one/releases/latest)
 
-- **Universal video downloader** — Download media from supported webpages, direct media links, and major platforms such as YouTube, Facebook, and TikTok. The built-in browser can detect media loaded by the current page.
-- **Direct movie streaming** — Browse movie catalogs from integrated sources, choose an available source, and watch in the built-in player. Catalogs and playable sources vary by provider.
-- **Private Vault & Security** — Store downloaded media and personal content in the Private Vault. Unlock it with a PIN or enable fingerprint and other supported biometric unlock on Android.
+All in One is a Flutter Android app for downloading videos from supported websites, streaming movies from integrated providers, and keeping personal media in a PIN- or fingerprint-protected vault. Use the built-in browser to detect downloadable media, choose a source in the movie player, and organize saved files in one app.
 
-## Run on Android
+## What can you do with All in One?
 
-Install Flutter with Dart 3.13.5 or later in the Dart 3 series, JDK 21, and the Android SDK Platform 37. Use an Android device or emulator running API 24 or later.
+| Feature | What you can do |
+| --- | --- |
+| **Web and social video downloader** | Download supported videos from YouTube, Facebook, TikTok, other webpages, and direct media links. The built-in browser can detect media loaded on a page. |
+| **Multi-source movie streaming** | Browse integrated movie catalogs, choose an available source, and watch in the built-in player. Catalogs and playback vary by provider. |
+| **Downloads and offline playback** | Keep saved media organized and play completed downloads offline. |
+| **Private Vault** | Keep personal media in a dedicated vault with a PIN and optional fingerprint or supported biometric unlock on Android. |
+| **GitHub release updates** | The Android app checks for newer releases at startup. A required update shows release notes and opens the APK download. |
+
+All in One is useful if you regularly switch between a web browser, a video downloader, a movie player, and a private media folder. Download and stream media you have permission to use.
+
+## Android screenshots
+
+| Movie source picker | Provider Hub | Permissions and Vault settings |
+| :---: | :---: | :---: |
+| <img src="docs/media/movie-source-picker.png" alt="All in One Android movie source picker showing available streaming providers" width="220"> | <img src="docs/media/provider-hub.png" alt="All in One Provider Hub listing media source extensions" width="220"> | <img src="docs/media/permissions-and-vault-settings.png" alt="All in One Android settings for storage permissions and the Private Vault" width="220"> |
+
+<details>
+<summary>Play the animated app tour</summary>
+
+![Animated tour of the All in One logo, movie source picker, Provider Hub, and Android settings](docs/media/android-tour.gif)
+
+</details>
+
+## Download and install on Android
+
+1. Open the latest release and download the APK from **Assets**. [Latest Android release](https://github.com/shahinrezasifat1999/all-in-one/releases/latest)
+2. Open the APK and follow Android’s install prompts. **Android 7.0 or later (API 24+)** is required.
+3. Open **All in One**. Set up the Private Vault from the app if you want to protect personal media.
+
+## Built with Flutter and Dart
+
+| Area | Packages and tools |
+| --- | --- |
+| UI and state | Flutter, Dart, `provider`, `cupertino_icons`, `intl` |
+| Networking and release updates | `http`, `dio`, `pub_semver`, `url_launcher` |
+| Browser and source runtime | `webview_flutter`, vendored `webview_win_floating`, `flutter_js` |
+| Downloads and media processing | Local `ytdlp_flutter`, `youtube_explode_dart`, `ffmpeg_kit_flutter_new_min`, youtubedl-android, yt-dlp, FFmpeg, and QuickJS |
+| Playback | `video_player`, `fvp` |
+| Storage and permissions | `shared_preferences`, `path_provider`, `permission_handler`, `crypto`, and Android’s native biometric APIs |
+| Testing and linting | `flutter_test`, `flutter_lints` |
+
+See pinned dependencies in [pubspec.yaml](pubspec.yaml) and [pubspec.lock](pubspec.lock). The local plugins are in [packages](packages).
+
+### Build from source
+
+Use Flutter with Dart 3.13.5 or later in the Dart 3 series, JDK 21, and Android SDK Platform 37.
 
 ```sh
 flutter pub get
 flutter run
+flutter build apk --release
 ```
 
-To build a release APK, run `flutter build apk --release`. To publish under your own signing key, configure `android/key.properties` locally.
-
-### Android updates
-
-On startup, All in One checks the latest GitHub Release. If its version is newer than the installed version, the app displays the release notes and requires an update before continuing. **Update Now** opens the APK download in the browser. Android handles the installation. If the check is unavailable, the app starts normally.
-
-For each new release, increase the version and build number in `pubspec.yaml`, sign the APK with the same key as the previous release, and attach the universal APK to a GitHub Release tagged `v<version>` (for example, `v1.0.2`). [GitHub Releases](https://github.com/shahinrezasifat1999/all-in-one/releases)
-
-On Android, the bundled `ytdlp_flutter` package uses youtubedl-android to run yt-dlp. The downloader uses FFmpeg for merging and QuickJS for JavaScript processing. [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [youtubedl-android](https://github.com/JunkFood02/youtubedl-android)
+For a new APK release, increase both the version and Android build number in `pubspec.yaml`, sign with the same key used for the previous release, and attach the universal APK to a GitHub Release tagged `v<version>`. [GitHub Releases](https://github.com/shahinrezasifat1999/all-in-one/releases)
 
 ## Developer
 
-**S. M. Shahin Reza Sifat**
+**S. M. Shahin Reza Sifat** created and maintains All in One as its sole app developer. The third-party packages listed above are maintained by their respective authors.
 
 Full-Stack Software Developer, Creative Director & Founder of Motion Work
 
