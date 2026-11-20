@@ -72,7 +72,7 @@ class SettingsScreen extends StatelessWidget {
                     24 + MediaQuery.paddingOf(context).bottom,
                   ),
                   children: [
-                    _heroCard(accent),
+                    _developerCard(accent, isDark),
                     const SizedBox(height: 24),
 
                     _sectionTitle(
@@ -465,7 +465,10 @@ class SettingsScreen extends StatelessWidget {
                             type: MaterialType.transparency,
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: Icon(Icons.person_outline, color: accent),
+                              leading: Icon(
+                                Icons.person_outline,
+                                color: accent,
+                              ),
                               title: const Text('Developer'),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () => Navigator.of(context).push(
@@ -662,81 +665,160 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
-  // Hero card
+  // Modern developer profile card
   // ---------------------------------------------------------------------------
-  Widget _heroCard(Color accent) {
+  Widget _developerCard(Color accent, bool isDark) {
+    final secondary = isDark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
+    final nameColor = isDark ? Colors.white : AppColors.lightTextPrimary;
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(26),
       child: Stack(
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
+                colors: isDark
+                    ? [const Color(0x1C7957CE), const Color(0x141420)]
+                    : [const Color(0xECF0FF), const Color(0xFFFDF4F7)],
               ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(13),
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.proBadgeGradient,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.star_rounded,
-                    color: Colors.black,
-                    size: 28,
-                  ),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: accent.withValues(alpha: .24)),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: .12),
+                  blurRadius: 22,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 8),
                 ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'All in One',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: AppColors.primaryGradient,
+                        boxShadow: [
+                          BoxShadow(
+                            color: accent.withValues(alpha: .32),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
-                          SizedBox(width: 8),
-                          Text(
-                            'PRO VIP',
-                            style: TextStyle(
-                              color: AppColors.accentGold,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 30,
+                        backgroundColor: isDark
+                            ? const Color(0xFF1E293B)
+                            : Colors.white,
+                        child: Text(
+                          'SR',
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'S. M. Shahin Reza Sifat',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: nameColor,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: .14),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: accent.withValues(alpha: .28),
+                              ),
+                            ),
+                            child: Text(
+                              'DEVELOPER',
+                              style: TextStyle(
+                                color: accent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .8,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: 5),
-                      Text(
-                        '100% Unlocked • 0 Ads • Zero Bloatware',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                      Text(
-                        'All 4K & 320kbps MP3 features free forever.',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Creator of All in One — a privacy-first, ad-free media app '
+                  'built for freedom, speed and simplicity.',
+                  style: TextStyle(
+                    color: secondary,
+                    fontSize: 12,
+                    height: 1.35,
                   ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.favorite_rounded,
+                      size: 13,
+                      color: AppColors.accentRed,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Built with care for the community',
+                      style: TextStyle(
+                        color: secondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           Positioned(
-            right: -60,
+            right: -50,
             top: -70,
-            child: _orb(accent.withValues(alpha: .20), 200),
+            child: _orb(accent.withValues(alpha: .20), 190),
           ),
         ],
       ),
