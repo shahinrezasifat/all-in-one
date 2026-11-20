@@ -2,9 +2,9 @@
   <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="All in One Android media app logo" width="112">
 </p>
 
-# All in One — Android Video Downloader, Movie Player & Private Vault
+# All in One
 
-**English** · [বাংলা](README.bn.md) · [Download Android APK](https://github.com/shahinrezasifat1999/all-in-one/releases/latest)
+[Download Android APK](https://github.com/shahinrezasifat1999/all-in-one/releases/latest)
 
 All in One is a Flutter Android app for downloading videos from supported websites, streaming movies from integrated providers, and keeping personal media in a PIN- or fingerprint-protected vault. Use the built-in browser to detect downloadable media, choose a source in the movie player, and organize saved files in one app.
 
@@ -21,6 +21,10 @@ All in One is a Flutter Android app for downloading videos from supported websit
 All in One is useful if you regularly switch between a web browser, a video downloader, a movie player, and a private media folder. Download and stream media you have permission to use.
 
 ## Android screenshots
+
+| Home | Movies | Vault | Downloads |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/media/android-home.jpg" alt="Home screen with trending videos" width="190"> | <img src="docs/media/android-movies.jpg" alt="Movies screen with the streaming catalog" width="190"> | <img src="docs/media/android-vault.jpg" alt="Vault lock screen with the PIN keypad" width="190"> | <img src="docs/media/android-downloads.jpg" alt="Downloads screen with its download tabs" width="190"> |
 
 | Movie source picker | Provider Hub | Permissions and Vault settings |
 | :---: | :---: | :---: |
