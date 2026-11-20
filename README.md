@@ -22,18 +22,24 @@ All in One is useful if you regularly switch between a web browser, a video down
 
 ## Android screenshots
 
-| Home | Movies | Vault | Downloads |
-| :---: | :---: | :---: | :---: |
-| <img src="docs/media/android-home.jpg" alt="Home screen with trending videos" width="190"> | <img src="docs/media/android-movies.jpg" alt="Movies screen with the streaming catalog" width="190"> | <img src="docs/media/android-vault.jpg" alt="Vault lock screen with the PIN keypad" width="190"> | <img src="docs/media/android-downloads.jpg" alt="Downloads screen with its download tabs" width="190"> |
+Captured in the Android app. Click an image to inspect the full screenshot.
 
-| Movie source picker | Provider Hub | Permissions and Vault settings |
+| YouTube 4K picker | YouTube audio options | Active download |
 | :---: | :---: | :---: |
-| <img src="docs/media/movie-source-picker.png" alt="All in One Android movie source picker showing available streaming providers" width="220"> | <img src="docs/media/provider-hub.png" alt="All in One Provider Hub listing media source extensions" width="220"> | <img src="docs/media/permissions-and-vault-settings.png" alt="All in One Android settings for storage permissions and the Private Vault" width="220"> |
+| [<img src="docs/media/youtube-4k-formats.jpg" alt="Big Buck Bunny on YouTube with 4K, 1440p, and 1080p MP4 options" width="215">](docs/media/youtube-4k-formats.jpg) | [<img src="docs/media/youtube-audio-formats.jpg" alt="YouTube format picker showing additional resolutions and the audio-only MP3 option" width="215">](docs/media/youtube-audio-formats.jpg) | [<img src="docs/media/active-download-progress.jpg" alt="An active MP4 download at 21 percent with speed, ETA, and pause controls" width="215">](docs/media/active-download-progress.jpg) |
+
+| Completed download | Demo video in the Vault | Movie download option |
+| :---: | :---: | :---: |
+| [<img src="docs/media/completed-demo-download.jpg" alt="Downloaded MP4 with playback and the option to move it into the Vault" width="215">](docs/media/completed-demo-download.jpg) | [<img src="docs/media/demo-video-in-vault.jpg" alt="An MP4 demo clip stored in the unlocked Secret Vault with a play button" width="215">](docs/media/demo-video-in-vault.jpg) | [<img src="docs/media/movie-source-download.jpg" alt="Movie details with an available MP4 source and separate play and download buttons" width="215">](docs/media/movie-source-download.jpg) |
+
+The YouTube images show the formats listed for that video. The download and Vault images use the same demo MP4 served from the emulator's local test server. Movie sources and available resolutions vary by title and provider.
+
+[View the Home screen with its video link field, platform shortcuts, and trending feed](docs/media/home-video-discovery.jpg).
 
 <details>
 <summary>Play the animated app tour</summary>
 
-![Animated tour of the All in One logo, movie source picker, Provider Hub, and Android settings](docs/media/android-tour.gif)
+![Android app tour showing 4K options, a download in progress, a private Vault video, and a movie source download button](docs/media/android-tour.gif)
 
 </details>
 
