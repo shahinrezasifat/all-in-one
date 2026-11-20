@@ -112,14 +112,12 @@ class _BrowserScreenState extends State<BrowserScreen> {
   Timer? _mediaWatcher;
   String _mediaSrc = '';
   bool _mediaDetected = false;
-  bool _mediaDownloadDismissed = false;
   bool _checkingForMedia = false;
   int _mediaPageRevision = 0;
 
   void _resetMediaDetection() {
     _mediaSrc = '';
     _mediaDetected = false;
-    _mediaDownloadDismissed = false;
     _mediaPageRevision++;
   }
 
@@ -454,7 +452,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
           setState(() {
             _mediaDetected = true;
             _mediaSrc = directSource;
-            _mediaDownloadDismissed = false;
           });
         }
       } catch (_) {
@@ -1348,35 +1345,39 @@ class _BrowserScreenState extends State<BrowserScreen> {
                               color: AppColors.primary,
                             ),
                           Expanded(
-                            child: (!_supportsWebView || _controller == null)
-                                ? _buildWebPlaceholder(isDark)
-                                : WebViewWidget(controller: _controller!),
-                          ),
-                          if (_mediaDetected && !_mediaDownloadDismissed)
-                            Material(
-                              color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                              child: ListTile(
-                                leading: const Icon(Icons.video_library_outlined),
-                                title: const Text('Video detected'),
-                                subtitle: const Text('Open available download formats'),
-                                onTap: _isExtracting ? null : _extractCurrentPage,
-                                trailing: Wrap(
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    IconButton(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                (!_supportsWebView || _controller == null)
+                                    ? _buildWebPlaceholder(isDark)
+                                    : WebViewWidget(controller: _controller!),
+                                if (_mediaDetected)
+                                  Positioned(
+                                    right: 16,
+                                    bottom: 12,
+                                    child: FloatingActionButton(
+                                      heroTag: null,
                                       tooltip: 'Download detected video',
-                                      onPressed: _isExtracting ? null : _extractCurrentPage,
-                                      icon: const Icon(Icons.download_rounded),
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      shape: const CircleBorder(),
+                                      onPressed: _isExtracting
+                                          ? null
+                                          : _extractCurrentPage,
+                                      child: _isExtracting
+                                          ? const SizedBox.square(
+                                              dimension: 23,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(Icons.download_rounded),
                                     ),
-                                    IconButton(
-                                      tooltip: 'Dismiss video download',
-                                      onPressed: () => setState(() => _mediaDownloadDismissed = true),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                     ),
