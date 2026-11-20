@@ -87,6 +87,32 @@ void main() {
     },
   );
 
+  test(
+    'The updater prefers the universal APK over an earlier ABI asset',
+    () async {
+      const universal = 'all-in-one-v1.10.0.apk';
+      final client = MockClient((_) async {
+        return http.Response(
+          jsonEncode({
+            'tag_name': 'v1.10.0',
+            'html_url': _release,
+            'assets': [
+              for (final name in ['split-arm64.apk', universal])
+                {
+                  'name': name,
+                  'state': 'uploaded',
+                  'browser_download_url': '$_releases/download/v1.10.0/$name',
+                },
+            ],
+          }),
+          200,
+        );
+      });
+      final update = await fetchAppUpdate(client, '1.9.0');
+      expect(update?.apkUrl?.pathSegments.last, universal);
+    },
+  );
+
   testWidgets('The startup check holds the home screen until it completes', (
     tester,
   ) async {

@@ -32,8 +32,8 @@ void main() {
       expect(find.text('S. M. Shahin Reza Sifat'), findsOneWidget);
       expect(find.byType(CircleAvatar), findsOneWidget);
       expect(find.text('@shahinrezasifat1999'), findsOneWidget);
-      expect(find.text('GitHub stats unavailable'), findsOneWidget);
-      expect(find.text('View GitHub profile'), findsOneWidget);
+      expect(find.text('STATS OFFLINE'), findsOneWidget);
+      expect(find.text('github.com/shahinrezasifat1999'), findsOneWidget);
 
       await tester.scrollUntilVisible(find.text('WhatsApp'), 300);
       expect(find.text('+8801766522499'), findsOneWidget);

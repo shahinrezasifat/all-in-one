@@ -86,9 +86,13 @@ Future<AppUpdate?> fetchAppUpdate(
             asset['state'] != 'uploaded') {
           continue;
         }
-        apkUrl = _releaseLink(asset['browser_download_url'], 'download');
-        if (apkUrl != null && apkUrl.pathSegments.last == name) break;
-        apkUrl = null;
+        final url = _releaseLink(asset['browser_download_url'], 'download');
+        if (url == null || url.pathSegments.last != name) continue;
+        if (name == 'all-in-one-v$latest.apk') {
+          apkUrl = url;
+          break;
+        }
+        apkUrl ??= url;
       }
     }
 

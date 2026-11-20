@@ -21,6 +21,10 @@ project(":fvp").plugins.withId("com.android.library") {
 // Without it (or without the keystore file) the build falls back to debug
 // keys so CI and the developer machine never break.
 val keystoreProperties = Properties()
+val releaseAbi = providers.gradleProperty("release-abi").orNull
+if (releaseAbi != null) {
+    require(releaseAbi in setOf("arm64-v8a", "armeabi-v7a", "x86_64"))
+}
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
@@ -50,6 +54,10 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Keep the same version code for universal and ABI-specific APKs.
+        if (releaseAbi != null) {
+            ndk.abiFilters.add(releaseAbi)
+        }
     }
 
     packaging {

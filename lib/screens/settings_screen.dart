@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_update_service.dart';
 import '../services/download_manager.dart';
+import '../services/github_profile_service.dart';
 import '../services/image_cache_service.dart';
 import '../services/movie_repository_service.dart';
 import '../services/permission_service.dart';
@@ -795,13 +796,37 @@ class SettingsScreen extends StatelessWidget {
         : AppColors.lightTextSecondary;
     final nameColor = isDark ? Colors.white : AppColors.lightTextPrimary;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _openGithub(context),
-        borderRadius: BorderRadius.circular(26),
-        child: _developerCardBody(accent, isDark, secondary, nameColor),
-      ),
+    return FutureBuilder<GithubProfile?>(
+      future: GithubProfileService.fetch(),
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        final avatarUrl =
+            profile?.avatarUrl ??
+            Uri.parse(
+              'https://github.com/${GithubProfileService.username}.png',
+            );
+        final name = profile?.displayName ?? 'S. M. Shahin Reza Sifat';
+        final description = profile?.bio?.trim().isNotEmpty == true
+            ? profile!.bio!.trim()
+            : 'Full-Stack Software Developer, Creative Director & Founder of Motion Work';
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _openGithub(context),
+            borderRadius: BorderRadius.circular(26),
+            child: _developerCardBody(
+              accent,
+              isDark,
+              secondary,
+              nameColor,
+              avatarUrl,
+              name,
+              description,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -810,6 +835,9 @@ class SettingsScreen extends StatelessWidget {
     bool isDark,
     Color secondary,
     Color nameColor,
+    Uri avatarUrl,
+    String name,
+    String description,
   ) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(26),
@@ -860,13 +888,21 @@ class SettingsScreen extends StatelessWidget {
                         backgroundColor: isDark
                             ? const Color(0xFF1E293B)
                             : Colors.white,
-                        child: Text(
-                          'SR',
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: .5,
+                        child: ClipOval(
+                          child: Image.network(
+                            avatarUrl.toString(),
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stack) => Text(
+                              'SR',
+                              style: TextStyle(
+                                color: accent,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .5,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -880,7 +916,7 @@ class SettingsScreen extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  'S. M. Shahin Reza Sifat',
+                                  name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -923,8 +959,9 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Creator of All in One — a privacy-first, ad-free media app '
-                  'built for freedom, speed and simplicity.',
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: secondary,
                     fontSize: 12,
