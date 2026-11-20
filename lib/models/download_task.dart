@@ -46,6 +46,7 @@ class DownloadTask {
   final String category; // 'video', 'audio', 'movie'
   final String originalUrl;
   String? streamUrl;
+  bool payloadVerified;
   final bool isHls;
 
   /// Format id the user actually picked. Kept on the task so that a retry
@@ -159,6 +160,7 @@ class DownloadTask {
     String? category,
     required this.originalUrl,
     this.streamUrl,
+    this.payloadVerified = false,
     this.preferredFormatId,
     this.isHls = false,
     this.needsAudioMerge = false,
@@ -286,6 +288,7 @@ class DownloadTask {
     'savePath': savePath,
     'status': status.name,
     'downloadedBytes': downloadedBytes,
+    'payloadVerified': payloadVerified,
     'totalBytes': totalBytes,
     'threadsCount': threadsCount,
     'createdAt': createdAt.toIso8601String(),
@@ -323,6 +326,7 @@ class DownloadTask {
         orElse: () => DownloadStatus.completed,
       ),
       downloadedBytes: json['downloadedBytes'] ?? 0,
+      payloadVerified: json['payloadVerified'] == true,
       totalBytes: json['totalBytes'] ?? 0,
       threadsCount: json['threadsCount'] ?? 1,
       createdAt: json['createdAt'] != null

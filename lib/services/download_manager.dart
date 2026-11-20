@@ -35,6 +35,7 @@ class DownloadManager extends ChangeNotifier {
 
   // Track active HTTP clients for immediate abort on pause or cancel
   final Map<String, List<http.Client>> _activeClients = {};
+  final Map<String, Future<void>> _runningDownloads = {};
 
   /// How many times the engine reconnects before giving up. Mobile networks
   /// drop sockets all the time — a single hiccup must never be shown to the
@@ -468,8 +469,8 @@ class DownloadManager extends ChangeNotifier {
       ext: source.format,
       isAudio: false,
       category: 'movie',
-      originalUrl: source.downloadUrl,
-      streamUrl: source.streamUrl.isNotEmpty ? source.streamUrl : source.downloadUrl,
+      originalUrl: source.downloadUrl.isNotEmpty ? source.downloadUrl : source.streamUrl,
+      streamUrl: _isUnusableUrl(source.downloadUrl) ? source.streamUrl : source.downloadUrl,
       headers: source.headers,
       isHls: source.format.toLowerCase() == 'm3u8',
       savePath: targetPath,
@@ -658,10 +659,12 @@ class DownloadManager extends ChangeNotifier {
   bool _savedFileIsComplete(DownloadTask task) {
     final path = task.savePath;
     if (path == null || path.isEmpty) return false;
-    if (task.totalBytes <= 0 || task.downloadedBytes < task.totalBytes) return false;
+    if (!task.payloadVerified || task.totalBytes <= 0 || task.downloadedBytes != task.totalBytes) {
+      return false;
+    }
     try {
       final file = File(path);
-      return file.existsSync() && file.lengthSync() >= task.downloadedBytes;
+      return file.existsSync() && file.lengthSync() == task.downloadedBytes;
     } catch (_) {
       return false;
     }
@@ -678,6 +681,17 @@ class DownloadManager extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> _downloadRealMedia(DownloadTask task, {String? preferredFormatId}) async {
+    if (_runningDownloads.containsKey(task.id)) return;
+    final run = _performDownload(task, preferredFormatId: preferredFormatId);
+    _runningDownloads[task.id] = run;
+    try {
+      await run;
+    } finally {
+      _runningDownloads.remove(task.id);
+    }
+  }
+
+  Future<void> _performDownload(DownloadTask task, {String? preferredFormatId}) async {
     await ready;
     if (task.status != DownloadStatus.downloading) return;
 
@@ -693,7 +707,8 @@ class DownloadManager extends ChangeNotifier {
         (nativeFormat || (isYouTube && (task.audioTrackId ?? '').isEmpty));
     final nativeOnly = usePage && (nativeFormat || Platform.isAndroid);
     Object? lastError;
-    if (usePage) {
+    for (var attempt = 1; usePage && attempt <= 3; attempt++) {
+      if (task.status != DownloadStatus.downloading) return;
       try {
         await _downloadWithYtDlp(task);
         return;
@@ -701,6 +716,10 @@ class DownloadManager extends ChangeNotifier {
         if (task.status != DownloadStatus.downloading) return;
         lastError = error;
         debugPrint('Native download failed: $error');
+        if (!_isRetryable(error) || attempt == 3) break;
+        task.statusNote = 'Reconnecting to continue the download…';
+        notifyListeners();
+        await Future.delayed(Duration(seconds: attempt));
       }
     }
 
@@ -875,6 +894,7 @@ class DownloadManager extends ChangeNotifier {
       task.totalBytes = finalLen;
 
       _adoptNativeFile(task, downloadedFile);
+      task.payloadVerified = true;
 
       try {
         if (workDir.listSync().isEmpty) workDir.deleteSync();
@@ -1044,7 +1064,10 @@ class DownloadManager extends ChangeNotifier {
 
     // ---- 2. The main payload --------------------------------------------
     if (!_savedFileIsComplete(task)) {
-      if (Platform.isAndroid) {
+      final path = Uri.tryParse(targetUrl)?.path.toLowerCase() ?? '';
+      final progressive = !task.isHls &&
+          RegExp(r'\.(mp4|m4v|webm|mkv|mov|mp3|m4a|aac|flac|opus|ogg|wav)$').hasMatch(path);
+      if (Platform.isAndroid && !progressive) {
         final file = await _transferResolvedWithYtDlp(task, targetUrl);
         if (file == null) return;
         _adoptNativeFile(task, file);
@@ -1053,6 +1076,8 @@ class DownloadManager extends ChangeNotifier {
       } else {
         await _downloadPayload(task, targetUrl);
       }
+      if (task.status != DownloadStatus.downloading) return;
+      task.payloadVerified = true;
     }
 
     if (task.status != DownloadStatus.downloading) return;
@@ -1234,15 +1259,13 @@ class DownloadManager extends ChangeNotifier {
 
   void _markCompleted(DownloadTask task) {
     final path = task.savePath;
-    if (path != null) {
-      try {
-        final file = File(path);
-        if (file.existsSync() && file.lengthSync() > 0) {
-          task.downloadedBytes = file.lengthSync();
-          task.totalBytes = task.downloadedBytes;
-        }
-      } catch (_) {}
+    final file = path == null ? null : File(path);
+    final length = file != null && file.existsSync() ? file.lengthSync() : 0;
+    if (!task.payloadVerified || length <= 0) {
+      throw const _DownloadException('The download did not produce a complete file');
     }
+    task.downloadedBytes = length;
+    task.totalBytes = length;
     task.status = DownloadStatus.completed;
     task.completedAt = DateTime.now();
     task.statusNote = null;
@@ -1281,7 +1304,7 @@ class DownloadManager extends ChangeNotifier {
       // 2. Probe non-GoogleVideo servers with Range header (bytes=0-0) to check Range support & total file size.
       // Note: googlevideo.com CDN flags rapid connect-disconnect probes as bot behavior (403),
       // and InnerTube already provides the exact file size via contentLength.
-      int totalLength = task.totalBytes;
+      int totalLength = isGoogleVideoUrl(streamUrl) ? task.totalBytes : 0;
 
       if (!isGoogleVideoUrl(streamUrl)) {
         final probeClient = http.Client();
@@ -1310,14 +1333,12 @@ class DownloadManager extends ChangeNotifier {
                 task.totalBytes = parsedTotal;
               }
             }
-            await probeRes.stream.drain<void>();
           } else if (probeRes.statusCode == 200) {
             _alignTaskExtension(task, probeRes.headers['content-type'], streamUrl);
             if (probeRes.contentLength != null && probeRes.contentLength! > 0) {
               totalLength = probeRes.contentLength!;
               task.totalBytes = totalLength;
             }
-            await probeRes.stream.drain<void>();
           } else if (probeRes.statusCode == 403 || probeRes.statusCode == 404) {
             await probeRes.stream.drain<void>();
             final fresh = await _resolveSource(task, task.preferredFormatId);
@@ -1370,11 +1391,6 @@ class DownloadManager extends ChangeNotifier {
           probeClient.close();
           clients.remove(probeClient);
         }
-      }
-
-      if (totalLength <= 0) {
-        totalLength = 15 * 1024 * 1024; // 15 MB fallback estimate
-        task.totalBytes = totalLength;
       }
 
       if (task.status != DownloadStatus.downloading) return;
@@ -2242,7 +2258,7 @@ class DownloadManager extends ChangeNotifier {
       int start = 0;
       if (file.existsSync()) {
         final len = file.lengthSync();
-        if (len > 0 && (totalLength <= 0 || len < totalLength)) {
+        if (len > 0 && (totalLength <= 0 || len <= totalLength)) {
           start = len;
         }
       }
@@ -2254,27 +2270,22 @@ class DownloadManager extends ChangeNotifier {
         final resumeReq = http.Request('GET', Uri.parse(streamUrl));
         resumeReq.headers
             .addAll(_mediaHeadersFor(task, streamUrl, range: 'bytes=$start-'));
-        debugPrint('[DownloadManager] Sending resumeReq headers=${resumeReq.headers}');
         res = await client.send(resumeReq).timeout(_responseTimeout);
-        debugPrint('[DownloadManager] resumeReq res.statusCode=${res.statusCode}');
 
         if (res.statusCode == 206) {
           append = true;
-          final cr = res.headers['content-range'];
-          if (cr != null && cr.contains('/')) {
-            final parsedTotal = int.tryParse(cr.split('/').last.trim());
-            if (parsedTotal != null && parsedTotal > 0) task.totalBytes = parsedTotal;
-          }
         } else if (res.statusCode == 200) {
           // Server ignored the range and is streaming the whole file again.
           append = false;
           start = 0;
         } else if (res.statusCode == 416) {
-          // "Range not satisfiable": every byte is already on disk.
-          await res.stream.drain<void>();
-          task.downloadedBytes = start;
-          task.totalBytes = start;
-          return;
+          final range = res.headers['content-range'] ?? '';
+          if (range == 'bytes */$start' && totalLength == start) {
+            task.downloadedBytes = start;
+            task.totalBytes = start;
+            return;
+          }
+          throw const _DownloadException('The server refused the resume offset');
         } else {
           final code = res.statusCode;
           await res.stream.drain<void>();
@@ -2287,13 +2298,10 @@ class DownloadManager extends ChangeNotifier {
         final headers = _mediaHeadersFor(task, streamUrl);
         final req = http.Request('GET', Uri.parse(streamUrl));
         req.headers.addAll(headers);
-        debugPrint('[DownloadManager] Sending _downloadSingleStream req.headers=${req.headers}');
         res = await client.send(req).timeout(_responseTimeout);
-        debugPrint('[DownloadManager] _downloadSingleStream res.statusCode=${res.statusCode}');
 
         if (res.statusCode != 200 && res.statusCode != 206) {
           final code = res.statusCode;
-          debugPrint('[DownloadManager] _downloadSingleStream failed: HTTP $code for $streamUrl');
           throw HttpException('HTTP $code');
         }
         append = false;
@@ -2301,12 +2309,31 @@ class DownloadManager extends ChangeNotifier {
 
       if (task.status != DownloadStatus.downloading) return;
 
-      _alignTaskExtension(task, res.headers['content-type'], streamUrl);
-
-      if (res.contentLength != null && res.contentLength! > 0) {
-        task.totalBytes =
-            append ? (start + res.contentLength!) : res.contentLength!;
+      final mime = (res.headers['content-type'] ?? '').split(';').first.toLowerCase();
+      if (const {'text/html', 'application/json', 'text/xml', 'application/xml'}.contains(mime)) {
+        throw const _DownloadException('The server returned a page instead of media', retryable: false);
       }
+      int expectedTotal = res.contentLength ?? totalLength;
+      int? rangeEnd;
+      if (res.statusCode == 206) {
+        final range = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$')
+            .firstMatch(res.headers['content-range'] ?? '');
+        final rangeStart = int.tryParse(range?.group(1) ?? '');
+        rangeEnd = int.tryParse(range?.group(2) ?? '');
+        final fullLength = int.tryParse(range?.group(3) ?? '');
+        if (rangeStart != start || rangeEnd == null || fullLength == null ||
+            rangeEnd < start || rangeEnd >= fullLength ||
+            (append && totalLength > 0 && totalLength != fullLength)) {
+          throw const _DownloadException('The server returned an invalid resume range');
+        }
+        expectedTotal = fullLength;
+      }
+      _alignTaskExtension(task, res.headers['content-type'], streamUrl);
+      final destination = File(task.savePath!);
+      if (append && destination.path != file.path) {
+        file.renameSync(destination.path);
+      }
+      task.totalBytes = expectedTotal;
 
       int received = start;
       task.downloadedBytes = received;
@@ -2318,7 +2345,7 @@ class DownloadManager extends ChangeNotifier {
       int windowStartBytes = received;
 
       final sink =
-          file.openWrite(mode: append ? FileMode.append : FileMode.write);
+          destination.openWrite(mode: append ? FileMode.append : FileMode.write);
       try {
         await for (final chunk in res.stream.timeout(_chunkIdleTimeout)) {
           if (task.status != DownloadStatus.downloading) return;
@@ -2365,9 +2392,13 @@ class DownloadManager extends ChangeNotifier {
 
       if (task.status != DownloadStatus.downloading) return;
 
-      final written = file.existsSync() ? file.lengthSync() : 0;
+      final written = destination.existsSync() ? destination.lengthSync() : 0;
       if (written <= 0) {
         throw const _DownloadException('The download arrived empty');
+      }
+      if ((rangeEnd != null && written != rangeEnd + 1) ||
+          (expectedTotal > 0 && written != expectedTotal)) {
+        throw const _DownloadException('The connection ended before the whole file arrived');
       }
       task.downloadedBytes = written;
       task.totalBytes = written;
@@ -2402,6 +2433,11 @@ class DownloadManager extends ChangeNotifier {
 
   void resumeTask(DownloadTask task) {
     if (task.status == DownloadStatus.paused || task.status == DownloadStatus.failed) {
+      final active = _runningDownloads[task.id];
+      if (active != null) {
+        unawaited(active.then((_) => resumeTask(task)));
+        return;
+      }
       task.status = DownloadStatus.downloading;
       task.errorMessage = null;
       _persistTasks();

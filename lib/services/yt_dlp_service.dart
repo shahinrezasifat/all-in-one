@@ -196,6 +196,7 @@ class YtDlpService {
     void Function(YtdlpProgress progress)? onProgress,
   }) async {
     await ensureInit();
+    if (!_initialized) throw StateError('The download engine could not start');
     try {
       return await Ytdlp.downloadAudio(
         url: youtubeVideoUrl(url) ?? url,

@@ -81,6 +81,87 @@ void main() {
     expect(result.title, 'Local Test Movie');
   });
 
+  test('web and movie downloads resume at the exact missing byte', () async {
+    final expected = List<int>.generate(65536, (i) => (i * 31) % 251);
+    final ranges = <String?>[];
+    final media = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final folder = await Directory.systemTemp.createTemp('all_in_one_resume');
+    addTearDown(() async {
+      await media.close(force: true);
+      await folder.delete(recursive: true);
+    });
+    media.listen((request) async {
+      final response = request.response;
+      if (request.uri.path == '/stream-only') {
+        response.statusCode = HttpStatus.notFound;
+        await response.close();
+        return;
+      }
+      if (request.uri.path == '/movie-download.mp4' &&
+          request.headers.value('X-Source-Fixture') != 'movie') {
+        response.statusCode = HttpStatus.forbidden;
+        await response.close();
+        return;
+      }
+      final range = request.headers.value(HttpHeaders.rangeHeader);
+      ranges.add(range);
+      final start = range == 'bytes=16384-' ? 16384 : 0;
+      final end = range == 'bytes=0-0' ? 1 : range == null ? 16384 : expected.length;
+      response
+        ..statusCode = HttpStatus.partialContent
+        ..headers.contentType = ContentType('video', 'mp4')
+        ..headers.contentLength = end - start
+        ..headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-${end - 1}/${expected.length}')
+        ..add(expected.sublist(start, end));
+      await response.close();
+    });
+    final url = 'http://127.0.0.1:${media.port}';
+    final manager = DownloadManager.instance;
+    await manager.setDownloadDirectory(folder.path);
+
+    final webTask = await manager.startDirectDownload(
+      url: '$url/web-download.mp4',
+      title: 'Resume Web Demo',
+      author: 'Fixture',
+      thumbnailUrl: '',
+      isAudio: false,
+    );
+    await _waitForCompletedDownload(webTask);
+    expect(await File(webTask.savePath!).readAsBytes(), expected);
+    manager.deleteTask(webTask);
+
+    final movieTask = await manager.startMovieDownload(
+      movie: const MovieItem(
+        id: 'resume_fixture',
+        title: 'Resume Movie Demo',
+        posterUrl: '',
+        backdropUrl: '',
+        year: 2026,
+        rating: 0,
+        quality: '360p',
+        genres: [],
+        type: 'movie',
+        synopsis: '',
+        duration: '',
+        repoId: 'fixture',
+        repoName: 'Fixture',
+        sources: [],
+      ),
+      source: MovieSource(
+        serverName: 'Fixture',
+        resolution: '360p',
+        downloadUrl: '$url/movie-download.mp4',
+        streamUrl: '$url/stream-only',
+        fileSize: '0.01 MB',
+        headers: const {'X-Source-Fixture': 'movie'},
+      ),
+    );
+    await _waitForCompletedDownload(movieTask);
+    expect(await File(movieTask.savePath!).readAsBytes(), expected);
+    expect(ranges.where((range) => range == 'bytes=16384-'), hasLength(2));
+    manager.deleteTask(movieTask);
+  });
+
   test('HLS master playlists are downloaded as one playable file', () async {
     SharedPreferences.setMockInitialValues({});
     final temp = await Directory.systemTemp.createTemp('snaptube_hls_test');
@@ -242,6 +323,16 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('vault_pin_hash'), isNotNull);
   });
+}
+
+Future<void> _waitForCompletedDownload(DownloadTask task) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 15));
+  while (task.status == DownloadStatus.downloading &&
+      DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+  expect(task.status, DownloadStatus.completed, reason: task.errorMessage);
+  expect(task.payloadVerified, isTrue);
 }
 
 Future<void> _handleRequest(HttpRequest request, int port) async {

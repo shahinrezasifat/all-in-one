@@ -1,6 +1,7 @@
 package se.cstate.ytdlp_flutter
 
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -161,6 +162,13 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
             addOption("--continue")
             addOption("--retries", "8")
             addOption("--fragment-retries", "8")
+            addOption("--extractor-retries", "4")
+            addCommands(listOf("--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:8"))
+            val host = Uri.parse(url).host.orEmpty().lowercase()
+            if (host == "youtu.be" || host == "youtube.com" || host.endsWith(".youtube.com") ||
+                host == "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com")) {
+                addOption("--http-chunk-size", "5M")
+            }
             addOption("--abort-on-unavailable-fragments")
             if (audioFormat != null) {
                 addOption("-x")
