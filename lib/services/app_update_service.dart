@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:pub_semver/pub_semver.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _repository = 'shahinrezasifat/all-in-one';
 const _updateChannel = MethodChannel('snaptube_pure/app_update');
+const _requiredReleaseKey = 'required_github_app_release';
 
 class AppUpdate {
   const AppUpdate({
@@ -23,6 +25,19 @@ class AppUpdate {
 }
 
 final installedAndroidVersion = _readInstalledAndroidVersion();
+final requiredAppUpdate = ValueNotifier<AppUpdate?>(null);
+Future<AppUpdate?>? _runningUpdateCheck;
+
+Future<AppUpdate?> requestAppUpdate() {
+  final known = requiredAppUpdate.value;
+  if (known != null) return Future.value(known);
+  return _runningUpdateCheck ??= checkForAppUpdate()
+      .then((update) {
+        if (update != null) requiredAppUpdate.value = update;
+        return update;
+      })
+      .whenComplete(() => _runningUpdateCheck = null);
+}
 
 Future<String?> _readInstalledAndroidVersion() async {
   if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
@@ -40,9 +55,51 @@ Future<AppUpdate?> checkForAppUpdate() async {
   final installedVersion = await installedAndroidVersion;
   if (installedVersion == null) return null;
 
+  SharedPreferences? preferences;
+  AppUpdate? remembered;
+  try {
+    preferences = await SharedPreferences.getInstance();
+    final encoded = preferences.getString(_requiredReleaseKey);
+    if (encoded != null) {
+      final data = jsonDecode(encoded);
+      final version = data is Map<String, dynamic> ? data['version'] : null;
+      if (data is Map<String, dynamic> &&
+          version is String &&
+          _parseVersion(version) > _parseVersion(installedVersion)) {
+        remembered = AppUpdate(
+          version: version,
+          notes: data['notes'] is String ? data['notes'] as String : '',
+          releaseUrl:
+              _releaseLink(data['releaseUrl'], 'tag') ??
+              Uri.https('github.com', '/$_repository/releases/latest'),
+          apkUrl: _releaseLink(data['apkUrl'], 'download'),
+        );
+      } else {
+        await preferences.remove(_requiredReleaseKey);
+      }
+    }
+  } on Exception {
+    // A local storage error must not interfere with the live release check.
+  }
+
   final client = http.Client();
   try {
-    return await fetchAppUpdate(client, installedVersion);
+    final live = await fetchAppUpdate(client, installedVersion);
+    if (live == null) return remembered;
+    try {
+      await preferences?.setString(
+        _requiredReleaseKey,
+        jsonEncode({
+          'version': live.version,
+          'notes': live.notes,
+          'releaseUrl': live.releaseUrl.toString(),
+          'apkUrl': live.apkUrl?.toString(),
+        }),
+      );
+    } on Exception {
+      // The dialog can still block the running app if saving fails.
+    }
+    return live;
   } finally {
     client.close();
   }

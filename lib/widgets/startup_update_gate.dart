@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,7 +11,7 @@ class StartupUpdateGate extends StatefulWidget {
   const StartupUpdateGate({
     super.key,
     required this.child,
-    this.checkForUpdate = checkForAppUpdate,
+    this.checkForUpdate = requestAppUpdate,
   });
 
   final Widget child;
@@ -18,27 +21,83 @@ class StartupUpdateGate extends StatefulWidget {
   State<StartupUpdateGate> createState() => _StartupUpdateGateState();
 }
 
-class _StartupUpdateGateState extends State<StartupUpdateGate> {
-  late final _check = widget.checkForUpdate();
+class _StartupUpdateGateState extends State<StartupUpdateGate>
+    with WidgetsBindingObserver {
+  Timer? _poll;
+  DateTime? _lastCheck;
+  AppUpdate? _required;
+  bool _starting = true;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    requiredAppUpdate.addListener(_applyManualUpdate);
+    unawaited(_check());
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      _poll = Timer.periodic(const Duration(minutes: 5), (_) {
+        if (WidgetsBinding.instance.lifecycleState ==
+            AppLifecycleState.resumed) {
+          unawaited(_check());
+        }
+      });
+    }
+  }
+
+  void _applyManualUpdate() {
+    final update = requiredAppUpdate.value;
+    if (update != null) setState(() => _required = update);
+  }
+
+  Future<void> _check() async {
+    if (_checking || _required != null) return;
+    _checking = true;
+    _lastCheck = DateTime.now();
+    AppUpdate? update;
+    try {
+      update = await widget.checkForUpdate();
+    } on Exception {
+      // An unavailable release check should leave the current app usable.
+    }
+    _checking = false;
+    if (!mounted) return;
+    setState(() {
+      _starting = false;
+      _required ??= update;
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        DateTime.now().difference(_lastCheck ?? DateTime(1970)) >=
+            const Duration(minutes: 1)) {
+      unawaited(_check());
+    }
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    requiredAppUpdate.removeListener(_applyManualUpdate);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<AppUpdate?>(
-      future: _check,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(
-                semanticsLabel: 'Checking for updates',
-              ),
-            ),
-          );
-        }
-        final update = snapshot.data;
-        return update == null ? widget.child : _RequiredUpdateDialog(update);
-      },
-    );
+    if (_starting) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            semanticsLabel: 'Checking for updates',
+          ),
+        ),
+      );
+    }
+    final update = _required;
+    return update == null ? widget.child : _RequiredUpdateDialog(update);
   }
 }
 

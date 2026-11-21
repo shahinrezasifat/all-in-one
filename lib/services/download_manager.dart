@@ -705,7 +705,7 @@ class DownloadManager extends ChangeNotifier {
     final isYouTube = YtDlpService.isYouTubeUrl(task.originalUrl);
     final usePage = YtDlpService.instance.supported &&
         (nativeFormat || (isYouTube && (task.audioTrackId ?? '').isEmpty));
-    final nativeOnly = usePage && (nativeFormat || Platform.isAndroid);
+    var nativeOnly = usePage && (nativeFormat || Platform.isAndroid);
     Object? lastError;
     for (var attempt = 1; usePage && attempt <= 3; attempt++) {
       if (task.status != DownloadStatus.downloading) return;
@@ -720,6 +720,36 @@ class DownloadManager extends ChangeNotifier {
         task.statusNote = 'Reconnecting to continue the download…';
         notifyListeners();
         await Future.delayed(Duration(seconds: attempt));
+      }
+    }
+
+    if (isYouTube && nativeOnly && task.status == DownloadStatus.downloading) {
+      task.statusNote = 'Trying another source for the selected YouTube format…';
+      notifyListeners();
+      ExtractResult? alternatives;
+      try {
+        alternatives = await ExtractorService.instance
+            .extract(task.originalUrl)
+            .timeout(const Duration(seconds: 35));
+      } on Exception catch (error) {
+        debugPrint('YouTube fallback could not resolve a source: $error');
+      }
+      if (task.status != DownloadStatus.downloading) return;
+      final height = ExtractorService.heightHint(formatId, task.formatLabel);
+      final pool = task.isAudio ? alternatives?.audioFormats : alternatives?.videoFormats;
+      final alternative = pool?.where((format) =>
+          !_isUnusableUrl(format.url) &&
+          (task.isAudio || height == null ||
+              ExtractorService.heightHint(format.id, format.label) == height) &&
+          (!format.needsAudioMerge || !_isUnusableUrl(format.companionAudioUrl))
+      ).firstOrNull;
+      if (alternative != null) {
+        task.streamUrl = alternative.url;
+        task.needsAudioMerge = alternative.needsAudioMerge;
+        task.audioStreamUrl = alternative.companionAudioUrl;
+        task.audioExt = alternative.companionAudioExt;
+        task.totalBytes = alternative.fileSize ?? 0;
+        nativeOnly = false;
       }
     }
 
@@ -801,6 +831,9 @@ class DownloadManager extends ChangeNotifier {
 
     final text = error.toString();
     final lower = text.toLowerCase();
+    if (lower.contains('sign in') || lower.contains('login required')) {
+      return 'YouTube requires sign-in for this video or network';
+    }
     if (text.contains('403')) {
       return 'Source refused the download link (403) — tap retry for a fresh link';
     }

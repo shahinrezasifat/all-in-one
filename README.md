@@ -7,7 +7,7 @@
 <p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
 <p align="center">
-  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.6/split-all-in-one-v1.0.6-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.6 for ARM64, 86 MB" width="300"></a>
+  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.7 for ARM64, 86 MB" width="300"></a>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 | **Multi-source movie streaming** | Browse integrated movie catalogs, choose an available source, and watch in the built-in player. Catalogs and playback vary by provider. |
 | **Downloads and offline playback** | Keep saved media organized and play completed downloads offline. |
 | **Private Vault** | Keep personal media in a dedicated vault with a PIN and optional fingerprint or supported biometric unlock on Android. |
-| **GitHub release updates** | The Android app checks for newer releases at startup. A required update shows release notes and opens the APK download. |
+| **GitHub release updates** | Android checks GitHub at startup, when you return to the app, and periodically while it is open. You can also check from Settings. A newer release blocks access and opens the APK download. |
 
 All in One is useful if you regularly switch between a web browser, a video downloader, a movie player, and a private media folder. Download and stream media you have permission to use.
 
@@ -62,10 +62,10 @@ The YouTube images show the formats listed for that video. The download and Vaul
 
 | Android APK | Download size | Device |
 | --- | ---: | --- |
-| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.6/split-all-in-one-v1.0.6-arm64-v8a.apk) | ~86 MB | Most modern Android phones and tablets |
-| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.6/split-all-in-one-v1.0.6-armeabi-v7a.apk) | ~86 MB | Older 32-bit ARM devices |
-| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.6/split-all-in-one-v1.0.6-x86_64.apk) | ~89 MB | Compatible Intel or AMD Android devices and emulators |
-| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.6/all-in-one-v1.0.6.apk) | ~229 MB | Contains all three CPU architectures in one installer |
+| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-arm64-v8a.apk) | ~86 MB | Most modern Android phones and tablets |
+| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-armeabi-v7a.apk) | ~86 MB | Older 32-bit ARM devices |
+| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-x86_64.apk) | ~89 MB | Compatible Intel or AMD Android devices and emulators |
+| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/all-in-one-v1.0.7.apk) | ~229 MB | Contains all three CPU architectures in one installer |
 
 Each architecture-specific APK includes the app and the media engines for its CPU. The listed size is the APK download size. Installed storage usage can be higher.
 

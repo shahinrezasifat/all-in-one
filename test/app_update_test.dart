@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snaptube_pure/services/app_update_service.dart';
 import 'package:snaptube_pure/widgets/startup_update_gate.dart';
 
@@ -173,5 +174,67 @@ void main() {
     await tester.pumpAndSettle();
     expect(launches, [_apk, _release]);
     expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
+  testWidgets('A foreground check gates even a screen pushed after startup', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    var checks = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        builder: (context, child) => StartupUpdateGate(
+          checkForUpdate: () async {
+            if (++checks == 1) return null;
+            return AppUpdate(
+              version: '1.10.0',
+              notes: 'New release',
+              releaseUrl: Uri.parse(_release),
+            );
+          },
+          child: child!,
+        ),
+        home: const Scaffold(body: Text('Home screen')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    navigator.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Playing video')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Playing video'), findsOneWidget);
+
+    await tester.pump(const Duration(minutes: 5));
+    await tester.pumpAndSettle();
+    expect(find.text('Playing video'), findsNothing);
+    expect(find.text('Update required · v1.10.0'), findsOneWidget);
+  });
+
+  testWidgets('A known mandatory release stays required while offline', (
+    tester,
+  ) async {
+    const channel = MethodChannel('snaptube_pure/app_update');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (_) async => '1.9.0');
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    SharedPreferences.setMockInitialValues({
+      'required_github_app_release': jsonEncode({
+        'version': '1.10.0',
+        'notes': 'Mandatory release',
+        'releaseUrl': _release,
+        'apkUrl': _apk,
+      }),
+    });
+    await tester.pumpWidget(
+      const MaterialApp(home: StartupUpdateGate(child: Text('Home screen'))),
+    );
+    await tester.pump(const Duration(seconds: 8));
+    await tester.pumpAndSettle();
+    expect(find.text('Home screen'), findsNothing);
+    expect(find.text('Update required · v1.10.0'), findsOneWidget);
   });
 }

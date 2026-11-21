@@ -112,9 +112,8 @@ class TubPureApp extends StatelessWidget {
               PointerDeviceKind.trackpad,
             },
           ),
-          home: const StartupUpdateGate(
-            child: StoragePermissionGate(child: MainNavigationScreen()),
-          ),
+          builder: (context, child) => StartupUpdateGate(child: child!),
+          home: const StoragePermissionGate(child: MainNavigationScreen()),
         );
       },
     );

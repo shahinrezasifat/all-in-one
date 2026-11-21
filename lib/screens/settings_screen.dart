@@ -406,6 +406,31 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(height: 10),
 
                     _aboutCard(context, accent, isDark, secondaryText),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      leading: Icon(Icons.system_update_outlined, color: accent),
+                      title: const Text('Check for updates'),
+                      subtitle: const Text('GitHub Releases'),
+                      onTap: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        messenger
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(const SnackBar(
+                            content: Text('Checking GitHub for updates…'),
+                          ));
+                        final installed = await installedAndroidVersion;
+                        final update = await requestAppUpdate();
+                        if (!context.mounted || !messenger.mounted) return;
+                        messenger.hideCurrentSnackBar();
+                        if (update == null) {
+                          messenger.showSnackBar(SnackBar(content: Text(
+                            installed == null
+                                ? 'APK updates are available on Android.'
+                                : 'No newer release found. Check your connection if you expected an update.',
+                          )));
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),
