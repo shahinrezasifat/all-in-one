@@ -1,0 +1,93 @@
+name: Build desktop release packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.50.0'
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Install Flutter SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:FLUTTER_VERSION https://github.com/flutter/flutter.git "$env:RUNNER_TEMP/flutter"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "$env:RUNNER_TEMP/flutter/bin" >> $env:GITHUB_PATH
+      - name: Build and package Windows x64
+        shell: pwsh
+        run: |
+          flutter pub get --enforce-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter build windows --release --no-pub
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $folder = (Resolve-Path 'build/windows/x64/runner/Release').Path
+          $app = Start-Process -FilePath (Join-Path $folder 'snaptube_pure.exe') -WorkingDirectory $folder -PassThru
+          try {
+            Start-Sleep -Seconds 15
+            $app.Refresh()
+            if ($app.HasExited -or $app.MainWindowHandle -eq 0) { throw 'Windows app did not open a window' }
+          } finally {
+            if (!$app.HasExited) { Stop-Process -Id $app.Id }
+          }
+          $tag = git describe --tags --exact-match
+          Compress-Archive -Path "$folder/*" -DestinationPath "all-in-one-$tag-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: all-in-one-*-windows-x64.zip
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev xvfb xdotool
+      - name: Install Flutter SDK
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Build and package Linux x64
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter build linux --release --no-pub
+          bundle=build/linux/x64/release/bundle
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a bash -s "$bundle" <<'EOF'
+          set -euo pipefail
+          "$1/snaptube_pure" > desktop-smoke.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          if ! timeout 24s xdotool search --sync --onlyvisible --pid "$pid" >/dev/null; then
+            cat desktop-smoke.log
+            exit 1
+          fi
+          sleep 5
+          kill -0 "$pid" || { cat desktop-smoke.log; exit 1; }
+          EOF
+          tag="$(git describe --tags --exact-match)"
+          tar -czf "all-in-one-$tag-linux-x64.tar.gz" -C "$bundle" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: all-in-one-*-linux-x64.tar.gz
+          if-no-files-found: error
