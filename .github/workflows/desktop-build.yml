@@ -72,7 +72,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libjson-glib-dev xvfb xdotool
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libjson-glib-dev xvfb xdotool x11-utils dbus-x11
       - name: Install Flutter SDK
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
@@ -82,12 +82,13 @@ jobs:
           flutter pub get --enforce-lockfile
           flutter build linux --release --no-pub
           bundle=build/linux/x64/release/bundle
-          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a bash -s "$bundle" <<'EOF'
+          LIBGL_ALWAYS_SOFTWARE=1 GDK_BACKEND=x11 NO_AT_BRIDGE=1 xvfb-run -a -s '-screen 0 1280x800x24' dbus-run-session -- bash -s "$bundle" <<'EOF'
           set -euo pipefail
           "$1/snaptube_pure" > desktop-smoke.log 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
-          if ! timeout 24s xdotool search --sync --onlyvisible --pid "$pid" >/dev/null; then
+          if ! timeout 45s xdotool search --sync --onlyvisible --name '^Tub Pure$' >/dev/null; then
+            xwininfo -root -tree
             cat desktop-smoke.log
             exit 1
           fi
