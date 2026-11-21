@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  Android 7.0+ · <a href="#android-screenshots">See the app</a> · <a href="#download-and-install-on-android">Install guide</a> · <a href="#choose-a-build">Other Android devices</a>
+  Android 7.0+ · <a href="#android-screenshots">See the app</a> · <a href="#download-and-install-on-android">Android builds</a> · <a href="#windows-and-linux-downloads">Desktop builds</a>
 </p>
 
 ## What can you do with All in One?
@@ -72,6 +72,19 @@ Each architecture-specific APK includes the app and the media engines for its CP
 1. Download the APK for your device. The main download button is for ARM64.
 2. Open the APK and follow Android’s install prompts. **Android 7.0 or later (API 24+)** is required.
 3. Open **All in One**. Set up the Private Vault if you want to protect personal media.
+
+## Windows and Linux downloads
+
+| Platform | Package | Run |
+| --- | --- | --- |
+| Windows x64 | [Portable ZIP](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/all-in-one-v1.0.7-windows-x64.zip) | Extract the entire ZIP and open `snaptube_pure.exe` |
+| Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/all-in-one-v1.0.7-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
+
+Windows needs the x64 Visual C++ Runtime and WebView2 for the in-app browser. Keep the executable, DLLs, and data folder together. [Microsoft Visual C++ Runtime](https://aka.ms/vc14/vc_redist.x64.exe) · [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+
+Linux was tested on Ubuntu 24.04 x64. The desktop bundle uses GTK 3, WebKitGTK 4.1, and JSON-GLib from the distribution. On Ubuntu 24.04, install them with `sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 libjson-glib-1.0-0`.
+
+For desktop download and media conversion features that call external tools, install `yt-dlp` and `ffmpeg` and make them available on your system PATH. Android biometric unlock and mandatory APK updates are Android features.
 
 ## Built with Flutter and Dart
 
