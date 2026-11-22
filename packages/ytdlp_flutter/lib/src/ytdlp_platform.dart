@@ -12,7 +12,10 @@ abstract class YtdlpPlatform {
   Future<void> init();
 
   /// Fetch metadata without downloading.
-  Future<VideoInfo> getVideoInfo(String url);
+  Future<VideoInfo> getVideoInfo(String url, {
+    String? format,
+    Map<String, String> headers = const {},
+  });
 
   /// Download the best audio-only stream of [url] into [outputDir] and
   /// return the absolute path of the finished file.

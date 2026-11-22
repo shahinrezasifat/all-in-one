@@ -1,11 +1,11 @@
 {
-    "name": "Tub Pure",
-    "short_name": "Tub Pure",
+    "name": "All in One",
+    "short_name": "All in One",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "Tub Pure - Ad-Free Video and Music Downloader & Player.",
+    "background_color": "#FCF6F7",
+    "theme_color": "#A51D32",
+    "description": "Media downloader, movie player, and private vault.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

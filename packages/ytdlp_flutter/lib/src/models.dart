@@ -50,6 +50,7 @@ class YtdlpProgress {
     this.fraction,
     this.downloadedBytes,
     this.totalBytes,
+    this.totalBytesIsEstimate = false,
     this.etaSeconds,
     this.speedBytesPerSecond,
   });
@@ -58,6 +59,7 @@ class YtdlpProgress {
   final double? fraction;
   final int? downloadedBytes;
   final int? totalBytes;
+  final bool totalBytesIsEstimate;
   final int? etaSeconds;
   final double? speedBytesPerSecond;
 

@@ -23,7 +23,30 @@ env:
   FLUTTER_VERSION: '3.50.0'
 
 jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Install Flutter SDK
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Install Linux test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libjson-glib-dev xvfb
+      - name: Analyze and test
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          xvfb-run -a flutter test --timeout 10m
+
   windows:
+    needs: verify
     if: inputs.platform != 'linux'
     runs-on: windows-2022
     timeout-minutes: 30
@@ -31,6 +54,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+          fetch-depth: 0
       - name: Install Flutter SDK
         shell: pwsh
         run: |
@@ -62,6 +86,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    needs: verify
     if: inputs.platform != 'windows'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -69,6 +94,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+          fetch-depth: 0
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -87,7 +113,7 @@ jobs:
           "$1/snaptube_pure" > desktop-smoke.log 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
-          if ! timeout 45s xdotool search --sync --onlyvisible --name '^Tub Pure$' >/dev/null; then
+          if ! timeout 45s xdotool search --sync --onlyvisible --name '^All in One$' >/dev/null; then
             xwininfo -root -tree
             cat desktop-smoke.log
             exit 1

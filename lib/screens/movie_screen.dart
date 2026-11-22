@@ -1307,13 +1307,7 @@ class _MovieScreenState extends State<MovieScreen> {
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     sliver: SliverGrid.builder(
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 150,
-                            childAspectRatio: .62,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 14,
-                          ),
+                      gridDelegate: MovieCard.catalogGrid,
                       itemCount: visible.length,
                       itemBuilder: (context, index) {
                         final movie = visible[index];

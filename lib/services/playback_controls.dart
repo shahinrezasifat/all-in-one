@@ -4,6 +4,21 @@ import 'package:flutter/services.dart';
 class PlaybackControls {
   static const _channel = MethodChannel('snaptube_pure/playback_controls');
   bool _adjustedBrightness = false;
+  bool _screenAwake = false;
+
+  Future<void> keepScreenOn(bool enabled) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (_screenAwake == enabled) return;
+    _screenAwake = enabled;
+    try {
+      await _channel.invokeMethod<Object?>('keepScreenOn', {
+        'owner': identityHashCode(this),
+        'enabled': enabled,
+      });
+    } on Exception {
+      // The host can be detached while an Android activity is being replaced.
+    }
+  }
 
   Future<double?> adjust({
     required bool brightness,

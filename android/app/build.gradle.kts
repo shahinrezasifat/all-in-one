@@ -11,15 +11,15 @@ plugins {
 
 // The app uses the platform video player on Android. Avoid shipping
 // its MDK FFmpeg library under the same name as yt-dlp's FFmpeg executable.
-project(":fvp").plugins.withId("com.android.library") {
+project.findProject(":fvp")?.plugins?.withId("com.android.library") {
     project(":fvp").extensions.configure<LibraryExtension> {
         packaging.jniLibs.excludes.add("**/libffmpeg.so")
     }
 }
 
 // Market signing: android/key.properties holds the release keystore details.
-// Without it (or without the keystore file) the build falls back to debug
-// keys so CI and the developer machine never break.
+// A release APK must never silently fall back to the debug key — such a build
+// can not be updated over the air on a user's device.
 val keystoreProperties = Properties()
 val releaseAbi = providers.gradleProperty("release-abi").orNull
 if (releaseAbi != null) {
@@ -84,7 +84,10 @@ android {
                     storePassword = keystoreProperties["storePassword"] as String
                 }
             } else {
-                signingConfigs.getByName("debug")
+                error(
+                    "Release signing key is missing. Create android/key.properties " +
+                        "and the release keystore, or build a debug APK instead."
+                )
             }
             // R8 code shrinking renames kotlin.coroutines.Continuation, which
             // breaks the dart:jni / Pigeon bridge: shared_preferences (and other
@@ -111,6 +114,7 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.media3:media3-exoplayer:1.9.2")
     implementation("com.github.recloudstream.cloudstream:library:v4.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 }

@@ -23,15 +23,8 @@ class VideoCard extends StatelessWidget {
     this.onLongPress,
   });
 
-  Future<void> _handleDownload(BuildContext context) async {
-    // Shows a real progress screen and an explicit error (with retry) when no
-    // stream can be found — the old 1s snackbar just vanished silently.
-    await analyzeAndPickFormat(
-      context,
-      url: video.videoUrl,
-      analyzingText: 'Analyzing formats & unlocked qualities...',
-    );
-  }
+  Future<void> _handleDownload(BuildContext context) =>
+      analyzeAndPickFormat(context, url: video.videoUrl);
 
   @override
   Widget build(BuildContext context) {

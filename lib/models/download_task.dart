@@ -1,3 +1,5 @@
+import 'movie_model.dart';
+
 enum DownloadStatus {
   queued,
   downloading,
@@ -48,6 +50,7 @@ class DownloadTask {
   String? streamUrl;
   bool payloadVerified;
   final bool isHls;
+  final String? hlsVariantResolution;
 
   /// Format id the user actually picked. Kept on the task so that a retry
   /// after a dropped connection re-resolves THE SAME resolution instead of
@@ -78,6 +81,11 @@ class DownloadTask {
   /// byte-range requests without them — dropping these is why movie
   /// downloads could silently fail. Persisted so retries keep working.
   Map<String, String> headers;
+  final MovieItem? series;
+  final String? seriesEpisodeUrl;
+  final String? seriesSeason;
+  final String? seriesLanguage;
+  final String? seriesResolution;
 
   /// Short human-readable state shown while the engine is reconnecting,
   /// waiting for the source or merging tracks (transient, never persisted).
@@ -138,6 +146,21 @@ class DownloadTask {
   DownloadStatus status;
   int downloadedBytes;
   int totalBytes;
+  bool totalBytesIsEstimate;
+
+  /// While the video half is transferring, this is the preflight audio size.
+  /// Zero means the companion size could not be determined.
+  int? pendingCompanionBytes;
+
+  int get displayTotalBytes {
+    final audio = pendingCompanionBytes;
+    if (audio == null) return totalBytes;
+    if (audio == 0 || totalBytes == 0) return 0;
+    return totalBytes + audio;
+  }
+
+  bool get hasDownloadProgress => displayTotalBytes > 0 ||
+      nativeProgress != null || isConverting || status == DownloadStatus.completed;
   double speedBytesPerSec;
   double? nativeProgress;
   String? savePath;
@@ -163,12 +186,18 @@ class DownloadTask {
     this.payloadVerified = false,
     this.preferredFormatId,
     this.isHls = false,
+    this.hlsVariantResolution,
     this.needsAudioMerge = false,
     this.audioStreamUrl,
     this.audioExt,
     this.audioTrackId,
     this.audioTrackName,
     Map<String, String>? headers,
+    this.series,
+    this.seriesEpisodeUrl,
+    this.seriesSeason,
+    this.seriesLanguage,
+    this.seriesResolution,
     this.statusNote,
     this.convertStage,
     this.convertProgress = 0.0,
@@ -176,6 +205,7 @@ class DownloadTask {
     this.status = DownloadStatus.queued,
     this.downloadedBytes = 0,
     this.totalBytes = 0,
+    this.totalBytesIsEstimate = false,
     this.speedBytesPerSec = 0,
     this.savePath,
     this.errorMessage,
@@ -192,9 +222,9 @@ class DownloadTask {
     // While the convert stage runs the byte download itself is finished —
     // its slider must honestly sit at 100%.
     if (isConverting || status == DownloadStatus.completed) return 1.0;
-    if (nativeProgress != null) return nativeProgress!;
-    if (totalBytes <= 0) return status == DownloadStatus.completed ? 1.0 : 0.0;
-    return (downloadedBytes / totalBytes).clamp(0.0, 1.0);
+    final total = displayTotalBytes;
+    if (total <= 0) return nativeProgress ?? 0.0;
+    return (downloadedBytes / total).clamp(0.0, 0.99);
   }
 
   String get speedFormatted {
@@ -208,8 +238,8 @@ class DownloadTask {
 
   String get progressSizeFormatted {
     final curMb = downloadedBytes / (1024 * 1024);
-    if (totalBytes > 0) {
-      final totMb = totalBytes / (1024 * 1024);
+    if (displayTotalBytes > 0) {
+      final totMb = displayTotalBytes / (1024 * 1024);
       return '${curMb.toStringAsFixed(1)} / ${totMb.toStringAsFixed(1)} MB';
     }
     return '${curMb.toStringAsFixed(1)} MB';
@@ -218,10 +248,10 @@ class DownloadTask {
   String get etaFormatted {
     if (status != DownloadStatus.downloading ||
         speedBytesPerSec <= 0 ||
-        totalBytes <= 0) {
+        displayTotalBytes <= 0) {
       return '';
     }
-    final remainingBytes = totalBytes - downloadedBytes;
+    final remainingBytes = displayTotalBytes - downloadedBytes;
     if (remainingBytes <= 0) return 'Finishing...';
 
     final remainingSecs = (remainingBytes / speedBytesPerSec).round();
@@ -281,8 +311,15 @@ class DownloadTask {
     'audioTrackId': audioTrackId,
     'audioTrackName': audioTrackName,
     'headers': headers,
+    if (series != null) 'series': series!.toJson(),
+    if (seriesEpisodeUrl != null) 'seriesEpisodeUrl': seriesEpisodeUrl,
+    if (seriesSeason != null) 'seriesSeason': seriesSeason,
+    if (seriesLanguage != null) 'seriesLanguage': seriesLanguage,
+    if (seriesResolution != null) 'seriesResolution': seriesResolution,
     'preferredFormatId': preferredFormatId,
     'isHls': isHls,
+    if (hlsVariantResolution != null)
+      'hlsVariantResolution': hlsVariantResolution,
     'needsAudioMerge': needsAudioMerge,
     'completionNote': completionNote,
     'savePath': savePath,
@@ -290,6 +327,7 @@ class DownloadTask {
     'downloadedBytes': downloadedBytes,
     'payloadVerified': payloadVerified,
     'totalBytes': totalBytes,
+    if (totalBytesIsEstimate) 'totalBytesIsEstimate': true,
     'threadsCount': threadsCount,
     'createdAt': createdAt.toIso8601String(),
     'completedAt': completedAt?.toIso8601String(),
@@ -316,8 +354,16 @@ class DownloadTask {
             (k, v) => MapEntry(k.toString(), v.toString()),
           ) ??
           const {},
+      series: json['series'] is Map<String, dynamic>
+          ? MovieItem.fromJson(json['series'] as Map<String, dynamic>)
+          : null,
+      seriesEpisodeUrl: json['seriesEpisodeUrl'] as String?,
+      seriesSeason: json['seriesSeason'] as String?,
+      seriesLanguage: json['seriesLanguage'] as String?,
+      seriesResolution: json['seriesResolution'] as String?,
       preferredFormatId: json['preferredFormatId'],
       isHls: json['isHls'] as bool? ?? false,
+      hlsVariantResolution: json['hlsVariantResolution'] as String?,
       needsAudioMerge: json['needsAudioMerge'] ?? false,
       completionNote: json['completionNote'],
       savePath: json['savePath'],
@@ -328,6 +374,7 @@ class DownloadTask {
       downloadedBytes: json['downloadedBytes'] ?? 0,
       payloadVerified: json['payloadVerified'] == true,
       totalBytes: json['totalBytes'] ?? 0,
+      totalBytesIsEstimate: json['totalBytesIsEstimate'] == true,
       threadsCount: json['threadsCount'] ?? 1,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt']) ?? DateTime.now()

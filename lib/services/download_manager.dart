@@ -1,19 +1,30 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/download_task.dart';
 import '../models/extract_result.dart';
 import '../models/movie_model.dart';
+import '../models/movie_source_language.dart';
+import 'download_size_probe.dart';
 import 'extractor_service.dart';
 import 'gallery_media_service.dart';
+import 'image_cache_service.dart';
 import 'inner_tube_service.dart';
 import 'media_mux_service.dart';
+import 'provider_engine/provider_engine_service.dart';
+import 'provider_engine/provider_models.dart';
 import 'virtual_folder_service.dart';
+
 import 'package:ytdlp_flutter/ytdlp_flutter.dart';
+
 import 'yt_dlp_service.dart';
 
 class DownloadManager extends ChangeNotifier {
@@ -36,6 +47,20 @@ class DownloadManager extends ChangeNotifier {
   // Track active HTTP clients for immediate abort on pause or cancel
   final Map<String, List<http.Client>> _activeClients = {};
   final Map<String, Future<void>> _runningDownloads = {};
+  static const _queuedDownloadConcurrency = 3;
+  static const _background = MethodChannel('snaptube_pure/background');
+  Future<void> _foregroundUpdate = Future.value();
+
+  Future<void> _setDownloadForeground(bool enabled) {
+    if (kIsWeb || !Platform.isAndroid) return Future.value();
+    return _foregroundUpdate = _foregroundUpdate.then((_) async {
+      try {
+        await _background.invokeMethod<void>('downloads', enabled);
+      } on Exception catch (error) {
+        debugPrint('Could not update the download foreground service: $error');
+      }
+    });
+  }
 
   /// How many times the engine reconnects before giving up. Mobile networks
   /// drop sockets all the time — a single hiccup must never be shown to the
@@ -54,8 +79,13 @@ class DownloadManager extends ChangeNotifier {
   static const Duration _responseTimeout = Duration(seconds: 20);
 
   List<DownloadTask> get tasks => List.unmodifiable(_tasks);
-  List<DownloadTask> get activeTasks =>
-      _tasks.where((t) => t.status != DownloadStatus.completed && t.status != DownloadStatus.cancelled).toList();
+  List<DownloadTask> get activeTasks => _tasks
+      .where(
+        (t) =>
+            t.status != DownloadStatus.completed &&
+            t.status != DownloadStatus.cancelled,
+      )
+      .toList();
   List<DownloadTask> get completedTasks =>
       _tasks.where((t) => t.status == DownloadStatus.completed).toList();
   List<DownloadTask> get videoTasks =>
@@ -68,11 +98,23 @@ class DownloadManager extends ChangeNotifier {
       completedTasks.where((t) => t.isImageTask).toList();
 
   /// Groups all completed tasks into a clean Website -> Channel -> `List<DownloadTask>` hierarchy.
-  Map<String, Map<String, List<DownloadTask>>> get organizedWebsiteFolders {
+  Map<String, Map<String, List<DownloadTask>>> get organizedWebsiteFolders =>
+      organizeWebsiteFolders(completedTasks);
+
+  Map<String, Map<String, List<DownloadTask>>> organizeWebsiteFolders(
+    Iterable<DownloadTask> tasks,
+  ) {
     final map = <String, Map<String, List<DownloadTask>>>{};
-    for (final task in completedTasks) {
-      final website = cleanWebsiteName(null, task.originalUrl);
-      final channel = cleanChannelName(task.author);
+    for (final task in tasks) {
+      final path = task.series == null
+          ? const <String>[]
+          : (task.savePath ?? '').split(RegExp(r'[/\\]'));
+      final website = path.length >= 3
+          ? path[path.length - 3]
+          : cleanWebsiteName(null, task.originalUrl);
+      final channel = path.length >= 3
+          ? path[path.length - 2]
+          : cleanChannelName(task.author);
       map.putIfAbsent(website, () => <String, List<DownloadTask>>{});
       map[website]!.putIfAbsent(channel, () => <DownloadTask>[]);
       map[website]![channel]!.add(task);
@@ -82,7 +124,10 @@ class DownloadManager extends ChangeNotifier {
 
   String _defaultStoragePath() {
     if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
-      final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
+      final home =
+          Platform.environment['HOME'] ??
+          Platform.environment['USERPROFILE'] ??
+          '';
       if (home.isNotEmpty) {
         return '$home/Downloads/SnapTube';
       }
@@ -101,7 +146,8 @@ class DownloadManager extends ChangeNotifier {
   }
 
   bool get isPublicStorage =>
-      Platform.isAndroid && downloadDirectory.startsWith('/storage/emulated/0/Download');
+      Platform.isAndroid &&
+      downloadDirectory.startsWith('/storage/emulated/0/Download');
 
   Future<void> _initStorage() async {
     _downloadDirectory = _defaultStoragePath();
@@ -119,7 +165,9 @@ class DownloadManager extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
 
       String? savedPath = prefs.getString('custom_download_path');
-      if (savedPath != null && savedPath.isNotEmpty && Directory(savedPath).existsSync()) {
+      if (savedPath != null &&
+          savedPath.isNotEmpty &&
+          Directory(savedPath).existsSync()) {
         _downloadDirectory = savedPath;
       } else {
         if (Platform.isAndroid) {
@@ -131,7 +179,9 @@ class DownloadManager extends ChangeNotifier {
             }
             _downloadDirectory = publicPath;
           } catch (_) {
-            final extDir = await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
+            final extDir =
+                await getExternalStorageDirectory() ??
+                await getApplicationDocumentsDirectory();
             _downloadDirectory = '${extDir.path}/SnapTube';
           }
         }
@@ -155,7 +205,8 @@ class DownloadManager extends ChangeNotifier {
         _tasks.clear();
         for (final item in list) {
           final task = DownloadTask.fromJson(item);
-          if (task.status == DownloadStatus.downloading) {
+          if (task.status == DownloadStatus.downloading ||
+              task.status == DownloadStatus.queued) {
             task.status = DownloadStatus.paused;
           }
           _tasks.add(task);
@@ -218,23 +269,29 @@ class DownloadManager extends ChangeNotifier {
       try {
         final uri = Uri.parse(url);
         final host = uri.host.toLowerCase().replaceFirst(RegExp(r'^www\.'), '');
-        if (host.contains('youtube') || host.contains('youtu.be')) return 'YouTube';
+        if (host.contains('youtube') || host.contains('youtu.be'))
+          return 'YouTube';
         if (host.contains('tiktok')) return 'TikTok';
-        if (host.contains('facebook') || host.contains('fb.watch')) return 'Facebook';
+        if (host.contains('facebook') || host.contains('fb.watch'))
+          return 'Facebook';
         if (host.contains('instagram')) return 'Instagram';
         if (host.contains('soundcloud')) return 'SoundCloud';
         if (host.contains('pornhub')) return 'Pornhub';
         if (host.contains('xvideos')) return 'XVideos';
         if (host.contains('xnxx')) return 'XNXX';
         if (host.contains('vimeo')) return 'Vimeo';
-        if (host.contains('twitter') || host.contains('x.com')) return 'Twitter';
+        if (host.contains('twitter') || host.contains('x.com'))
+          return 'Twitter';
         if (host.contains('reddit')) return 'Reddit';
         if (host.contains('dailymotion')) return 'Dailymotion';
 
         final parts = host.split('.');
         if (parts.isNotEmpty) {
           final base = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
-          final cleanBase = base.replaceAll(RegExp(r'-(cdn|video|media|static|stream)$'), '');
+          final cleanBase = base.replaceAll(
+            RegExp(r'-(cdn|video|media|static|stream)$'),
+            '',
+          );
           if (cleanBase.isNotEmpty) {
             return cleanBase[0].toUpperCase() + cleanBase.substring(1);
           }
@@ -295,7 +352,7 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Adds a standalone image/thumbnail download entry to the task list
+  /// Registers an image that was already saved to disk.
   Future<DownloadTask> addCompletedImageTask({
     required String title,
     required String author,
@@ -308,11 +365,10 @@ class DownloadManager extends ChangeNotifier {
     final file = File(filePath);
     final size = file.existsSync() ? file.lengthSync() : 0;
     final ext = filePath.split('.').last;
-    final channel = cleanChannelName(author);
     final task = DownloadTask(
       id: 'img_${DateTime.now().millisecondsSinceEpoch}',
       title: title,
-      author: channel,
+      author: cleanChannelName(author),
       thumbnailUrl: thumbnailUrl.isNotEmpty ? thumbnailUrl : filePath,
       formatLabel: 'Cover Thumbnail (${ext.toUpperCase()})',
       ext: ext,
@@ -333,6 +389,57 @@ class DownloadManager extends ChangeNotifier {
     return task;
   }
 
+  Future<DownloadTask> startThumbnailDownload({
+    required String title,
+    required String author,
+    required String platform,
+    required String originalUrl,
+    required String thumbnailUrl,
+  }) async {
+    await ready;
+    final folder = destinationFolder(
+      platform: platform,
+      url: originalUrl,
+      author: author,
+    );
+    final cleaned = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    final fileTitle = cleaned.isEmpty ? 'cover' : cleaned;
+    final stem = '$folder/${fileTitle}_thumb';
+    final urlPath = Uri.tryParse(thumbnailUrl)?.path.toLowerCase() ?? '';
+    final ext =
+        RegExp(r'\.(jpe?g|png|webp|avif|gif)$').firstMatch(urlPath)?.group(1) ??
+        'jpg';
+    var target = '$stem.$ext';
+    for (
+      var copy = 2;
+      File(target).existsSync() ||
+          _tasks.any((task) => task.savePath == target);
+      copy++
+    ) {
+      target = '$stem ($copy).$ext';
+    }
+    final task = DownloadTask(
+      id: 'img_${DateTime.now().microsecondsSinceEpoch}',
+      title: title,
+      author: cleanChannelName(author),
+      thumbnailUrl: thumbnailUrl,
+      formatLabel: 'Cover Thumbnail',
+      ext: ext,
+      isAudio: false,
+      category: 'image',
+      originalUrl: thumbnailUrl,
+      streamUrl: thumbnailUrl,
+      savePath: target,
+      status: DownloadStatus.downloading,
+      threadsCount: 1,
+    );
+    _tasks.insert(0, task);
+    _persistTasks();
+    notifyListeners();
+    _downloadRealMedia(task);
+    return task;
+  }
+
   Future<DownloadTask> startDownload({
     required ExtractResult video,
     required MediaFormat format,
@@ -346,7 +453,9 @@ class DownloadManager extends ChangeNotifier {
       url: video.originalUrl,
       author: video.author,
     );
-    final sanitizedTitle = video.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    final sanitizedTitle = video.title
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .trim();
     final filename = '${sanitizedTitle}_${format.id}.${format.ext}';
     final targetPath = '$folder/$filename';
 
@@ -369,6 +478,7 @@ class DownloadManager extends ChangeNotifier {
       audioTrackName: audioTrackName,
       savePath: targetPath,
       totalBytes: format.fileSize ?? 0,
+      totalBytesIsEstimate: (format.fileSize ?? 0) > 0,
       status: DownloadStatus.downloading,
       threadsCount: 1,
     );
@@ -390,11 +500,10 @@ class DownloadManager extends ChangeNotifier {
     String? quality,
   }) async {
     await ready;
-    final folder = destinationFolder(
-      url: url,
-      author: author,
-    );
-    final sanitizedTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    final folder = destinationFolder(url: url, author: author);
+    final sanitizedTitle = title
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .trim();
     final ext = isAudio ? 'mp3' : 'mp4';
     final qLabel = quality ?? (isAudio ? '320 kbps MP3' : '1080p HD MP4');
     final filename = '${sanitizedTitle}_${isAudio ? "audio" : "video"}.$ext';
@@ -429,24 +538,108 @@ class DownloadManager extends ChangeNotifier {
     required MovieItem movie,
     required MovieSource source,
     String? customTitle,
+    int? seasonNumber,
   }) async {
     await ready;
+    ImageCacheService.instance.prefetch([movie.posterUrl]);
     final folder = '$downloadDirectory/Movies';
-    try {
-      final d = Directory(folder);
-      if (!d.existsSync()) {
-        d.createSync(recursive: true);
-      }
-    } catch (_) {}
-    final titleToUse = customTitle ?? movie.title;
-    final sanitizedTitle = titleToUse.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    final task = _makeMovieTask(
+      movie,
+      source,
+      customTitle ?? movie.title,
+      folder,
+      series: movie.isSeries
+          ? movie.copyWith(sources: const [], seasons: const [])
+          : null,
+      seasonName: seasonNumber == null ? null : 'Season $seasonNumber',
+    );
+    _tasks.insert(0, task);
+    _persistTasks();
+    notifyListeners();
+    unawaited(_downloadRealMedia(task));
+    return task;
+  }
+
+  Future<void> startSeasonDownload({
+    required MovieItem series,
+    required String seasonName,
+    required String language,
+    required String resolution,
+    required List<({ProviderEpisode episode, MovieSource source})> episodes,
+  }) async {
+    await ready;
+    if (episodes.isEmpty) return;
+    ImageCacheService.instance.prefetch([series.posterUrl]);
+    final seriesName = _safeDownloadName(series.title, fallback: 'Series');
+    final season = _safeDownloadName(seasonName, fallback: 'Season 1');
+    final folder = '$downloadDirectory/$seriesName/$season';
+    await Directory(folder).create(recursive: true);
+    final details = series.copyWith(sources: const [], seasons: const []);
+    for (final entry in episodes) {
+      final episode = entry.episode;
+      final number = episode.number.toString().padLeft(2, '0');
+      final name = episode.title.trim();
+      final group = episode.group?.trim() ?? '';
+      final title = [
+        'Episode $number',
+        if (name.isNotEmpty &&
+            name != 'Episode' &&
+            name != 'Episode ${episode.number}')
+          name,
+        if (group.isNotEmpty) group,
+      ].join(' - ');
+      final task = _makeMovieTask(
+        series,
+        entry.source,
+        title,
+        folder,
+        status: DownloadStatus.queued,
+        series: details,
+        seasonName: episode.season == null ? seasonName : 'Season ${episode.season}',
+        episodeUrl: episode.url,
+        language: language,
+        resolution: resolution,
+      );
+      _tasks.insert(0, task);
+    }
+    await _persistTasks();
+    _startQueuedDownloads();
+  }
+
+  String _safeDownloadName(String value, {required String fallback}) {
+    final clean = value
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .trim()
+        .replaceFirst(RegExp(r'\.+$'), '');
+    return clean.isEmpty ? fallback : clean;
+  }
+
+  DownloadTask _makeMovieTask(
+    MovieItem movie,
+    MovieSource source,
+    String title,
+    String folder, {
+    DownloadStatus status = DownloadStatus.downloading,
+    MovieItem? series,
+    String? seasonName,
+    String? episodeUrl,
+    String? language,
+    String? resolution,
+  }) {
+    final sanitizedTitle = _safeDownloadName(title, fallback: 'Video');
     final formatToUse = source.format.isNotEmpty ? source.format : 'mp4';
-    final quality = source.resolution.replaceAll(RegExp(r'[\s\\/:*?"<>|]'), '_');
+    final quality = source.resolution.replaceAll(
+      RegExp(r'[\s\\/:*?"<>|]'),
+      '_',
+    );
     final stem = '$folder/${sanitizedTitle}_$quality';
     var targetPath = '$stem.$formatToUse';
-    for (var copy = 2;
-        File(targetPath).existsSync() || _tasks.any((task) => task.savePath == targetPath);
-        copy++) {
+    for (
+      var copy = 2;
+      File(targetPath).existsSync() ||
+          _tasks.any((task) => task.savePath == targetPath);
+      copy++
+    ) {
       targetPath = '$stem ($copy).$formatToUse';
     }
 
@@ -461,29 +654,35 @@ class DownloadManager extends ChangeNotifier {
     }
 
     final task = DownloadTask(
-      id: 'movie_${movie.id}_${DateTime.now().millisecondsSinceEpoch}',
-      title: '$titleToUse (${source.resolution})',
+      id: 'movie_${movie.id}_${DateTime.now().microsecondsSinceEpoch}_${targetPath.hashCode}',
+      title: '$title (${source.resolution})',
       author: '${movie.repoName} • ${source.serverName}',
       thumbnailUrl: movie.posterUrl,
       formatLabel: '${source.resolution} • ${source.fileSize}',
-      ext: source.format,
+      ext: formatToUse,
       isAudio: false,
       category: 'movie',
-      originalUrl: source.downloadUrl.isNotEmpty ? source.downloadUrl : source.streamUrl,
-      streamUrl: _isUnusableUrl(source.downloadUrl) ? source.streamUrl : source.downloadUrl,
+      originalUrl: source.downloadUrl.isNotEmpty
+          ? source.downloadUrl
+          : source.streamUrl,
+      streamUrl: _isUnusableUrl(source.downloadUrl)
+          ? source.streamUrl
+          : source.downloadUrl,
       headers: source.headers,
       isHls: source.format.toLowerCase() == 'm3u8',
+      hlsVariantResolution: source.hlsVariantResolution,
       savePath: targetPath,
       totalBytes: bytes,
-      status: DownloadStatus.downloading,
+      totalBytesIsEstimate: bytes > 0,
+      status: status,
+      series: series,
+      seriesSeason: seasonName,
+      seriesEpisodeUrl: episodeUrl,
+      seriesLanguage: language,
+      seriesResolution: resolution,
       threadsCount: 1,
     );
 
-    _tasks.insert(0, task);
-    _persistTasks();
-    notifyListeners();
-
-    _downloadRealMedia(task);
     return task;
   }
 
@@ -597,16 +796,25 @@ class DownloadManager extends ChangeNotifier {
   /// The resolution the user picked ([DownloadTask.preferredFormatId] /
   /// [DownloadTask.formatLabel]) is always honoured, so a retry can never
   /// silently downgrade 4K/2K/1080p to a smaller stream.
-  Future<LiveStreamSource?> _resolveSource(DownloadTask task, String? preferredFormatId) async {
+  Future<LiveStreamSource?> _resolveSource(
+    DownloadTask task,
+    String? preferredFormatId,
+  ) async {
+    if (task.series != null) {
+      return await _refreshSeriesEpisode(task)
+          ? LiveStreamSource(videoUrl: task.streamUrl!, videoExt: task.ext)
+          : null;
+    }
     try {
       if (task.originalUrl.isNotEmpty) {
         if (task.needsAudioMerge) {
-          final pair = await ExtractorService.instance.resolveLiveVideoWithAudio(
-            task.originalUrl,
-            preferredFormatId: preferredFormatId,
-            preferredLabel: task.formatLabel,
-            audioTrackId: task.audioTrackId,
-          );
+          final pair = await ExtractorService.instance
+              .resolveLiveVideoWithAudio(
+                task.originalUrl,
+                preferredFormatId: preferredFormatId,
+                preferredLabel: task.formatLabel,
+                audioTrackId: task.audioTrackId,
+              );
           if (pair != null && pair.videoUrl.isNotEmpty) return pair;
         }
         final url = await ExtractorService.instance.resolveLiveStreamUrl(
@@ -622,15 +830,15 @@ class DownloadManager extends ChangeNotifier {
       }
 
       if (task.category == 'audio') {
-        final url = await ExtractorService.instance.resolveLiveAudioStreamForTrack(
-          task.title,
-          task.author,
-        );
+        final url = await ExtractorService.instance
+            .resolveLiveAudioStreamForTrack(task.title, task.author);
         if (url == null || url.isEmpty) return null;
         return LiveStreamSource(videoUrl: url, videoExt: task.ext);
       }
       if (task.category == 'movie') {
-        final cleanTitle = task.title.replaceAll(RegExp(r'\([^)]*\)'), '').trim();
+        final cleanTitle = task.title
+            .replaceAll(RegExp(r'\([^)]*\)'), '')
+            .trim();
         final url = await ExtractorService.instance.resolveLiveMovieStream(
           cleanTitle.isNotEmpty ? cleanTitle : task.title,
           resolution: task.formatLabel,
@@ -643,6 +851,44 @@ class DownloadManager extends ChangeNotifier {
       debugPrint('Fresh stream re-resolve failed for ${task.title}: $e');
     }
     return null;
+  }
+
+  Future<bool> _refreshSeriesEpisode(DownloadTask task) async {
+    final series = task.series;
+    final episodeUrl = task.seriesEpisodeUrl;
+    if (series == null || episodeUrl == null) return false;
+    try {
+      final sources = await ProviderEngineService.instance
+          .episodeDownloadFormats(
+            series,
+            ProviderEpisode(
+              id: episodeUrl,
+              number: 0,
+              url: episodeUrl,
+              title: '',
+            ),
+          );
+      if (task.status != DownloadStatus.downloading) return false;
+      final matches = sources.where(
+        (source) =>
+            movieSourceLanguageKeys(source).contains(task.seriesLanguage) &&
+            (task.seriesResolution == 'Auto' ||
+                episodeDownloadResolution(source) == task.seriesResolution) &&
+            (source.format.toLowerCase() == 'm3u8') == task.isHls &&
+            source.hlsVariantResolution == task.hlsVariantResolution,
+      );
+      final source =
+          matches
+              .where((source) => task.author.endsWith(source.serverName))
+              .firstOrNull ??
+          (task.downloadedBytes == 0 ? matches.firstOrNull : null);
+      if (source == null) return false;
+      task.streamUrl = source.downloadUrl;
+      task.headers = source.headers;
+      return true;
+    } on Exception {
+      return false;
+    }
   }
 
   /// A stored stream URL that is empty or a demo/preview clip must be replaced
@@ -659,7 +905,9 @@ class DownloadManager extends ChangeNotifier {
   bool _savedFileIsComplete(DownloadTask task) {
     final path = task.savePath;
     if (path == null || path.isEmpty) return false;
-    if (!task.payloadVerified || task.totalBytes <= 0 || task.downloadedBytes != task.totalBytes) {
+    if (!task.payloadVerified ||
+        task.totalBytes <= 0 ||
+        task.downloadedBytes != task.totalBytes) {
       return false;
     }
     try {
@@ -680,18 +928,45 @@ class DownloadManager extends ChangeNotifier {
   // Resilient download engine
   // ---------------------------------------------------------------------------
 
-  Future<void> _downloadRealMedia(DownloadTask task, {String? preferredFormatId}) async {
+  void _startQueuedDownloads() {
+    final available = _queuedDownloadConcurrency - _runningDownloads.length;
+    if (available > 0) {
+      final next = _tasks.reversed
+          .where((task) => task.status == DownloadStatus.queued)
+          .take(available)
+          .toList();
+      for (final task in next) {
+        task.status = DownloadStatus.downloading;
+        unawaited(_downloadRealMedia(task));
+      }
+      if (next.isNotEmpty) unawaited(_persistTasks());
+    }
+    notifyListeners();
+  }
+
+  Future<void> _downloadRealMedia(
+    DownloadTask task, {
+    String? preferredFormatId,
+  }) async {
     if (_runningDownloads.containsKey(task.id)) return;
-    final run = _performDownload(task, preferredFormatId: preferredFormatId);
+    if (_runningDownloads.isEmpty) _setDownloadForeground(true);
+    final run = _foregroundUpdate.then(
+      (_) => _performDownload(task, preferredFormatId: preferredFormatId),
+    );
     _runningDownloads[task.id] = run;
     try {
       await run;
     } finally {
       _runningDownloads.remove(task.id);
+      _startQueuedDownloads();
+      if (_runningDownloads.isEmpty) unawaited(_setDownloadForeground(false));
     }
   }
 
-  Future<void> _performDownload(DownloadTask task, {String? preferredFormatId}) async {
+  Future<void> _performDownload(
+    DownloadTask task, {
+    String? preferredFormatId,
+  }) async {
     await ready;
     if (task.status != DownloadStatus.downloading) return;
 
@@ -703,7 +978,8 @@ class DownloadManager extends ChangeNotifier {
 
     final nativeFormat = formatId?.startsWith('ytdlp_') ?? false;
     final isYouTube = YtDlpService.isYouTubeUrl(task.originalUrl);
-    final usePage = YtDlpService.instance.supported &&
+    final usePage =
+        YtDlpService.instance.supported &&
         (nativeFormat || (isYouTube && (task.audioTrackId ?? '').isEmpty));
     var nativeOnly = usePage && (nativeFormat || Platform.isAndroid);
     Object? lastError;
@@ -724,7 +1000,8 @@ class DownloadManager extends ChangeNotifier {
     }
 
     if (isYouTube && nativeOnly && task.status == DownloadStatus.downloading) {
-      task.statusNote = 'Trying another source for the selected YouTube format…';
+      task.statusNote =
+          'Trying another source for the selected YouTube format…';
       notifyListeners();
       ExtractResult? alternatives;
       try {
@@ -736,31 +1013,46 @@ class DownloadManager extends ChangeNotifier {
       }
       if (task.status != DownloadStatus.downloading) return;
       final height = ExtractorService.heightHint(formatId, task.formatLabel);
-      final pool = task.isAudio ? alternatives?.audioFormats : alternatives?.videoFormats;
-      final alternative = pool?.where((format) =>
-          !_isUnusableUrl(format.url) &&
-          (task.isAudio || height == null ||
-              ExtractorService.heightHint(format.id, format.label) == height) &&
-          (!format.needsAudioMerge || !_isUnusableUrl(format.companionAudioUrl))
-      ).firstOrNull;
+      final pool = task.isAudio
+          ? alternatives?.audioFormats
+          : alternatives?.videoFormats;
+      final alternative = pool
+          ?.where(
+            (format) =>
+                !_isUnusableUrl(format.url) &&
+                (task.isAudio ||
+                    height == null ||
+                    ExtractorService.heightHint(format.id, format.label) ==
+                        height) &&
+                (!format.needsAudioMerge ||
+                    !_isUnusableUrl(format.companionAudioUrl)),
+          )
+          .firstOrNull;
       if (alternative != null) {
         task.streamUrl = alternative.url;
         task.needsAudioMerge = alternative.needsAudioMerge;
         task.audioStreamUrl = alternative.companionAudioUrl;
         task.audioExt = alternative.companionAudioExt;
         task.totalBytes = alternative.fileSize ?? 0;
+        task.totalBytesIsEstimate = task.totalBytes > 0;
         nativeOnly = false;
       }
     }
 
-    for (int attempt = 1; !nativeOnly && attempt <= maxDownloadAttempts; attempt++) {
+    for (
+      int attempt = 1;
+      !nativeOnly && attempt <= maxDownloadAttempts;
+      attempt++
+    ) {
       if (task.status != DownloadStatus.downloading) return;
 
       if (attempt > 1) {
         // The bytes already on disk always stand — say exactly that instead
         // of flashing a scary, broken-looking "Reconnecting" to the user.
         final resumePct = task.totalBytes > 0
-            ? (task.downloadedBytes * 100 / task.totalBytes).clamp(0, 100).toInt()
+            ? (task.downloadedBytes * 100 / task.totalBytes)
+                  .clamp(0, 100)
+                  .toInt()
             : 0;
         task.statusNote = 'Getting a fresh link — continuing from $resumePct%';
         task.speedBytesPerSec = 0;
@@ -790,6 +1082,13 @@ class DownloadManager extends ChangeNotifier {
         if (e.toString().contains('403') &&
             isGoogleVideoUrl(task.streamUrl ?? task.originalUrl)) {
           InnerTubeService.instance.rotateClient();
+        }
+        final rejectedLink = RegExp(r'\b(401|403|404|410)\b')
+            .hasMatch(e.toString());
+        if (task.series != null &&
+            rejectedLink &&
+            attempt < maxDownloadAttempts) {
+          if (await _refreshSeriesEpisode(task)) continue;
         }
         if (!_isRetryable(e)) break;
       }
@@ -880,9 +1179,12 @@ class DownloadManager extends ChangeNotifier {
       }
     } else {
       final nativeHeight = task.preferredFormatId?.startsWith('ytdlp_') == true
-          ? int.tryParse(RegExp(r'^(\d+)p').firstMatch(task.formatLabel)?.group(1) ?? '')
+          ? int.tryParse(
+              RegExp(r'^(\d+)p').firstMatch(task.formatLabel)?.group(1) ?? '',
+            )
           : null;
-      final h = nativeHeight ??
+      final h =
+          nativeHeight ??
           ExtractorService.heightHint(task.preferredFormatId, task.formatLabel);
       if (h != null && h > 0) {
         selector = 'bv*[height=$h]+ba/b[height=$h]';
@@ -891,13 +1193,10 @@ class DownloadManager extends ChangeNotifier {
       }
     }
 
-    task.statusNote = 'Preparing download…';
     task.speedBytesPerSec = 0;
-    if (Platform.isAndroid) {
-      task.totalBytes = 0;
-      task.nativeProgress = null;
-    }
-    notifyListeners();
+    task.nativeProgress = null;
+    await _prepareNativeSize(task, task.originalUrl, selector);
+    if (task.status != DownloadStatus.downloading) return;
 
     final finishedPath = await YtDlpService.instance.downloadFormat(
       url: task.originalUrl,
@@ -907,20 +1206,16 @@ class DownloadManager extends ChangeNotifier {
       audioFormat: audioFormat,
       onProgress: (YtdlpProgress p) {
         if (task.status != DownloadStatus.downloading) return;
-        if (Platform.isAndroid) {
-          _updateNativeProgress(task, p);
-        } else {
-          task.totalBytes = p.totalBytes ?? task.totalBytes;
-          task.downloadedBytes = p.downloadedBytes ?? task.downloadedBytes;
-          task.speedBytesPerSec = p.speedBytesPerSecond ?? 0;
-        }
+        _updateNativeProgress(task, p);
         notifyListeners();
       },
     );
 
     if (task.status != DownloadStatus.downloading) return;
 
-    if (finishedPath.isNotEmpty && File(finishedPath).existsSync() && File(finishedPath).lengthSync() > 0) {
+    if (finishedPath.isNotEmpty &&
+        File(finishedPath).existsSync() &&
+        File(finishedPath).lengthSync() > 0) {
       final downloadedFile = File(finishedPath);
       final finalLen = downloadedFile.lengthSync();
       task.downloadedBytes = finalLen;
@@ -935,7 +1230,7 @@ class DownloadManager extends ChangeNotifier {
         // Cleanup must not invalidate the saved download.
       }
 
-      if (!task.isAudio && task.category != 'movie') {
+      if (!task.isImageTask && !task.isAudio && task.category != 'movie') {
         await _ensureMp4Output(task);
         if (task.status != DownloadStatus.downloading) return;
       }
@@ -954,11 +1249,17 @@ class DownloadManager extends ChangeNotifier {
     final outputExt = downloadedFile.uri.pathSegments.last.split('.').last;
     final currentPath = task.savePath!;
     if (outputExt != task.ext && currentPath.endsWith('.${task.ext}')) {
-      final stem = currentPath.substring(0, currentPath.length - task.ext.length - 1);
+      final stem = currentPath.substring(
+        0,
+        currentPath.length - task.ext.length - 1,
+      );
       var target = '$stem.$outputExt';
-      for (var copy = 2;
-          File(target).existsSync() || _tasks.any((item) => item.savePath == target);
-          copy++) {
+      for (
+        var copy = 2;
+        File(target).existsSync() ||
+            _tasks.any((item) => item.savePath == target);
+        copy++
+      ) {
         target = '$stem ($copy).$outputExt';
       }
       task.savePath = target;
@@ -977,17 +1278,69 @@ class DownloadManager extends ChangeNotifier {
     }
   }
 
-  void _updateNativeProgress(DownloadTask task, YtdlpProgress progress, {int offset = 0}) {
+  void _setMeasuredSize(
+    DownloadTask task,
+    DownloadSize size, {
+    int offset = 0,
+  }) {
+    task.totalBytes = offset + size.bytes;
+    task.totalBytesIsEstimate = size.estimated;
+  }
+
+  Future<void> _prepareNativeSize(
+    DownloadTask task,
+    String url,
+    String selector, {
+    int offset = 0,
+    Map<String, String> headers = const {},
+  }) async {
+    task.statusNote = 'Checking download size…';
+    notifyListeners();
+    DownloadSize? size;
+    if (!task.isAudio && (task.isHls || _looksLikeHls(url))) {
+      size = await _probeNativeHlsSize(task, url);
+    }
+    if (size == null && task.status == DownloadStatus.downloading) {
+      try {
+        final metadata = await YtDlpService.instance
+            .resolve(url, format: selector, headers: headers)
+            .timeout(const Duration(seconds: 12));
+        if (metadata != null)
+          size = YtDlpService.selectedDownloadSize(metadata);
+      } on Exception {
+        // Continue if the source cannot publish a size in advance.
+      }
+    }
+    if (task.status != DownloadStatus.downloading) return;
+    if (size != null) {
+      _setMeasuredSize(task, size, offset: offset);
+      unawaited(_persistTasks());
+    }
+    task.statusNote = 'Starting download…';
+    notifyListeners();
+  }
+
+  void _updateNativeProgress(
+    DownloadTask task,
+    YtdlpProgress progress, {
+    int offset = 0,
+  }) {
     final bytes = progress.downloadedBytes;
-    if (bytes == null) return;
+    if (bytes != null) task.downloadedBytes = offset + bytes;
     final total = progress.totalBytes;
-    task.downloadedBytes = offset + bytes;
-    task.totalBytes = total == null ? 0 : offset + total;
+    // A native event may only describe the first track of a multi-track transfer.
+    // Keep the complete preflight total until progress reports a larger transfer.
+    if (total != null && total > 0 && offset + total > task.totalBytes) {
+      _setMeasuredSize(task, (
+        bytes: total,
+        estimated: progress.totalBytesIsEstimate || task.totalBytes > 0,
+      ), offset: offset);
+    }
     task.speedBytesPerSec = progress.speedBytesPerSecond ?? 0;
     task.statusNote = null;
-    if (task.totalBytes > 0) {
-      final fraction = (task.downloadedBytes / task.totalBytes).clamp(0.0, 0.99);
-      if (fraction > (task.nativeProgress ?? -1)) task.nativeProgress = fraction;
+    final fraction = progress.fraction;
+    if (task.displayTotalBytes <= 0 && fraction != null) {
+      task.nativeProgress = fraction.clamp(0.0, 0.99);
     }
   }
 
@@ -998,30 +1351,73 @@ class DownloadManager extends ChangeNotifier {
   }) async {
     final folder = task.id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final track = companion ? 'audio' : 'media';
-    final workDir = Directory('${File(task.savePath!).parent.path}/.yt-dlp/$folder/$track');
+    final workDir = Directory(
+      '${File(task.savePath!).parent.path}/.yt-dlp/$folder/$track',
+    );
     await workDir.create(recursive: true);
     if (task.status != DownloadStatus.downloading) return null;
     final audio = companion || task.isAudio;
     final offset = companion ? task.downloadedBytes : 0;
-    if (!companion) {
-      task.nativeProgress = null;
-      task.totalBytes = 0;
+    task.nativeProgress = null;
+    final exactHls = YtDlpService.exactHlsSelector(task.hlsVariantResolution);
+    if (task.hlsVariantResolution != null && exactHls == null) {
+      throw const _DownloadException(
+        'Invalid dimensions for the selected video resolution.',
+        retryable: false,
+      );
     }
-    final outputPath = await YtDlpService.instance.downloadFormat(
-      url: url,
-      formatSelector: audio ? 'ba/b' : 'b/bv/ba',
-      outputDir: workDir.path,
-      taskId: task.id,
-      audioFormat: !companion && audio && task.ext.toLowerCase() == 'mp3'
-          ? 'mp3'
-          : null,
-      headers: _mediaHeadersFor(task, url),
-      onProgress: (progress) {
-        if (task.status != DownloadStatus.downloading) return;
-        _updateNativeProgress(task, progress, offset: offset);
-        notifyListeners();
-      },
+    final dash =
+        task.ext.toLowerCase() == 'mpd' ||
+        Uri.tryParse(url)?.path.toLowerCase().endsWith('.mpd') == true;
+    final dashHeight = dash
+        ? int.tryParse(
+            RegExp(r'^(\d{3,4})p').firstMatch(task.formatLabel)?.group(1) ?? '',
+          )
+        : null;
+    final dashSelector = dashHeight == null
+        ? 'bv*+ba/best'
+        : 'bv*[height=$dashHeight]+ba/b[height=$dashHeight]';
+    final selector = audio
+        ? 'ba/b'
+        : exactHls ?? (dash ? dashSelector : 'b/bv/ba');
+    final headers = _mediaHeadersFor(task, url);
+    await _prepareNativeSize(
+      task,
+      url,
+      selector,
+      offset: offset,
+      headers: headers,
     );
+    if (task.status != DownloadStatus.downloading) return null;
+    final String outputPath;
+    try {
+      outputPath = await YtDlpService.instance.downloadFormat(
+        url: url,
+        formatSelector: selector,
+        outputDir: workDir.path,
+        taskId: task.id,
+        audioFormat: !companion && audio && task.ext.toLowerCase() == 'mp3'
+            ? 'mp3'
+            : null,
+        headers: headers,
+        onProgress: (progress) {
+          if (task.status != DownloadStatus.downloading) return;
+          _updateNativeProgress(task, progress, offset: offset);
+          notifyListeners();
+        },
+      );
+    } on YtdlpException catch (error) {
+      if (exactHls != null &&
+          error.toString().toLowerCase().contains(
+            'requested format is not available',
+          )) {
+        throw const _DownloadException(
+          'This source no longer offers the selected video resolution.',
+          retryable: false,
+        );
+      }
+      rethrow;
+    }
     if (task.status != DownloadStatus.downloading) return null;
     final file = File(outputPath);
     if (!await file.exists() || await file.length() == 0) {
@@ -1032,12 +1428,23 @@ class DownloadManager extends ChangeNotifier {
 
   /// One download attempt: resolve the exact source, fetch every part the
   /// format needs, merge them when required and only then mark the task done.
-  Future<void> _runDownloadPass(DownloadTask task, {String? preferredFormatId}) async {
-    task.statusNote = null;
+  Future<void> _runDownloadPass(
+    DownloadTask task, {
+    String? preferredFormatId,
+  }) async {
+    task.statusNote = 'Checking download size…';
+    notifyListeners();
 
     // ---- 1. The exact source(s) the user asked for ----------------------
     String? streamUrl = task.streamUrl;
     String? audioUrl = task.needsAudioMerge ? task.audioStreamUrl : null;
+
+    if (task.hlsVariantResolution != null && _isUnusableUrl(streamUrl)) {
+      throw const _DownloadException(
+        'The link for this resolution is unavailable. Select the format again.',
+        retryable: false,
+      );
+    }
 
     // A language chosen in the picker is honoured on EVERY pass: re-resolving
     // always mints fresh links for exactly that dub (the extract-time URL is
@@ -1048,9 +1455,11 @@ class DownloadManager extends ChangeNotifier {
     // googlevideo": the bytes request goes out with a link that YouTube
     // stopped honouring hours ago. Re-mint BEFORE the first byte instead of
     // waiting for the CDN to reject it.
-    final staleGoogleLink = _googleLinkExpiring(streamUrl) ||
+    final staleGoogleLink =
+        _googleLinkExpiring(streamUrl) ||
         (task.needsAudioMerge && _googleLinkExpiring(audioUrl));
-    final needsInitialResolution = _isUnusableUrl(streamUrl) ||
+    final needsInitialResolution =
+        _isUnusableUrl(streamUrl) ||
         (task.needsAudioMerge && _isUnusableUrl(audioUrl)) ||
         staleGoogleLink;
     if (needsInitialResolution || wantsTrackAudio) {
@@ -1073,12 +1482,15 @@ class DownloadManager extends ChangeNotifier {
 
     // Direct links and ordinary websites: run a full extract and take the
     // first format that actually carries a real stream URL.
-    if (_isUnusableUrl(streamUrl)) {
+    if (_isUnusableUrl(streamUrl) && task.series == null) {
       final res = await _extractFallbackFormat(task, preferredFormatId);
       if (res != null) {
         streamUrl = res.url;
         task.streamUrl = streamUrl;
-        if ((res.fileSize ?? 0) > 0) task.totalBytes = res.fileSize!;
+        if ((res.fileSize ?? 0) > 0) {
+          task.totalBytes = res.fileSize!;
+          task.totalBytesIsEstimate = true;
+        }
       }
     }
 
@@ -1086,6 +1498,21 @@ class DownloadManager extends ChangeNotifier {
       throw const _DownloadException('Could not resolve the media stream');
     }
     final targetUrl = streamUrl!;
+    final companion = task.needsAudioMerge && !_isUnusableUrl(audioUrl)
+        ? audioUrl
+        : null;
+    task.pendingCompanionBytes = null;
+    if (companion != null) {
+      task.pendingCompanionBytes = 0;
+      final probeClient = http.Client();
+      try {
+        task.pendingCompanionBytes =
+            (await _probeSizeUrl(probeClient, task, companion)) ?? 0;
+      } finally {
+        probeClient.close();
+      }
+      if (task.status != DownloadStatus.downloading) return;
+    }
 
     final savePath = task.savePath;
     if (savePath == null || savePath.isEmpty) {
@@ -1098,16 +1525,42 @@ class DownloadManager extends ChangeNotifier {
     // ---- 2. The main payload --------------------------------------------
     if (!_savedFileIsComplete(task)) {
       final path = Uri.tryParse(targetUrl)?.path.toLowerCase() ?? '';
-      final progressive = !task.isHls &&
-          RegExp(r'\.(mp4|m4v|webm|mkv|mov|mp3|m4a|aac|flac|opus|ogg|wav)$').hasMatch(path);
-      if (Platform.isAndroid && !progressive) {
+      final progressive =
+          !task.isHls &&
+          RegExp(r'\.(mp4|m4v|webm|mkv|mov|mp3|m4a|aac|flac|opus|ogg|wav)$')
+              .hasMatch(path);
+      Future<void> downloadWithNativeEngine() async {
         final file = await _transferResolvedWithYtDlp(task, targetUrl);
         if (file == null) return;
         _adoptNativeFile(task, file);
         task.downloadedBytes = File(task.savePath!).lengthSync();
         task.totalBytes = task.downloadedBytes;
+      }
+
+      final nativeHls = task.isHls || _looksLikeHls(targetUrl);
+      final dash = task.ext.toLowerCase() == 'mpd' || path.endsWith('.mpd');
+      if (dash && !YtDlpService.instance.supported) {
+        throw const _DownloadException(
+          'DASH downloads are not supported on this device.',
+          retryable: false,
+        );
+      }
+      if (dash ||
+          (Platform.isAndroid &&
+              !task.isImageTask &&
+              !progressive &&
+              (nativeHls || task.category != 'movie')) ||
+          (task.hlsVariantResolution != null &&
+              YtDlpService.instance.supported)) {
+        await downloadWithNativeEngine();
       } else {
-        await _downloadPayload(task, targetUrl);
+        try {
+          await _downloadPayload(task, targetUrl);
+        } on Exception {
+          if (!Platform.isAndroid || progressive || task.isImageTask) rethrow;
+          if (task.status != DownloadStatus.downloading) return;
+          await downloadWithNativeEngine();
+        }
       }
       if (task.status != DownloadStatus.downloading) return;
       task.payloadVerified = true;
@@ -1117,18 +1570,28 @@ class DownloadManager extends ChangeNotifier {
 
     // ---- 3. Companion audio + merge for adaptive (video-only) formats ----
     if (task.needsAudioMerge) {
-      if (_isUnusableUrl(audioUrl)) {
+      if (companion == null) {
         task.completionNote =
             'No separate audio track was published for this stream';
       } else {
+        final audioBytes = task.pendingCompanionBytes ?? 0;
+        task.pendingCompanionBytes = null;
+        task.totalBytes = audioBytes > 0
+            ? task.downloadedBytes + audioBytes
+            : 0;
+        task.totalBytesIsEstimate = false;
         if (Platform.isAndroid) {
-          final file = await _transferResolvedWithYtDlp(task, audioUrl!, companion: true);
+          final file = await _transferResolvedWithYtDlp(
+            task,
+            companion,
+            companion: true,
+          );
           if (file == null) return;
           final target = File(_companionAudioPath(task));
           if (target.existsSync()) target.deleteSync();
           file.renameSync(target.path);
         } else {
-          await _downloadCompanionAudio(task, audioUrl!);
+          await _downloadCompanionAudio(task, companion, audioBytes);
         }
         if (task.status != DownloadStatus.downloading) return;
         await _mergeCompanionAudio(task);
@@ -1138,7 +1601,7 @@ class DownloadManager extends ChangeNotifier {
     if (task.status != DownloadStatus.downloading) return;
 
     // ---- 4. Every non-movie VIDEO leaves this app as a real MP4 ----------
-    if (!task.isAudio && task.category != 'movie') {
+    if (!task.isImageTask && !task.isAudio && task.category != 'movie') {
       await _ensureMp4Output(task);
       if (task.status != DownloadStatus.downloading) return;
     }
@@ -1216,11 +1679,14 @@ class DownloadManager extends ChangeNotifier {
     // The temp output MUST keep a .mp3 suffix — ffmpeg picks the muxer from
     // the file extension and refuses anything like "song.mp3.enc.tmp".
     final tmpPath = '$path.mp3enc.mp3';
-    final out = await MediaMuxService.instance.convertToMp3(path,
-        outPath: tmpPath, onProgress: (p) {
-      task.convertProgress = p;
-      notifyListeners();
-    });
+    final out = await MediaMuxService.instance.convertToMp3(
+      path,
+      outPath: tmpPath,
+      onProgress: (p) {
+        task.convertProgress = p;
+        notifyListeners();
+      },
+    );
     task.convertStage = null;
     if (out != null && File(out).existsSync() && File(out).lengthSync() > 0) {
       try {
@@ -1258,7 +1724,8 @@ class DownloadManager extends ChangeNotifier {
         final head = List<int>.filled(4, 0);
         final read = raf.readIntoSync(head);
         if (read < 2) return false;
-        if (head[0] == 0x49 && head[1] == 0x44 && head[2] == 0x33) return true; // 'ID3'
+        if (head[0] == 0x49 && head[1] == 0x44 && head[2] == 0x33)
+          return true; // 'ID3'
         return head[0] == 0xFF && (head[1] & 0xE0) == 0xE0; // frame sync
       } finally {
         raf.closeSync();
@@ -1295,10 +1762,14 @@ class DownloadManager extends ChangeNotifier {
     final file = path == null ? null : File(path);
     final length = file != null && file.existsSync() ? file.lengthSync() : 0;
     if (!task.payloadVerified || length <= 0) {
-      throw const _DownloadException('The download did not produce a complete file');
+      throw const _DownloadException(
+        'The download did not produce a complete file',
+      );
     }
     task.downloadedBytes = length;
     task.totalBytes = length;
+    task.totalBytesIsEstimate = false;
+    task.pendingCompanionBytes = null;
     task.status = DownloadStatus.completed;
     task.completedAt = DateTime.now();
     task.statusNote = null;
@@ -1337,37 +1808,61 @@ class DownloadManager extends ChangeNotifier {
       // 2. Probe non-GoogleVideo servers with Range header (bytes=0-0) to check Range support & total file size.
       // Note: googlevideo.com CDN flags rapid connect-disconnect probes as bot behavior (403),
       // and InnerTube already provides the exact file size via contentLength.
-      int totalLength = isGoogleVideoUrl(streamUrl) ? task.totalBytes : 0;
+      final googleVideo = isGoogleVideoUrl(streamUrl);
+      int totalLength = googleVideo
+          ? int.tryParse(
+                  Uri.tryParse(streamUrl)?.queryParameters['clen'] ?? '',
+                ) ??
+                0
+          : 0;
+      bool supportsRanges = false;
+      String? validator;
 
-      if (!isGoogleVideoUrl(streamUrl)) {
+      if (!googleVideo) {
         final probeClient = http.Client();
         clients.add(probeClient);
 
         try {
           final probeReq = http.Request('GET', Uri.parse(streamUrl));
-          probeReq.headers.addAll(_mediaHeadersFor(task, streamUrl, range: 'bytes=0-0'));
-          final probeRes = await probeClient.send(probeReq).timeout(const Duration(seconds: 10));
+          probeReq.headers.addAll(
+            _mediaHeadersFor(task, streamUrl, range: 'bytes=0-0'),
+          );
+          final probeRes = await probeClient
+              .send(probeReq)
+              .timeout(const Duration(seconds: 10));
 
-          final probeType = (probeRes.headers['content-type'] ?? '').toLowerCase();
-          if (probeType.contains('mpegurl') || probeType.contains('vnd.apple')) {
+          final probeType = (probeRes.headers['content-type'] ?? '')
+              .toLowerCase();
+          if (probeType.contains('mpegurl') ||
+              probeType.contains('vnd.apple')) {
             await probeRes.stream.drain<void>();
             await _downloadHls(task, streamUrl);
             return;
           }
 
           if (probeRes.statusCode == 206) {
-            _alignTaskExtension(task, probeRes.headers['content-type'], streamUrl);
+            _alignTaskExtension(
+              task,
+              probeRes.headers['content-type'],
+              streamUrl,
+            );
             final cr = probeRes.headers['content-range'];
             if (cr != null && cr.contains('/')) {
               final totalStr = cr.split('/').last.trim();
               final parsedTotal = int.tryParse(totalStr);
               if (parsedTotal != null && parsedTotal > 0) {
+                supportsRanges = cr == 'bytes 0-0/$parsedTotal';
+                validator = probeRes.headers['etag'];
                 totalLength = parsedTotal;
                 task.totalBytes = parsedTotal;
               }
             }
           } else if (probeRes.statusCode == 200) {
-            _alignTaskExtension(task, probeRes.headers['content-type'], streamUrl);
+            _alignTaskExtension(
+              task,
+              probeRes.headers['content-type'],
+              streamUrl,
+            );
             if (probeRes.contentLength != null && probeRes.contentLength! > 0) {
               totalLength = probeRes.contentLength!;
               task.totalBytes = totalLength;
@@ -1375,7 +1870,9 @@ class DownloadManager extends ChangeNotifier {
           } else if (probeRes.statusCode == 403 || probeRes.statusCode == 404) {
             await probeRes.stream.drain<void>();
             final fresh = await _resolveSource(task, task.preferredFormatId);
-            if (fresh == null || fresh.videoUrl.isEmpty || fresh.videoUrl == streamUrl) {
+            if (fresh == null ||
+                fresh.videoUrl.isEmpty ||
+                fresh.videoUrl == streamUrl) {
               final code = probeRes.statusCode;
               throw HttpException('HTTP $code from the media server');
             }
@@ -1383,10 +1880,16 @@ class DownloadManager extends ChangeNotifier {
             task.streamUrl = fresh.videoUrl;
 
             final retryReq = http.Request('GET', Uri.parse(streamUrl));
-            retryReq.headers.addAll(_mediaHeadersFor(task, streamUrl, range: 'bytes=0-0'));
-            final retryRes = await probeClient.send(retryReq).timeout(const Duration(seconds: 20));
-            final retryType = (retryRes.headers['content-type'] ?? '').toLowerCase();
-            if (retryType.contains('mpegurl') || retryType.contains('vnd.apple')) {
+            retryReq.headers.addAll(
+              _mediaHeadersFor(task, streamUrl, range: 'bytes=0-0'),
+            );
+            final retryRes = await probeClient
+                .send(retryReq)
+                .timeout(const Duration(seconds: 20));
+            final retryType = (retryRes.headers['content-type'] ?? '')
+                .toLowerCase();
+            if (retryType.contains('mpegurl') ||
+                retryType.contains('vnd.apple')) {
               await retryRes.stream.drain<void>();
               await _downloadHls(task, streamUrl);
               return;
@@ -1397,19 +1900,26 @@ class DownloadManager extends ChangeNotifier {
               throw HttpException('HTTP $code from the media server');
             }
 
-            _alignTaskExtension(task, retryRes.headers['content-type'], streamUrl);
+            _alignTaskExtension(
+              task,
+              retryRes.headers['content-type'],
+              streamUrl,
+            );
             if (retryRes.statusCode == 206) {
               final cr = retryRes.headers['content-range'];
               if (cr != null && cr.contains('/')) {
                 final totalStr = cr.split('/').last.trim();
                 final parsedTotal = int.tryParse(totalStr);
                 if (parsedTotal != null && parsedTotal > 0) {
+                  supportsRanges = cr == 'bytes 0-0/$parsedTotal';
+                  validator = retryRes.headers['etag'];
                   totalLength = parsedTotal;
                   task.totalBytes = parsedTotal;
                 }
               }
             } else {
-              if (retryRes.contentLength != null && retryRes.contentLength! > 0) {
+              if (retryRes.contentLength != null &&
+                  retryRes.contentLength! > 0) {
                 totalLength = retryRes.contentLength!;
                 task.totalBytes = totalLength;
               }
@@ -1428,10 +1938,25 @@ class DownloadManager extends ChangeNotifier {
 
       if (task.status != DownloadStatus.downloading) return;
 
-      // 3. Strictly ONE connection for EVERY download — movies included, the
-      // user asked for classic single-thread transfers with maximum speed.
-      // A single keep-alive stream already saturates a good link, so the
-      // multi-chunk engine is switched off entirely.
+      if (totalLength > 0) {
+        _setMeasuredSize(task, (bytes: totalLength, estimated: false));
+      }
+      task.statusNote = 'Starting download…';
+      notifyListeners();
+
+      if (task.category == 'movie' &&
+          supportsRanges &&
+          totalLength >= 16 * 1024 * 1024 &&
+          await _downloadMovieRanges(
+            task,
+            streamUrl,
+            totalLength,
+            validator,
+            clients,
+          )) {
+        return;
+      }
+      if (task.status != DownloadStatus.downloading) return;
       task.threadsCount = 1;
       await _downloadSingleStream(task, streamUrl, totalLength, clients);
     } finally {
@@ -1451,7 +1976,10 @@ class DownloadManager extends ChangeNotifier {
   /// Path of the temporary audio half of an adaptive video download.
   String _companionAudioPath(DownloadTask task) {
     final base = task.savePath!.replaceFirst(RegExp(r'\.[^./\\]+$'), '');
-    final ext = (task.audioExt ?? 'm4a').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final ext = (task.audioExt ?? 'm4a').replaceAll(
+      RegExp(r'[^a-zA-Z0-9]'),
+      '',
+    );
     return '$base.audio.${ext.isEmpty ? 'm4a' : ext}';
   }
 
@@ -1459,7 +1987,11 @@ class DownloadManager extends ChangeNotifier {
   /// stream, resuming from whatever partial bytes a previous attempt already
   /// wrote. Nothing is re-encoded: the saved file keeps the exact bitrate the
   /// source published.
-  Future<void> _downloadCompanionAudio(DownloadTask task, String url) async {
+  Future<void> _downloadCompanionAudio(
+    DownloadTask task,
+    String url,
+    int audioTotal,
+  ) async {
     final audioPath = _companionAudioPath(task);
     final file = File(audioPath);
     file.parent.createSync(recursive: true);
@@ -1471,16 +2003,11 @@ class DownloadManager extends ChangeNotifier {
     }
 
     final videoBytes = task.downloadedBytes;
-    int audioTotal = 0;
     int audioReceived = start;
 
     void refreshTotals() {
-      if (audioTotal > 0) {
-        task.totalBytes = videoBytes + audioTotal;
-      } else {
-        final guess = (videoBytes ~/ 6).clamp(2 * 1024 * 1024, 24 * 1024 * 1024);
-        task.totalBytes = videoBytes + guess;
-      }
+      task.totalBytes = audioTotal > 0 ? videoBytes + audioTotal : 0;
+      task.totalBytesIsEstimate = false;
       task.downloadedBytes = videoBytes + audioReceived;
     }
 
@@ -1506,7 +2033,9 @@ class DownloadManager extends ChangeNotifier {
         } catch (_) {}
       }
 
-      final sink = file.openWrite(mode: start > 0 ? FileMode.append : FileMode.write);
+      final sink = file.openWrite(
+        mode: start > 0 ? FileMode.append : FileMode.write,
+      );
       DateTime lastSpeed = DateTime.now();
       DateTime lastUi = DateTime.now();
       int lastBytes = audioReceived;
@@ -1548,15 +2077,18 @@ class DownloadManager extends ChangeNotifier {
                   '($code; ${_googlevideoIdentity(url)}) — minting a fresh one',
                 );
                 try {
-                  final fresh = await ExtractorService.instance.resolveLiveStreamUrl(
-                    task.originalUrl,
-                    isAudio: true,
-                    audioTrackId: task.audioTrackId,
-                  );
+                  final fresh = await ExtractorService.instance
+                      .resolveLiveStreamUrl(
+                        task.originalUrl,
+                        isAudio: true,
+                        audioTrackId: task.audioTrackId,
+                      );
                   if (fresh != null && fresh.isNotEmpty) {
                     url = fresh;
                     task.audioStreamUrl = fresh;
-                    headers['User-Agent'] = InnerTubeService.userAgentForUrl(fresh);
+                    headers['User-Agent'] = InnerTubeService.userAgentForUrl(
+                      fresh,
+                    );
                     continue;
                   }
                 } catch (_) {}
@@ -1567,7 +2099,8 @@ class DownloadManager extends ChangeNotifier {
             if (res.statusCode == 206) {
               final cr = res.headers['content-range'];
               if (cr != null && cr.contains('/')) {
-                final parsedTotal = int.tryParse(cr.split('/').last.trim()) ?? 0;
+                final parsedTotal =
+                    int.tryParse(cr.split('/').last.trim()) ?? 0;
                 if (parsedTotal > 0) audioTotal = parsedTotal;
               }
             } else if (res.statusCode == 200 && audioReceived == 0) {
@@ -1584,7 +2117,8 @@ class DownloadManager extends ChangeNotifier {
               final now = DateTime.now();
               final speedMs = now.difference(lastSpeed).inMilliseconds;
               if (speedMs >= 300) {
-                task.speedBytesPerSec = (audioReceived - lastBytes) / (speedMs / 1000.0);
+                task.speedBytesPerSec =
+                    (audioReceived - lastBytes) / (speedMs / 1000.0);
                 lastSpeed = now;
                 lastBytes = audioReceived;
               }
@@ -1592,9 +2126,12 @@ class DownloadManager extends ChangeNotifier {
               final windowMs = now.difference(windowStart).inMilliseconds;
               if (windowMs >= 60000) {
                 final moved = audioReceived - windowStartBytes;
-                final notFinishedYet = audioTotal == 0 || audioReceived < audioTotal;
+                final notFinishedYet =
+                    audioTotal == 0 || audioReceived < audioTotal;
                 if (moved < _minBytesPerMinute && notFinishedYet) {
-                  throw const _DownloadException('Audio stream was throttled by the source');
+                  throw const _DownloadException(
+                    'Audio stream was throttled by the source',
+                  );
                 }
                 windowStart = now;
                 windowStartBytes = audioReceived;
@@ -1658,8 +2195,14 @@ class DownloadManager extends ChangeNotifier {
     task.speedBytesPerSec = 0;
     notifyListeners();
 
-    final ext = (task.ext.isNotEmpty ? task.ext : 'mp4').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-    final mergedPath = target.replaceFirst(RegExp(r'\.[^./\\]+$'), '.merged.$ext');
+    final ext = (task.ext.isNotEmpty ? task.ext : 'mp4').replaceAll(
+      RegExp(r'[^a-zA-Z0-9]'),
+      '',
+    );
+    final mergedPath = target.replaceFirst(
+      RegExp(r'\.[^./\\]+$'),
+      '.merged.$ext',
+    );
 
     final result = await MediaMuxService.instance.merge(
       videoPath: target,
@@ -1695,7 +2238,8 @@ class DownloadManager extends ChangeNotifier {
     // so nothing the user spent bandwidth on is thrown away.
     debugPrint('Audio merge failed for ${task.title}: ${result.error}');
     task.statusNote = null;
-    task.completionNote = 'Saved as two parts (merge unavailable) — ${_shortError(result.error)}';
+    task.completionNote =
+        'Saved as two parts (merge unavailable) — ${_shortError(result.error)}';
   }
 
   /// Maps an HTTP media type to the container extension we should save.
@@ -1707,12 +2251,14 @@ class DownloadManager extends ChangeNotifier {
     if (ct.contains('audio/aac')) return 'aac';
     if (ct.contains('audio/flac') || ct.contains('audio/x-flac')) return 'flac';
     if (ct.contains('audio/opus')) return 'opus';
-    if (ct.contains('audio/ogg') || ct.contains('application/ogg')) return 'ogg';
+    if (ct.contains('audio/ogg') || ct.contains('application/ogg'))
+      return 'ogg';
     if (ct.contains('audio/wav') || ct.contains('audio/x-wav')) return 'wav';
     if (ct.contains('audio/webm')) return 'webm';
     if (ct.contains('video/mp4')) return 'mp4';
     if (ct.contains('video/webm')) return 'webm';
-    if (ct.contains('video/x-matroska') || ct.contains('video/matroska')) return 'mkv';
+    if (ct.contains('video/x-matroska') || ct.contains('video/matroska'))
+      return 'mkv';
     if (ct.contains('video/quicktime')) return 'mov';
     return null;
   }
@@ -1721,7 +2267,16 @@ class DownloadManager extends ChangeNotifier {
   /// a 30s store preview (M4A) but is then replaced by a full-length stream
   /// (often WebM/Opus), so the filename must follow the bytes we actually save.
   void _alignTaskExtension(DownloadTask task, String? contentType, String url) {
-    String? ext = _extensionForContentType(contentType);
+    String? ext = task.isImageTask
+        ? switch (contentType?.split(';').first.trim().toLowerCase()) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/avif' => 'avif',
+            'image/gif' => 'gif',
+            _ => null,
+          }
+        : _extensionForContentType(contentType);
     if (ext == null) {
       try {
         final uri = Uri.parse(url);
@@ -1732,7 +2287,17 @@ class DownloadManager extends ChangeNotifier {
         if (ext == null) {
           final path = uri.path.toLowerCase();
           for (final candidate in const [
-            'mp4', 'm4a', 'webm', 'mkv', 'mov', 'mp3', 'aac', 'flac', 'opus', 'ogg', 'wav',
+            'mp4',
+            'm4a',
+            'webm',
+            'mkv',
+            'mov',
+            'mp3',
+            'aac',
+            'flac',
+            'opus',
+            'ogg',
+            'wav',
           ]) {
             if (path.endsWith('.$candidate')) {
               ext = candidate;
@@ -1765,6 +2330,94 @@ class DownloadManager extends ChangeNotifier {
     }
   }
 
+  Future<int?> _probeSizeUrl(
+    http.Client client,
+    DownloadTask task,
+    String url,
+  ) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !const {'http', 'https'}.contains(uri.scheme)) {
+      return Future.value();
+    }
+    return probeResourceBytes(client, uri, _mediaHeadersFor(task, url));
+  }
+
+  Future<DownloadSize?> _probePlaylistSize(
+    http.Client client,
+    DownloadTask task,
+    _HlsPlaylist playlist,
+  ) async {
+    if (!playlist.usesByteRanges) {
+      final sampled = await probeSegmentedSize(
+        playlist.segments,
+        initSegment: playlist.initSegment,
+        probe: (url) => _probeSizeUrl(client, task, url),
+      );
+      if (sampled != null) return sampled;
+    }
+    if (playlist.bandwidth > 0 && playlist.duration > 0) {
+      return (
+        bytes: (playlist.bandwidth * playlist.duration / 8).round(),
+        estimated: true,
+      );
+    }
+    return null;
+  }
+
+  Future<DownloadSize?> _probeNativeHlsSize(
+    DownloadTask task,
+    String url,
+  ) async {
+    final client = http.Client();
+    Future<DownloadSize?> inspect() async {
+      final playlist = await _resolveHlsPlaylist(
+        client,
+        url,
+        task.originalUrl,
+        headers: task.headers,
+        exactResolution: task.hlsVariantResolution,
+        forSizing: true,
+      );
+      if (playlist == null ||
+          !playlist.isFinite ||
+          task.status != DownloadStatus.downloading) {
+        return null;
+      }
+      final video = await _probePlaylistSize(client, task, playlist);
+      if (video == null) return null;
+      final audioUrl = playlist.externalAudioUrl;
+      if (audioUrl == null) {
+        return (
+          bytes: video.bytes,
+          estimated: video.estimated || task.hlsVariantResolution == null,
+        );
+      }
+      final audio = await _resolveHlsPlaylist(
+        client,
+        audioUrl,
+        task.originalUrl,
+        headers: task.headers,
+        forSizing: true,
+      );
+      if (audio == null ||
+          !audio.isFinite ||
+          task.status != DownloadStatus.downloading) {
+        return null;
+      }
+      final audioSize = await _probePlaylistSize(client, task, audio);
+      if (audioSize == null) return null;
+      return (bytes: video.bytes + audioSize.bytes, estimated: true);
+    }
+
+    try {
+      return await inspect().timeout(const Duration(seconds: 8));
+    } on Exception {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
   /// Downloads an HLS stream by resolving the master playlist, choosing the
   /// highest-bandwidth variant and concatenating every media segment (plus the
   /// fMP4 init segment) into one playable file. Failures THROW so the retry
@@ -1778,10 +2431,20 @@ class DownloadManager extends ChangeNotifier {
         playlistUrl,
         task.originalUrl.isNotEmpty ? task.originalUrl : playlistUrl,
         headers: task.headers,
+        exactResolution: task.hlsVariantResolution,
       );
       if (playlist == null || playlist.segments.isEmpty) {
         throw const _DownloadException('Could not resolve the HLS playlist');
       }
+
+      final initialSize = await _probePlaylistSize(client, task, playlist);
+      if (task.status != DownloadStatus.downloading) return;
+      if (initialSize != null) {
+        _setMeasuredSize(task, initialSize);
+        unawaited(_persistTasks());
+      }
+      task.statusNote = 'Starting download…';
+      notifyListeners();
 
       final savePath = task.savePath;
       if (savePath == null || savePath.isEmpty) {
@@ -1794,19 +2457,29 @@ class DownloadManager extends ChangeNotifier {
       final segmentPaths = playlist.segments
           .map((u) => Uri.tryParse(u)?.path.toLowerCase() ?? '')
           .toList();
-      final usesFmp4 = playlist.initSegment != null ||
+      final usesFmp4 =
+          playlist.initSegment != null ||
           segmentPaths.any((p) => p.endsWith('.m4s') || p.endsWith('.mp4'));
       final firstExt = segmentPaths.isNotEmpty
           ? segmentPaths.first.split('.').last
           : '';
       final outExt = usesFmp4
           ? 'mp4'
-          : (const {'aac', 'mp3', 'm4a', 'flac', 'opus', 'ogg'}.contains(firstExt)
-              ? firstExt
-              : 'ts');
+          : (const {
+                  'aac',
+                  'mp3',
+                  'm4a',
+                  'flac',
+                  'opus',
+                  'ogg',
+                }.contains(firstExt)
+                ? firstExt
+                : 'ts');
 
-      final targetPath =
-          savePath.replaceFirst(RegExp(r'\.[^./\\]+$'), '.$outExt');
+      final targetPath = savePath.replaceFirst(
+        RegExp(r'\.[^./\\]+$'),
+        '.$outExt',
+      );
       task.savePath = targetPath;
 
       final file = File(targetPath);
@@ -1831,12 +2504,13 @@ class DownloadManager extends ChangeNotifier {
       int bytesSeen = 0;
       int writtenAtSegStart = 0;
       void refineTotalEstimate() {
-        if (segmentsSeen <= 0) return;
+        if (segmentsSeen <= 0 || initialSize != null) return;
         final avg = bytesSeen ~/ segmentsSeen;
         task.totalBytes =
-            bytesSeen + avg * (segmentCount - segmentsSeen).clamp(0, segmentCount);
+            bytesSeen +
+            avg * (segmentCount - segmentsSeen).clamp(0, segmentCount);
+        task.totalBytesIsEstimate = segmentsSeen < segmentCount;
       }
-      if (segmentCount == 0) task.totalBytes = 0;
 
       DateTime lastSpeedTime = DateTime.now();
       int lastDownloaded = task.downloadedBytes;
@@ -1921,11 +2595,18 @@ class DownloadManager extends ChangeNotifier {
       // without it.
       req.headers.addAll(headers);
       final res = await client.send(req).timeout(const Duration(seconds: 15));
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers['location'] != null) {
+      if (res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers['location'] != null) {
         final loc = Uri.parse(url).resolve(res.headers['location']!).toString();
         await res.stream.drain<void>();
         return await _fetchPlaylistText(
-            client, loc, referer, headers: headers, redirects: redirects + 1);
+          client,
+          loc,
+          referer,
+          headers: headers,
+          redirects: redirects + 1,
+        );
       }
       if (res.statusCode < 200 || res.statusCode >= 300) return null;
       return await res.stream.transform(utf8.decoder).join();
@@ -1940,10 +2621,16 @@ class DownloadManager extends ChangeNotifier {
     String referer, {
     int depth = 0,
     Map<String, String> headers = const {},
+    String? exactResolution,
+    bool forSizing = false,
   }) async {
     if (depth > 3) return null;
-    final text =
-        await _fetchPlaylistText(client, url, referer, headers: headers);
+    final text = await _fetchPlaylistText(
+      client,
+      url,
+      referer,
+      headers: headers,
+    );
     if (text == null || !text.contains('#EXTM3U')) return null;
 
     final base = Uri.parse(url);
@@ -1953,14 +2640,55 @@ class DownloadManager extends ChangeNotifier {
         .where((l) => l.isNotEmpty)
         .toList();
 
-    // Master playlist: pick the highest-bandwidth variant that resolves.
+    // Only Auto may pick a different resolution by bandwidth.
     if (text.contains('#EXT-X-STREAM-INF')) {
       final variants = <_HlsVariant>[];
+      var requiresNativeAudio = false;
       for (int i = 0; i < lines.length; i++) {
         final line = lines[i];
-        if (!line.startsWith('#EXT-X-STREAM-INF')) continue;
+        if (!line.startsWith('#EXT-X-STREAM-INF:')) continue;
+        if (exactResolution != null &&
+            RegExp(r'(?:^|[:,])RESOLUTION=(\d+x\d+)(?:,|$)')
+                    .firstMatch(line)
+                    ?.group(1) !=
+                exactResolution) {
+          continue;
+        }
+
         final bandwidth =
-            int.tryParse(RegExp(r'BANDWIDTH=(\d+)').firstMatch(line)?.group(1) ?? '') ?? 0;
+            int.tryParse(
+              RegExp(r'AVERAGE-BANDWIDTH=(\d+)').firstMatch(line)?.group(1) ??
+                  RegExp(r'BANDWIDTH=(\d+)').firstMatch(line)?.group(1) ??
+                  '',
+            ) ??
+            0;
+        String? externalAudioUrl;
+        if (exactResolution != null || forSizing) {
+          final audioGroup = RegExp(r'(?:^|[:,])AUDIO="([^"]+)"')
+              .firstMatch(line)
+              ?.group(1);
+          final candidates = lines.where(
+            (entry) =>
+                audioGroup != null &&
+                entry.startsWith('#EXT-X-MEDIA:') &&
+                entry.contains('TYPE=AUDIO') &&
+                entry.contains('GROUP-ID="$audioGroup"') &&
+                entry.contains('URI='),
+          );
+          final audio =
+              candidates
+                  .where((entry) => entry.contains('DEFAULT=YES'))
+                  .firstOrNull ??
+              candidates.firstOrNull;
+          if (audio != null) {
+            final uri = RegExp(r'URI="([^"]+)"').firstMatch(audio)?.group(1);
+            if (uri != null) externalAudioUrl = base.resolve(uri).toString();
+            if (!forSizing) {
+              requiresNativeAudio = true;
+              continue;
+            }
+          }
+        }
         for (int j = i + 1; j < lines.length; j++) {
           final next = lines[j];
           if (next.startsWith('#')) continue;
@@ -1968,10 +2696,19 @@ class DownloadManager extends ChangeNotifier {
             _HlsVariant(
               bandwidth: bandwidth,
               url: base.resolve(next).toString(),
+              externalAudioUrl: externalAudioUrl,
             ),
           );
           break;
         }
+      }
+      if (exactResolution != null && variants.isEmpty) {
+        throw _DownloadException(
+          requiresNativeAudio
+              ? 'This version has a separate audio track. Download it on Android or macOS.'
+              : 'This source no longer offers the selected video resolution.',
+          retryable: false,
+        );
       }
       variants.sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
       for (final variant in variants) {
@@ -1981,19 +2718,48 @@ class DownloadManager extends ChangeNotifier {
           referer,
           depth: depth + 1,
           headers: headers,
+          exactResolution: exactResolution,
+          forSizing: forSizing,
         );
-        if (media != null && media.segments.isNotEmpty) return media;
+        if (media != null && media.segments.isNotEmpty) {
+          return _HlsPlaylist(
+            segments: media.segments,
+            initSegment: media.initSegment,
+            duration: media.duration,
+            isFinite: media.isFinite,
+            usesByteRanges: media.usesByteRanges,
+            bandwidth: media.bandwidth > 0
+                ? media.bandwidth
+                : variant.bandwidth,
+            externalAudioUrl:
+                media.externalAudioUrl ?? variant.externalAudioUrl,
+          );
+        }
       }
       return null;
+    }
+    if (exactResolution != null && depth == 0) {
+      throw const _DownloadException(
+        'Could not confirm the selected video resolution from this source.',
+        retryable: false,
+      );
     }
 
     // Media playlist.
     String? initSegment;
+    var duration = 0.0;
+    var usesByteRanges = false;
     final segments = <String>[];
     for (final line in lines) {
+      if (line.startsWith('#EXTINF:')) {
+        duration += double.tryParse(line.substring(8).split(',').first) ?? 0;
+      }
+      if (line.startsWith('#EXT-X-BYTERANGE:') || line.contains('BYTERANGE=')) {
+        usesByteRanges = true;
+      }
       if (line.startsWith('#EXT-X-KEY')) {
         // AES-encrypted HLS cannot be decoded without a key handshake.
-        if (!line.contains('METHOD=NONE')) return null;
+        if (!forSizing && !line.contains('METHOD=NONE')) return null;
         continue;
       }
       if (line.startsWith('#EXT-X-MAP')) {
@@ -2008,9 +2774,16 @@ class DownloadManager extends ChangeNotifier {
     }
 
     if (segments.isEmpty) return null;
-    return _HlsPlaylist(segments: segments, initSegment: initSegment);
+    return _HlsPlaylist(
+      segments: segments,
+      initSegment: initSegment,
+      duration: duration,
+      isFinite:
+          lines.contains('#EXT-X-ENDLIST') ||
+          lines.contains('#EXT-X-PLAYLIST-TYPE:VOD'),
+      usesByteRanges: usesByteRanges,
+    );
   }
-
 
   /// ONE connection per (re)link, streaming continuously to the end.
   ///
@@ -2043,8 +2816,9 @@ class DownloadManager extends ChangeNotifier {
     int lastDownloaded = downloaded;
     DateTime lastUiNotify = DateTime.now();
 
-    final sink =
-        file.openWrite(mode: downloaded > 0 ? FileMode.append : FileMode.write);
+    final sink = file.openWrite(
+      mode: downloaded > 0 ? FileMode.append : FileMode.write,
+    );
     String url = streamUrl;
     int relinks = 0;
 
@@ -2060,14 +2834,15 @@ class DownloadManager extends ChangeNotifier {
           req.headers['User-Agent'] = InnerTubeService.userAgentForUrl(url);
           if (downloaded > 0) req.headers['Range'] = 'bytes=$downloaded-';
 
-          final res =
-              await streamClient.send(req).timeout(_responseTimeout);
+          final res = await streamClient.send(req).timeout(_responseTimeout);
 
           if (res.statusCode == 416) {
             final range = res.headers['content-range'] ?? '';
             final remoteLength = int.tryParse(range.split('/').last);
             if (downloaded > 0 && remoteLength == downloaded) break;
-            throw const _DownloadException('The server refused the resume position');
+            throw const _DownloadException(
+              'The server refused the resume position',
+            );
           }
 
           if (res.statusCode != 200 && res.statusCode != 206) {
@@ -2160,7 +2935,8 @@ class DownloadManager extends ChangeNotifier {
           // Zero bytes received on a 200/206 connection -> server closed socket prematurely
           if (++relinks > 12) {
             throw const _DownloadException(
-                'The video server kept closing the connection');
+              'The video server kept closing the connection',
+            );
           }
           final fresh = await _remintGoogleVideoUrl(task);
           if (fresh != null) url = fresh;
@@ -2229,10 +3005,8 @@ class DownloadManager extends ChangeNotifier {
     if (_isUnusableUrl(task.originalUrl)) {
       if (task.category == 'audio') {
         try {
-          final fresh = await ExtractorService.instance.resolveLiveAudioStreamForTrack(
-            task.title,
-            task.author,
-          );
+          final fresh = await ExtractorService.instance
+              .resolveLiveAudioStreamForTrack(task.title, task.author);
           if (fresh != null && fresh.isNotEmpty) {
             task.streamUrl = fresh;
             return fresh;
@@ -2258,6 +3032,105 @@ class DownloadManager extends ChangeNotifier {
     }
 
     return null;
+  }
+
+  /// Fetches bounded batches of ranges and writes them in order. Only complete
+  /// batches reach disk, so an unsupported range or interrupted connection can
+  /// fall back to the regular downloader at the last contiguous byte.
+  Future<bool> _downloadMovieRanges(
+    DownloadTask task,
+    String url,
+    int total,
+    String? validator,
+    List<http.Client> activeClients,
+  ) async {
+    const blockSize = 4 * 1024 * 1024;
+    const connections = 6;
+    final file = File(task.savePath!);
+    var offset = await file.exists() ? await file.length() : 0;
+    if (offset > total) return false;
+    task.threadsCount = connections;
+    task.downloadedBytes = offset;
+    final clients = List.generate(connections, (_) => http.Client());
+    activeClients.addAll(clients);
+    RandomAccessFile? output;
+    try {
+      output = await file.open(mode: FileMode.append);
+      while (offset < total && task.status == DownloadStatus.downloading) {
+        final startTime = Stopwatch()..start();
+        final remaining = (total - offset + blockSize - 1) ~/ blockSize;
+        final blocks = await Future.wait(
+          List.generate(remaining.clamp(1, connections), (index) async {
+            final start = offset + index * blockSize;
+            final end = (start + blockSize - 1).clamp(start, total - 1);
+            final request = http.Request('GET', Uri.parse(url));
+            request.headers.addAll(
+              _mediaHeadersFor(task, url, range: 'bytes=$start-$end'),
+            );
+            request.headers['Accept-Encoding'] = 'identity';
+            if (validator != null && !validator.startsWith('W/')) {
+              request.headers['If-Range'] = validator;
+            }
+            final response = await clients[index]
+                .send(request)
+                .timeout(_responseTimeout);
+            if (response.statusCode != 206 ||
+                response.headers['content-range'] !=
+                    'bytes $start-$end/$total') {
+              throw const _DownloadException(
+                'The server did not honor the parallel range',
+              );
+            }
+            final bytes = BytesBuilder(copy: false);
+            await for (final chunk in response.stream.timeout(
+              _chunkIdleTimeout,
+            )) {
+              bytes.add(chunk);
+              if (bytes.length > end - start + 1) {
+                throw const _DownloadException(
+                  'The server returned an oversized range',
+                );
+              }
+            }
+            if (bytes.length != end - start + 1) {
+              throw const _DownloadException(
+                'The connection ended inside a range',
+              );
+            }
+            return bytes.takeBytes();
+          }),
+          eagerError: true,
+        );
+        if (task.status != DownloadStatus.downloading) return true;
+        final before = offset;
+        for (final block in blocks) {
+          await output.writeFrom(block);
+          offset += block.length;
+        }
+        if (task.status != DownloadStatus.downloading) return true;
+        task.downloadedBytes = offset;
+        task.speedBytesPerSec =
+            (offset - before) *
+            1000000 /
+            startTime.elapsedMicroseconds.clamp(1, 1 << 30);
+        notifyListeners();
+      }
+      return true;
+    } on Exception catch (error) {
+      debugPrint(
+        'Parallel movie transfer fell back to a single connection: $error',
+      );
+      return false;
+    } finally {
+      for (final client in clients) {
+        client.close();
+        activeClients.remove(client);
+      }
+      await output?.close();
+      if (task.status == DownloadStatus.cancelled && await file.exists()) {
+        await file.delete();
+      }
+    }
   }
 
   /// Single high-speed stream downloader, used for hosts without Range support
@@ -2301,8 +3174,9 @@ class DownloadManager extends ChangeNotifier {
 
       if (start > 0) {
         final resumeReq = http.Request('GET', Uri.parse(streamUrl));
-        resumeReq.headers
-            .addAll(_mediaHeadersFor(task, streamUrl, range: 'bytes=$start-'));
+        resumeReq.headers.addAll(
+          _mediaHeadersFor(task, streamUrl, range: 'bytes=$start-'),
+        );
         res = await client.send(resumeReq).timeout(_responseTimeout);
 
         if (res.statusCode == 206) {
@@ -2318,7 +3192,9 @@ class DownloadManager extends ChangeNotifier {
             task.totalBytes = start;
             return;
           }
-          throw const _DownloadException('The server refused the resume offset');
+          throw const _DownloadException(
+            'The server refused the resume offset',
+          );
         } else {
           final code = res.statusCode;
           await res.stream.drain<void>();
@@ -2342,9 +3218,21 @@ class DownloadManager extends ChangeNotifier {
 
       if (task.status != DownloadStatus.downloading) return;
 
-      final mime = (res.headers['content-type'] ?? '').split(';').first.toLowerCase();
-      if (const {'text/html', 'application/json', 'text/xml', 'application/xml'}.contains(mime)) {
-        throw const _DownloadException('The server returned a page instead of media', retryable: false);
+      final mime = (res.headers['content-type'] ?? '')
+          .split(';')
+          .first
+          .toLowerCase();
+      if (const {
+        'text/html',
+        'application/json',
+        'text/xml',
+        'application/xml',
+        'application/dash+xml',
+      }.contains(mime)) {
+        throw const _DownloadException(
+          'The server returned a page instead of media',
+          retryable: false,
+        );
       }
       int expectedTotal = res.contentLength ?? totalLength;
       int? rangeEnd;
@@ -2354,10 +3242,15 @@ class DownloadManager extends ChangeNotifier {
         final rangeStart = int.tryParse(range?.group(1) ?? '');
         rangeEnd = int.tryParse(range?.group(2) ?? '');
         final fullLength = int.tryParse(range?.group(3) ?? '');
-        if (rangeStart != start || rangeEnd == null || fullLength == null ||
-            rangeEnd < start || rangeEnd >= fullLength ||
+        if (rangeStart != start ||
+            rangeEnd == null ||
+            fullLength == null ||
+            rangeEnd < start ||
+            rangeEnd >= fullLength ||
             (append && totalLength > 0 && totalLength != fullLength)) {
-          throw const _DownloadException('The server returned an invalid resume range');
+          throw const _DownloadException(
+            'The server returned an invalid resume range',
+          );
         }
         expectedTotal = fullLength;
       }
@@ -2366,10 +3259,13 @@ class DownloadManager extends ChangeNotifier {
       if (append && destination.path != file.path) {
         file.renameSync(destination.path);
       }
-      task.totalBytes = expectedTotal;
+      if (expectedTotal > 0) {
+        _setMeasuredSize(task, (bytes: expectedTotal, estimated: false));
+      }
 
       int received = start;
       task.downloadedBytes = received;
+      notifyListeners();
 
       DateTime lastSpeedTime = DateTime.now();
       int lastDownloaded = received;
@@ -2377,8 +3273,9 @@ class DownloadManager extends ChangeNotifier {
       DateTime windowStart = DateTime.now();
       int windowStartBytes = received;
 
-      final sink =
-          destination.openWrite(mode: append ? FileMode.append : FileMode.write);
+      final sink = destination.openWrite(
+        mode: append ? FileMode.append : FileMode.write,
+      );
       try {
         await for (final chunk in res.stream.timeout(_chunkIdleTimeout)) {
           if (task.status != DownloadStatus.downloading) return;
@@ -2404,7 +3301,9 @@ class DownloadManager extends ChangeNotifier {
             final notFinishedYet =
                 task.totalBytes <= 0 || received < task.totalBytes;
             if (moved < _minBytesPerMinute && notFinishedYet) {
-              throw const _DownloadException('The stream was throttled by the source');
+              throw const _DownloadException(
+                'The stream was throttled by the source',
+              );
             }
             windowStart = now;
             windowStartBytes = received;
@@ -2431,7 +3330,9 @@ class DownloadManager extends ChangeNotifier {
       }
       if ((rangeEnd != null && written != rangeEnd + 1) ||
           (expectedTotal > 0 && written != expectedTotal)) {
-        throw const _DownloadException('The connection ended before the whole file arrived');
+        throw const _DownloadException(
+          'The connection ended before the whole file arrived',
+        );
       }
       task.downloadedBytes = written;
       task.totalBytes = written;
@@ -2442,7 +3343,8 @@ class DownloadManager extends ChangeNotifier {
   }
 
   void pauseTask(DownloadTask task) {
-    if (task.status == DownloadStatus.downloading) {
+    if (task.status == DownloadStatus.downloading ||
+        task.status == DownloadStatus.queued) {
       task.status = DownloadStatus.paused;
       task.speedBytesPerSec = 0;
       for (final seg in task.segments) {
@@ -2465,17 +3367,26 @@ class DownloadManager extends ChangeNotifier {
   }
 
   void resumeTask(DownloadTask task) {
-    if (task.status == DownloadStatus.paused || task.status == DownloadStatus.failed) {
+    if (task.status == DownloadStatus.paused ||
+        task.status == DownloadStatus.failed) {
       final active = _runningDownloads[task.id];
       if (active != null) {
-        unawaited(active.then((_) => resumeTask(task)));
+        // whenComplete also fires when the tracked download ended in an error,
+        // otherwise the task would stay paused forever.
+        unawaited(active.whenComplete(() => resumeTask(task)));
         return;
       }
-      task.status = DownloadStatus.downloading;
       task.errorMessage = null;
-      _persistTasks();
-      notifyListeners();
-      _downloadRealMedia(task);
+      if (task.series != null) {
+        task.status = DownloadStatus.queued;
+        unawaited(_persistTasks());
+        _startQueuedDownloads();
+      } else {
+        task.status = DownloadStatus.downloading;
+        _persistTasks();
+        notifyListeners();
+        _downloadRealMedia(task);
+      }
     }
   }
 
@@ -2513,7 +3424,10 @@ class DownloadManager extends ChangeNotifier {
 
   Future<void> restoreCompletedTask(DownloadTask task) async {
     await ready;
-    _tasks.removeWhere((existing) => existing.id == task.id || existing.savePath == task.savePath);
+    _tasks.removeWhere(
+      (existing) =>
+          existing.id == task.id || existing.savePath == task.savePath,
+    );
     _tasks.insert(0, task);
     await _persistTasks();
     notifyListeners();
@@ -2573,8 +3487,7 @@ class DownloadManager extends ChangeNotifier {
         if (entity is! File) continue;
         final name = entity.path.split(Platform.pathSeparator).last;
         if (!name.startsWith(prefix)) continue;
-        final isTemp =
-            name.contains('.audio.') || name.contains('.merged.');
+        final isTemp = name.contains('.audio.') || name.contains('.merged.');
         if (!isTemp) continue;
         try {
           entity.deleteSync();
@@ -2600,15 +3513,33 @@ class _DownloadException implements Exception {
 }
 
 class _HlsVariant {
-  const _HlsVariant({required this.bandwidth, required this.url});
+  const _HlsVariant({
+    required this.bandwidth,
+    required this.url,
+    this.externalAudioUrl,
+  });
 
   final int bandwidth;
   final String url;
+  final String? externalAudioUrl;
 }
 
 class _HlsPlaylist {
-  const _HlsPlaylist({required this.segments, this.initSegment});
+  const _HlsPlaylist({
+    required this.segments,
+    this.initSegment,
+    this.duration = 0,
+    this.bandwidth = 0,
+    this.usesByteRanges = false,
+    this.isFinite = false,
+    this.externalAudioUrl,
+  });
 
   final List<String> segments;
   final String? initSegment;
+  final double duration;
+  final int bandwidth;
+  final bool usesByteRanges;
+  final bool isFinite;
+  final String? externalAudioUrl;
 }

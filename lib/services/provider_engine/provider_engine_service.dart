@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -95,7 +96,24 @@ class ProviderEngineService {
     if (cached != null) return cached;
     return _opening.putIfAbsent(key, () async {
       try {
-        final js = await _getText(provider.scriptUrl);
+        // Provider scripts are evaluated with network access — never accept a
+        // cleartext source that could be replaced in transit.
+        final scriptUri = Uri.tryParse(provider.scriptUrl);
+        final localScript =
+            scriptUri != null &&
+            const {
+              'localhost',
+              '127.0.0.1',
+              '[::1]',
+              '10.0.2.2',
+            }.contains(scriptUri.host);
+        if (scriptUri == null ||
+            (scriptUri.scheme != 'https' &&
+                !(scriptUri.scheme == 'http' && localScript)) ||
+            scriptUri.host.isEmpty) {
+          throw StateError('Provider scripts must be served over HTTPS');
+        }
+        final js = await _getText(scriptUri.toString());
         final ctx = ProviderContext(
           id: provider.id,
           name: provider.name,
@@ -321,7 +339,7 @@ class ProviderEngineService {
       backdropUrl: m.cover,
       year: year,
       rating: 0.0,
-      quality: 'HD',
+      quality: '',
       genres: m.genres.isEmpty ? const ['Cinema'] : m.genres,
       type: m.type,
       catalogGroups: m.catalogGroups,
@@ -361,11 +379,16 @@ class ProviderEngineService {
     MovieItem item, {
     ProviderEpisode? episode,
     bool keepAllFormats = false,
+    void Function(List<MovieSource>)? onFormats,
   }) async {
     if (item.detailUrl.isEmpty) return const [];
     await MovieRepositoryService.instance.ready;
     if (_isCloudStream(item)) {
-      return CloudStreamRuntime.resolve(item, episodeData: episode?.url);
+      return CloudStreamRuntime.resolve(
+        item,
+        episodeData: episode?.url,
+        onFormats: onFormats,
+      );
     }
     final ctx = await _contextFor(
       item.providerId,
@@ -373,50 +396,74 @@ class ProviderEngineService {
     );
     if (ctx == null) return const [];
 
-    var episodeUrl = episode?.url ?? item.episodeUrl;
-    List<ProviderEpisode> episodes = const [];
-    if (episodeUrl.isEmpty) {
+    final versions = <String, String>{};
+    final storedUrl = episode?.url ?? item.episodeUrl;
+    if (storedUrl.isNotEmpty) {
+      versions[storedUrl] = episode?.title ?? '';
+    } else {
       try {
-        episodes = await ctx.getEpisodes(item.detailUrl);
+        final episodes = await ctx.getEpisodes(item.detailUrl);
+        final choices = keepAllFormats && !item.isSeries
+            ? episodes
+            : episodes.take(1);
+        for (final version in choices) {
+          if (version.url.isNotEmpty) versions[version.url] = version.title;
+        }
       } catch (_) {
-        // Some movie providers accept the title URL directly.
+        // Some providers accept the detail URL directly.
       }
-    }
-
-    if (episodeUrl.isEmpty) {
-      // Prefer a stored episode url, else the first episode, else the detail
-      // url itself (some providers accept the page url directly).
-      episodeUrl = episodes.isNotEmpty ? episodes.first.url : item.detailUrl;
+      if (versions.isEmpty) versions[item.detailUrl] = '';
     }
 
     final out = <MovieSource>[];
     final seen = <String>{};
-    // Resolve the chosen episode and, for series, keep it simple (first ep).
-    final candidates = <String>{episodeUrl};
-
-    for (final ep in candidates) {
-      List<ProviderStream> streams;
-      try {
-        streams = await ctx.getVideoSources(ep);
-      } catch (_) {
-        streams = const [];
-      }
-      for (final s in streams) {
-        if (s.url.isEmpty || (!keepAllFormats && seen.contains(s.url)))
+    final entries = versions.entries.toList(growable: false);
+    var next = 0;
+    Future<void> resolveVersion() async {
+      while (next < entries.length) {
+        final version = entries[next++];
+        List<ProviderStream> streams;
+        try {
+          streams = await ctx.getVideoSources(version.key);
+        } catch (_) {
           continue;
-        seen.add(s.url);
-        out.add(movieSourceFromStream(s, item, ctx));
+        }
+        final formats = <MovieSource>[];
+        for (final stream in streams) {
+          if (stream.url.isEmpty ||
+              (!keepAllFormats && !seen.add(stream.url))) {
+            continue;
+          }
+          formats.add(
+            movieSourceFromStream(
+              stream,
+              item,
+              ctx,
+              versionLabel: item.isSeries || episode != null
+                  ? ''
+                  : version.value,
+            ),
+          );
+        }
+        out.addAll(formats);
+        if (formats.isNotEmpty) onFormats?.call(formats);
       }
     }
+
+    await Future.wait(
+      List.generate(entries.length.clamp(1, 3), (_) => resolveVersion()),
+    );
     return out;
   }
 
   MovieSource movieSourceFromStream(
     ProviderStream s,
     MovieItem item,
-    ProviderContext ctx,
-  ) {
-    final q = s.quality == 'auto' || s.quality.isEmpty ? 'HD' : s.quality;
+    ProviderContext ctx, {
+    String versionLabel = '',
+  }) {
+    final q = providerResolution(s.quality, labels: [s.label, versionLabel]);
+    final uriPath = Uri.tryParse(s.url)?.path.toLowerCase() ?? '';
     return MovieSource(
       serverName: s.label.isNotEmpty ? s.label : '${ctx.name} $q',
       resolution: q,
@@ -425,13 +472,130 @@ class ProviderEngineService {
       fileSize: '',
       format: switch (s.container.toLowerCase()) {
         'hls' || 'm3u8' => 'm3u8',
+        'dash' || 'mpd' => 'mpd',
         'mkv' || 'webm' || 'mov' || 'avi' || 'ts' => s.container.toLowerCase(),
+        _ when uriPath.endsWith('.m3u8') => 'm3u8',
+        _ when uriPath.endsWith('.mpd') => 'mpd',
         _ => 'mp4',
       },
       providerId: ctx.id,
       providerName: ctx.name,
       headers: s.headers,
     );
+  }
+
+  Future<List<MovieSource>> episodeDownloadFormats(
+    MovieItem movie,
+    ProviderEpisode episode,
+  ) async {
+    final sources = await resolveStreams(
+      movie,
+      episode: episode,
+      keepAllFormats: true,
+    ).timeout(const Duration(seconds: 25));
+    final seen = <(String, String, String, String?)>{};
+    final downloadable = sources.where((source) {
+      final uri = Uri.tryParse(source.downloadUrl);
+      return uri != null &&
+          const {'http', 'https'}.contains(uri.scheme) &&
+          seen.add((
+            source.downloadUrl,
+            source.serverName,
+            source.resolution,
+            source.hlsVariantResolution,
+          ));
+    }).toList();
+    final formats = List<List<MovieSource>>.filled(
+      downloadable.length,
+      const [],
+    );
+    var next = 0;
+    Future<void> inspectManifests() async {
+      while (next < downloadable.length) {
+        final index = next++;
+        final source = downloadable[index];
+        final variants =
+            source.hlsVariantResolution == null &&
+                source.streamUrl == source.downloadUrl &&
+                source.format.toLowerCase() == 'm3u8'
+            ? await adaptiveMovieFormats(source)
+            : const <MovieSource>[];
+        formats[index] = variants.isEmpty ? [source] : variants;
+      }
+    }
+
+    await Future.wait(
+      List.generate(downloadable.length.clamp(1, 3), (_) => inspectManifests()),
+    );
+    return formats.expand((sources) => sources).toList();
+  }
+
+  /// Read only master-playlist metadata. Keep the original manifest URL so
+  /// playback can select the video track while retaining alternate audio.
+  Future<List<MovieSource>> adaptiveMovieFormats(MovieSource source) async {
+    final url = Uri.tryParse(source.streamUrl);
+    if (source.format.toLowerCase() != 'm3u8' ||
+        url == null ||
+        !const {'http', 'https'}.contains(url.scheme)) {
+      return const [];
+    }
+
+    final client = http.Client();
+    Future<String> readMaster() async {
+      final request = http.Request('GET', url)..headers.addAll(source.headers);
+      final response = await client.send(request);
+      if (response.statusCode != 200) return '';
+      const limit = 96 * 1024;
+      final buffer = BytesBuilder(copy: false);
+      await for (final data in response.stream) {
+        final remaining = limit - buffer.length;
+        buffer.add(
+          data.length <= remaining ? data : data.sublist(0, remaining),
+        );
+        if (buffer.length >= limit) break;
+      }
+      return utf8.decode(buffer.takeBytes(), allowMalformed: true);
+    }
+
+    try {
+      final playlist = await readMaster().timeout(const Duration(seconds: 3));
+      if (!playlist.trimLeft().startsWith('#EXTM3U')) return const [];
+      final variants = <int, String>{};
+      final resolution = RegExp(r'(?:^|[:,])RESOLUTION=(\d+)x(\d+)(?:,|$)');
+      for (final line in const LineSplitter().convert(playlist)) {
+        if (!line.startsWith('#EXT-X-STREAM-INF:')) continue;
+        final match = resolution.firstMatch(line);
+        if (match == null) continue;
+        final width = int.parse(match[1]!);
+        final height = int.parse(match[2]!);
+        final widescreen = const {
+          3840: 2160,
+          2560: 1440,
+          1920: 1080,
+          1280: 720,
+          854: 480,
+          640: 360,
+        }[width];
+        final labelHeight = widescreen != null && height < widescreen
+            ? widescreen
+            : height;
+        variants.putIfAbsent(labelHeight, () => '${width}x$height');
+      }
+      final sorted = variants.keys.toList()..sort((a, b) => b.compareTo(a));
+      return [
+        for (final height in sorted)
+          source.copyWith(
+            resolution: '${height}p',
+            downloadUrl: source.streamUrl,
+            fileSize: '',
+            hlsVariantResolution: variants[height],
+          ),
+      ];
+    } on Exception {
+      return const [];
+    } finally {
+      client.close();
+    }
   }
 
   // ── cross-repository resolution ────────────────────────────────────────────

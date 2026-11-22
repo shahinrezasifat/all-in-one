@@ -129,7 +129,10 @@ class YtdlpIos extends YtdlpPlatform {
   }
 
   @override
-  Future<VideoInfo> getVideoInfo(String url) async {
+  Future<VideoInfo> getVideoInfo(String url, {
+    String? format,
+    Map<String, String> headers = const {},
+  }) async {
     final data = await _runJob({
       'id': 'info-${DateTime.now().microsecondsSinceEpoch}',
       'op': 'info',

@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:ytdlp_flutter/ytdlp_flutter.dart';
 
+import 'download_size_probe.dart';
+
 /// A quality tier parsed from yt-dlp's real format list. [selector] is passed
 /// straight to yt-dlp's `-f` option by [Ytdlp.downloadAudio].
 class YtDlpQuality {
@@ -60,9 +62,10 @@ class YtDlpService {
     }
     final host = uri.host.toLowerCase();
     return host == 'youtu.be' ||
-        const ['youtube.com', 'youtube-nocookie.com'].any(
-          (domain) => host == domain || host.endsWith('.$domain'),
-        );
+        const [
+          'youtube.com',
+          'youtube-nocookie.com',
+        ].any((domain) => host == domain || host.endsWith('.$domain'));
   }
 
   static bool isYouTubeUrl(String url) => youtubeVideoUrl(url) != null;
@@ -82,11 +85,51 @@ class YtDlpService {
     return Uri.https('www.youtube.com', '/watch', {'v': id}).toString();
   }
 
-  Future<VideoInfo?> resolve(String url) async {
+  Future<VideoInfo?> resolve(
+    String url, {
+    String? format,
+    Map<String, String> headers = const {},
+  }) async {
     if (!supported) return null;
     await ensureInit();
     if (!_initialized) throw StateError('The download engine could not start');
-    return Ytdlp.getVideoInfo(youtubeVideoUrl(url) ?? url);
+    return Ytdlp.getVideoInfo(youtubeVideoUrl(url) ?? url, format: format, headers: headers);
+  }
+
+  /// Size of the selected transfer, including all requested tracks.
+  static DownloadSize? selectedDownloadSize(VideoInfo info) {
+    final root = info.raw;
+    if (root == null || root['is_live'] == true) return null;
+    DownloadSize? read(Map format) {
+      final parts = format['requested_formats'] ?? format['requested_downloads'];
+      if (parts is List && parts.isNotEmpty) {
+        var bytes = 0;
+        var estimated = false;
+        for (final part in parts) {
+          final size = part is Map ? read(part) : null;
+          if (size == null) return null;
+          bytes += size.bytes;
+          estimated |= size.estimated;
+        }
+        return (bytes: bytes, estimated: estimated);
+      }
+      final exact = format['filesize'];
+      if (exact is num && exact.isFinite && exact > 0) {
+        return (bytes: exact.round(), estimated: false);
+      }
+      final approximate = format['filesize_approx'];
+      if (approximate is num && approximate.isFinite && approximate > 0) {
+        return (bytes: approximate.round(), estimated: true);
+      }
+      final duration = format['duration'] ?? info.durationSeconds;
+      final bitrate = format['tbr'];
+      if (duration is num && duration.isFinite && duration > 0 &&
+          bitrate is num && bitrate.isFinite && bitrate > 0) {
+        return (bytes: (duration * bitrate * 1000 / 8).round(), estimated: true);
+      }
+      return null;
+    }
+    return read(root);
   }
 
   /// Builds a clean quality ladder from the full yt-dlp info dict.
@@ -183,6 +226,14 @@ class YtDlpService {
       format: quality.selector,
       onProgress: onProgress,
     );
+  }
+
+  static String? exactHlsSelector(String? dimensions) {
+    final match = RegExp(r'^([1-9]\d*)x([1-9]\d*)$')
+        .firstMatch(dimensions ?? '');
+    if (match == null) return null;
+    final filter = '[width=${match[1]}][height=${match[2]}]';
+    return 'b$filter/bv$filter+ba';
   }
 
   /// Downloads with an explicit format selector (e.g. height-capped video+audio or audio only).

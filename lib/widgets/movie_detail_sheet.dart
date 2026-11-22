@@ -1,18 +1,15 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/movie_model.dart';
+import '../models/movie_source_language.dart';
 import '../screens/movie_player_screen.dart';
 import '../services/download_manager.dart';
-import '../services/extractor_service.dart';
 import '../services/movie_repository_service.dart';
 import '../services/permission_service.dart';
 import '../services/preference_service.dart';
 import '../services/provider_engine/provider_engine_service.dart';
-import '../services/stream_fallback_service.dart';
+import '../services/provider_engine/provider_models.dart';
 import '../services/watch_history_service.dart';
 import '../theme/app_colors.dart';
 import 'movie_card.dart';
@@ -63,13 +60,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
   /// source picker so it only offers sources for that exact format.
   _ResPick? _selectedResPick;
 
-  // REAL playable streams resolved live across EVERY active repository
-  // (JS providers run getDetail â†’ getVideoSources; other repos are title-
-  // searched and their closest match resolved too). Sizes are probed lazily
-  // so each resolution can honestly show its smallest-MB file.
   List<MovieSource> _allSources = const [];
   bool _resolving = false;
-  bool _sizesProbing = false;
 
   // Selected language key (e.g. 'bn', 'hi', 'en', 'dual', 'multi', 'ta', 'te', etc.)
   String? _selectedLanguageKey;
@@ -350,32 +342,6 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     return keys.toList();
   }
 
-  static List<String> _sourceLanguageKeys(MovieSource source) {
-    final label = '${source.serverName} ${source.resolution}'.toLowerCase();
-    const aliases = {
-      'bn': r'bangla|bengali|ben',
-      'hi': r'hindi|hin',
-      'en': r'english|eng',
-      'dual': r'dual|2[ ._-]*audio',
-      'multi': r'multi|all[ ._-]+audio',
-      'ta': r'tamil|tam',
-      'te': r'telugu|tel',
-      'ml': r'malayalam|mal',
-      'kn': r'kannada|kan',
-      'ko': r'korean|kor',
-      'ja': r'japanese|jpn',
-      'es': r'spanish|español|espanol|spa',
-      'fr': r'french|français|francais|fra',
-      'ar': r'arabic|ara',
-      'tr': r'turkish|tur',
-    };
-    final keys = [
-      for (final entry in aliases.entries)
-        if (RegExp(r'\b(?:' + entry.value + r')\b').hasMatch(label)) entry.key,
-    ];
-    return keys.isEmpty ? const ['orig'] : keys;
-  }
-
   /// Groups all real sources across every repository into language options
   List<_LanguageOption> _getAvailableLanguages() {
     if (_effectiveSources.isEmpty) return const [];
@@ -383,7 +349,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     final map = <String, List<MovieSource>>{};
     for (final s in _effectiveSources) {
       final keys = widget.selectedSourceOnly
-          ? _sourceLanguageKeys(s)
+          ? movieSourceLanguageKeys(s)
           : _detectLanguageKeys(s, widget.movie);
       for (final k in keys) {
         map.putIfAbsent(k, () => []).add(s);
@@ -415,7 +381,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
         options.add(
           _LanguageOption(
             key: key,
-            label: _languageMeta[key] ?? key.toUpperCase(),
+            label:
+                _languageMeta[key] ??
+                movieSourceLanguageLabels[key] ??
+                key.toUpperCase(),
             sources: map[key]!,
           ),
         );
@@ -427,7 +396,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
         options.add(
           _LanguageOption(
             key: entry.key,
-            label: _languageMeta[entry.key] ?? entry.key.toUpperCase(),
+            label:
+                _languageMeta[entry.key] ??
+                movieSourceLanguageLabels[entry.key] ??
+                entry.key.toUpperCase(),
             sources: entry.value,
           ),
         );
@@ -513,206 +485,41 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     _resolveStreams();
   }
 
-  Future<void> _resolveStreams() async {
+  void _addFormats(List<MovieSource> formats) {
+    if (formats.isEmpty || !mounted) return;
     setState(() {
-      _resolving = true;
+      _allSources = {
+        for (final source in [..._allSources, ...formats])
+          (
+            source.resolution,
+            source.format,
+            source.serverName,
+            source.streamUrl,
+            source.downloadUrl,
+          ): source,
+      }.values.toList();
+      _selectedSource ??= _allSources.first;
     });
+  }
 
+  Future<void> _resolveStreams({bool otherSources = false}) async {
+    if (_resolving) return;
+    setState(() => _resolving = true);
     try {
-      await MovieRepositoryService.instance.ready;
-    } catch (_) {}
-
-    final merged = <MovieSource>[];
-
-    if (widget.selectedSourceOnly) {
-      try {
-        merged.addAll(
-          await ProviderEngineService.instance.resolveStreams(widget.movie),
-        );
-      } catch (_) {}
-    } else {
-      // 1. Live sweep across all active JS providers (4K HDHub, VegaMovies, AniKoto, etc.)
-      try {
-        final streams = await ProviderEngineService.instance
-            .resolveStreamsEverywhere(widget.movie);
-        merged.addAll(streams);
-      } catch (_) {}
-
-      if (!mounted) return;
-
-      // 2. Multi-provider fallback discovery across catalog and active extensions
-      try {
-        final fallbacks = StreamFallbackService.instance.discoverStreams(
-          widget.movie,
-        );
-        for (final s in fallbacks) {
-          final url = s.downloadUrl.isNotEmpty ? s.downloadUrl : s.streamUrl;
-          if (url.isEmpty) continue;
-          if (!merged.any(
-            (m) =>
-                (m.downloadUrl.isNotEmpty ? m.downloadUrl : m.streamUrl) == url,
-          )) {
-            merged.add(s);
-          }
-        }
-      } catch (_) {}
-
-      // 3. Any baked-in sources on the movie item
-      for (final s in widget.movie.sources) {
-        if (s.downloadUrl.isEmpty && s.streamUrl.isEmpty) continue;
-        final url = s.downloadUrl.isNotEmpty ? s.downloadUrl : s.streamUrl;
-        if (!merged.any(
-          (m) =>
-              (m.downloadUrl.isNotEmpty ? m.downloadUrl : m.streamUrl) == url,
-        )) {
-          merged.add(s);
-        }
-      }
-
-      // 4. Cross-catalog search for identical or similar title
-      if (merged.isEmpty) {
-        try {
-          final cleanTitle = ProviderEngineService.cleanSearchTitle(
-            widget.movie.title,
-          );
-          final catalog = MovieRepositoryService.instance.getAllMovies();
-          for (final m in catalog) {
-            if (m.sources.any(
-              (s) => s.downloadUrl.isNotEmpty || s.streamUrl.isNotEmpty,
-            )) {
-              final score = ProviderEngineService.titleScore(
-                cleanTitle,
-                ProviderEngineService.cleanSearchTitle(m.title),
-              );
-              if (score >= 0.7) {
-                for (final s in m.sources) {
-                  if (s.downloadUrl.isNotEmpty || s.streamUrl.isNotEmpty) {
-                    final url = s.downloadUrl.isNotEmpty
-                        ? s.downloadUrl
-                        : s.streamUrl;
-                    if (!merged.any(
-                      (x) =>
-                          (x.downloadUrl.isNotEmpty
-                              ? x.downloadUrl
-                              : x.streamUrl) ==
-                          url,
-                    )) {
-                      merged.add(s);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 5. If still empty, attempt web stream extraction
-      if (merged.isEmpty) {
-        try {
-          final extracted = await ExtractorService.instance.resolveMovieExtract(
-            widget.movie.title,
-          );
-          if (extracted != null && extracted.videoFormats.isNotEmpty) {
-            for (final f in extracted.videoFormats) {
-              final fUrl = f.url ?? '';
-              if (fUrl.isEmpty) continue;
-              merged.add(
-                MovieSource(
-                  serverName: f.note != null && f.note!.isNotEmpty
-                      ? 'Web Stream (${f.note})'
-                      : 'Web Stream',
-                  resolution: f.label,
-                  downloadUrl: fUrl,
-                  streamUrl: fUrl,
-                  fileSize: f.fileSize != null ? _fmtBytes(f.fileSize!) : '',
-                  format: f.ext,
-                  providerName: 'Online Web Stream',
-                  repoName: 'Web Stream',
-                ),
-              );
-            }
-          }
-        } catch (_) {}
-      }
+      final engine = ProviderEngineService.instance;
+      final formats = otherSources
+          ? await engine.resolveStreamsEverywhere(widget.movie)
+          : await engine.resolveStreams(
+              widget.movie,
+              keepAllFormats: true,
+              onFormats: _addFormats,
+            );
+      _addFormats(formats);
+    } catch (_) {
+      // The available formats remain usable if a provider fails.
+    } finally {
+      if (mounted) setState(() => _resolving = false);
     }
-
-    if (!mounted) return;
-
-    setState(() {
-      _allSources = merged;
-      _resolving = false;
-      if (merged.isNotEmpty) {
-        _selectedSource ??= merged.first;
-      }
-    });
-
-    if (merged.isNotEmpty) {
-      _probeMissingSizes();
-    }
-  }
-
-  /// HEAD/Range-probe every stream with no declared size so the resolution
-  /// list can show real MB numbers and pick the smallest file per resolution.
-  Future<void> _probeMissingSizes() async {
-    final todo = _allSources.where((s) => s.fileSize.trim().isEmpty).toList();
-    if (todo.isEmpty) return;
-    setState(() => _sizesProbing = true);
-    final client = http.Client();
-    final updates = <MovieSource, MovieSource>{};
-    await Future.wait(
-      todo.map((s) async {
-        final probed = await _probeSize(client, s);
-        if (probed.fileSize != s.fileSize) updates[s] = probed;
-      }),
-    );
-    client.close();
-    if (!mounted) return;
-    setState(() {
-      if (updates.isNotEmpty) {
-        _allSources = _allSources
-            .map((s) => updates.containsKey(s) ? updates[s]! : s)
-            .toList();
-      }
-      _sizesProbing = false;
-    });
-  }
-
-  Future<MovieSource> _probeSize(http.Client client, MovieSource s) async {
-    final url = s.downloadUrl.isNotEmpty ? s.downloadUrl : s.streamUrl;
-    if (url.isEmpty || s.format == 'm3u8') return s;
-    try {
-      final req = http.Request('GET', Uri.parse(url))
-        ..headers.addAll(s.headers)
-        ..headers['Range'] = 'bytes=0-0'
-        ..headers['User-Agent'] =
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-      final res = await client.send(req).timeout(const Duration(seconds: 8));
-      final cr = res.headers['content-range'] ?? '';
-      var total =
-          int.tryParse(RegExp(r'/(\d+)$').firstMatch(cr)?.group(1) ?? '') ?? 0;
-      if (total <= 0) {
-        total = int.tryParse(res.headers['content-length'] ?? '') ?? 0;
-      }
-      try {
-        await res.stream.drain().timeout(const Duration(seconds: 2));
-      } catch (_) {
-        unawaited(res.stream.listen((_) {}).cancel());
-      }
-      if (total > 1024) return s.copyWith(fileSize: _fmtBytes(total));
-    } catch (_) {}
-    return s;
-  }
-
-  static String _fmtBytes(int bytes) {
-    if (bytes >= 1099511627776) {
-      return '${(bytes / 1099511627776).toStringAsFixed(2)} TB';
-    }
-    if (bytes >= 1073741824) {
-      return '${(bytes / 1073741824).toStringAsFixed(2)} GB';
-    }
-    return '${(bytes / 1048576).clamp(1, 999999).toStringAsFixed(0)} MB';
   }
 
   static double _sizeMb(MovieSource s) {
@@ -735,14 +542,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
   }
 
   static int heightOf(MovieSource s) {
-    final r = s.resolution.toLowerCase();
-    if (r.contains('4k') || r.contains('2160')) return 2160;
-    if (r.contains('2k') || r.contains('qhd')) return 1440;
-    final m = RegExp(r'(\d{3,4})p?').firstMatch(r);
-    if (m != null) return int.tryParse(m.group(1)!) ?? 0;
-    if (r.contains('hd') && !r.contains('480')) return 720;
-    if (r.contains('sd') || r.contains('480')) return 480;
-    return 0;
+    final resolution = providerResolution(s.resolution);
+    return int.tryParse(resolution.replaceAll('p', '')) ?? 0;
   }
 
   /// The format list for the active language: groups by resolution, picks the best/lightest
@@ -788,8 +589,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
       } else {
         label = best.resolution.isNotEmpty && best.resolution != '-'
             ? best.resolution
-            : 'Auto / HD';
-        shortBadge = 'HD';
+            : 'Auto';
+        shortBadge = 'Auto';
       }
       picks.add(
         _ResPick(
@@ -1568,9 +1369,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    widget.selectedSourceOnly
-                        ? 'Loading languages and formats…'
-                        : 'Scanning all repositories for languages & formats...',
+                    'Checking available formats…',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -1617,9 +1416,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
             ),
             const SizedBox(height: 10),
             Text(
-              widget.selectedSourceOnly
-                  ? 'This source has no playable formats for this title right now.'
-                  : 'None of the active repositories or providers have a playable stream or download for "${widget.movie.title}" right now. This title may be an upcoming cinema release (${widget.movie.year}).',
+              'This source has no playable formats for this title right now.',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
@@ -1631,7 +1428,9 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _resolveStreams,
+                    onPressed: () => _resolveStreams(
+                      otherSources: !widget.selectedSourceOnly,
+                    ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
@@ -1643,9 +1442,11 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                       size: 16,
                       color: AppColors.primary,
                     ),
-                    label: const Text(
-                      'Retry Search',
-                      style: TextStyle(
+                    label: Text(
+                      widget.selectedSourceOnly
+                          ? 'Retry'
+                          : 'Find other sources',
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: AppColors.primary,
@@ -1719,16 +1520,6 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                 color: isDark ? Colors.white54 : Colors.black54,
               ),
             ),
-            if (_sizesProbing) const SizedBox(width: 6),
-            if (_sizesProbing)
-              const SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.accentGreen,
-                ),
-              ),
           ],
         ),
         const SizedBox(height: 4),

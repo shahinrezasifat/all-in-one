@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,11 +40,24 @@ class VaultFolder {
   );
 }
 
-class VaultService extends ChangeNotifier {
+class VaultService extends ChangeNotifier with WidgetsBindingObserver {
   static final VaultService instance = VaultService._();
 
   late final Future<void> _ready = _init();
-  VaultService._();
+  VaultService._() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // A private vault must not stay open while the app is in the background.
+    if ((state == AppLifecycleState.detached ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.hidden) &&
+        _isUnlocked) {
+      lock();
+    }
+  }
 
   bool _isUnlocked = false;
   bool _hasPin = false;
@@ -95,18 +110,68 @@ class VaultService extends ChangeNotifier {
         }
       } catch (_) {}
     }
+
+    // Older builds stored moved downloads under the application-support dir
+    // while photos/folders used the download dir. Fold them into one root so
+    // restore, playback and deletion all look in the same place.
+    // Skip the platform call entirely when there is nothing to migrate (also
+    // keeps unit tests, which have no path_provider plugin, from blocking).
+    if (_vaultItems.any((item) => item.vaultPath.contains('/secret_vault/'))) {
+      try {
+        final support = await getApplicationSupportDirectory().timeout(
+          const Duration(seconds: 3),
+        );
+        final legacyRoot = '${support.path}/secret_vault';
+        var migrated = false;
+        for (var i = 0; i < _vaultItems.length; i++) {
+          final item = _vaultItems[i];
+          if (!item.vaultPath.startsWith('$legacyRoot/')) continue;
+          final oldFile = File(item.vaultPath);
+          if (!await oldFile.exists()) continue;
+          final fileName = item.vaultPath.split('/').last;
+          final target = File('$vaultDirectoryPath/${item.id}/$fileName');
+          await target.parent.create(recursive: true);
+          if (!await target.exists()) {
+            await oldFile.copy(target.path);
+            await oldFile.delete();
+          }
+          _vaultItems[i] = item.copyWith(vaultPath: target.path);
+          migrated = true;
+        }
+        if (migrated) await _persistItems();
+      } catch (_) {}
+    }
     notifyListeners();
   }
 
-  String _hashPin(String pin) {
-    return sha256.convert(utf8.encode('snaptube_pure_vault_$pin')).toString();
+  static const int _pinStretchRounds = 25000;
+  static const String _pinSaltKey = 'vault_pin_salt';
+
+  String _newPinSalt() {
+    final random = Random.secure();
+    return base64.encode(List<int>.generate(16, (_) => random.nextInt(256)));
   }
+
+  /// Salted, stretched hash. A plain SHA-256 of a 4-digit PIN with a global
+  /// salt is trivially brute-forced once SharedPreferences is readable.
+  String _hashPin(String pin, String salt) {
+    List<int> bytes = utf8.encode('$salt:${pin.trim()}');
+    for (var i = 0; i < _pinStretchRounds; i++) {
+      bytes = sha256.convert(bytes).bytes;
+    }
+    return 'v1\$$salt\$${base64.encode(bytes)}';
+  }
+
+  String _legacyPinHash(String pin) =>
+      sha256.convert(utf8.encode('snaptube_pure_vault_$pin')).toString();
 
   Future<bool> setPin(String newPin) async {
     if (newPin.trim().length < 4) return false;
     await _ready;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('vault_pin_hash', _hashPin(newPin.trim()));
+    final salt = _newPinSalt();
+    await prefs.setString('vault_pin_hash', _hashPin(newPin, salt));
+    await prefs.setString(_pinSaltKey, salt);
     _hasPin = true;
     _isUnlocked = true;
 
@@ -124,12 +189,29 @@ class VaultService extends ChangeNotifier {
     if (savedHash == null || savedHash.isEmpty) {
       return false;
     }
-    if (_hashPin(enteredPin.trim()) == savedHash) {
-      _isUnlocked = true;
-      notifyListeners();
-      return true;
+    final salt = prefs.getString(_pinSaltKey);
+    var valid = false;
+    String? migratedHash;
+    String? migratedSalt;
+    if (savedHash.startsWith('v1\$') && salt != null) {
+      valid = _hashPin(enteredPin, salt) == savedHash;
+    } else {
+      // Existing installations keep working and are silently upgraded on the
+      // first successful unlock.
+      valid = _legacyPinHash(enteredPin.trim()) == savedHash;
+      if (valid) {
+        migratedSalt = _newPinSalt();
+        migratedHash = _hashPin(enteredPin, migratedSalt);
+      }
     }
-    return false;
+    if (!valid) return false;
+    if (migratedHash != null && migratedSalt != null) {
+      await prefs.setString('vault_pin_hash', migratedHash);
+      await prefs.setString(_pinSaltKey, migratedSalt);
+    }
+    _isUnlocked = true;
+    notifyListeners();
+    return true;
   }
 
   Future<bool> setBiometricsEnabled(bool enabled) async {
@@ -175,9 +257,19 @@ class VaultService extends ChangeNotifier {
   }
 
   // Vault Folders Management
+  /// Folder names become directory names on disk — never allow separators or
+  /// `..` to escape the vault root.
+  String _safeFolderName(String raw) {
+    final cleaned = raw.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    if (cleaned.isEmpty || cleaned == '.' || cleaned == '..') {
+      return 'Vault Folder';
+    }
+    return cleaned;
+  }
+
   Future<VaultFolder> createVaultFolder(String name) async {
     await _ready;
-    final folderName = name.trim();
+    final folderName = _safeFolderName(name);
     final newFolder = VaultFolder(
       id: 'vf_${DateTime.now().millisecondsSinceEpoch}',
       name: folderName,
@@ -204,7 +296,7 @@ class VaultService extends ChangeNotifier {
     if (idx != -1) {
       _vaultFolders[idx] = VaultFolder(
         id: id,
-        name: newName.trim(),
+        name: _safeFolderName(newName),
         createdAt: _vaultFolders[idx].createdAt,
       );
       await _persistFolders();
@@ -292,8 +384,8 @@ class VaultService extends ChangeNotifier {
       final file = File(path);
       if (path.isEmpty || !await file.exists())
         throw StateError('The download file is missing');
-      final storage = await getApplicationSupportDirectory();
-      final privateRoot = await Directory('${storage.path}/secret_vault')
+      // Use the single vault root shared by photos, folders and migration.
+      final privateRoot = await Directory(vaultDirectoryPath)
           .create(recursive: true);
       final slot = await privateRoot.createTemp('media_');
       final ext = task.ext.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
@@ -352,6 +444,7 @@ class VaultService extends ChangeNotifier {
     String? folderId,
   }) async {
     await _ready;
+    if (!_isUnlocked) throw StateError('Unlock the vault first');
     final file = File(filePath);
     if (!file.existsSync()) return;
 
@@ -367,7 +460,11 @@ class VaultService extends ChangeNotifier {
 
     try {
       file.copySync(vaultPath);
-    } catch (_) {}
+    } catch (_) {
+      // Never index an item whose vault copy does not exist — it would break
+      // restore, playback and deletion later on.
+      return;
+    }
 
     final item = VaultItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),

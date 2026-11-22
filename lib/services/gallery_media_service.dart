@@ -38,6 +38,7 @@ class GalleryMediaService {
     }
 
     // 2. Its thumbnail/poster as a standalone image next to it.
+    if (task.isImageTask) return;
     final url = task.thumbnailUrl;
     if (url.isEmpty) return;
     await saveThumbnail(

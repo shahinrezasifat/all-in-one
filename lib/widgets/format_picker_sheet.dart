@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../models/extract_result.dart';
 import '../services/download_manager.dart';
-import '../services/gallery_media_service.dart';
 import '../services/permission_service.dart';
 import '../services/virtual_folder_service.dart';
 import '../theme/app_colors.dart';
@@ -211,43 +210,26 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     }
   }
 
-  /// One-click save of the video thumbnail: lands as a real image inside the
-  /// Download folder AND is indexed for the Gallery instantly.
   Future<void> _downloadThumbnail() async {
     if (_thumbnailSaving || _thumbnailDone) return;
-    final url = widget.result.thumbnailUrl;
-    if (url.isEmpty) return;
+    final result = widget.result;
+    if (result.thumbnailUrl.isEmpty) return;
     setState(() => _thumbnailSaving = true);
-
-    await DownloadManager.instance.ready;
-    final folder = DownloadManager.instance.destinationFolder(
-      platform: widget.result.platform,
-      url: widget.result.originalUrl,
-      author: widget.result.author,
-    );
-
-    final saved = await GalleryMediaService.instance.saveThumbnail(
-      url,
-      widget.result.title,
-      folder: folder,
-    );
-    if (!mounted) return;
-    setState(() => _thumbnailSaving = false);
-    if (saved != null) {
-      await DownloadManager.instance.addCompletedImageTask(
-        title: widget.result.title,
-        author: widget.result.author,
-        platform: widget.result.platform,
-        originalUrl: widget.result.originalUrl,
-        filePath: saved,
-        thumbnailUrl: url,
+    try {
+      await DownloadManager.instance.startThumbnailDownload(
+        title: result.title,
+        author: result.author,
+        platform: result.platform,
+        originalUrl: result.originalUrl,
+        thumbnailUrl: result.thumbnailUrl,
       );
+      if (!mounted) return;
       setState(() => _thumbnailDone = true);
-      final website = DownloadManager.cleanWebsiteName(widget.result.platform, widget.result.originalUrl);
-      final channel = DownloadManager.cleanChannelName(widget.result.author);
-      _toast('Thumbnail saved to $website/$channel — visible in Gallery');
-    } else {
-      _toast('Could not save the thumbnail');
+      _toast('Thumbnail queued in Downloads');
+    } catch (_) {
+      _toast('Could not queue the thumbnail');
+    } finally {
+      if (mounted) setState(() => _thumbnailSaving = false);
     }
   }
 
@@ -734,7 +716,7 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
           Icon(Icons.check_circle_rounded, color: AppColors.accentGreen, size: 20),
           SizedBox(width: 4),
           Text(
-            'Saved',
+            'Queued',
             style: TextStyle(
               color: AppColors.accentGreen,
               fontWeight: FontWeight.w700,

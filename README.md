@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="All in One app logo" width="96">
+  <img src="assets/images/app_logo.png" alt="All in One app logo" width="96">
 </p>
 
-<h1 align="center">All in One</h1>
+<h1 align="center">All in One · Video Downloader, Movie Player &amp; Private Vault</h1>
 
 <p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
 <p align="center">
-  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.7 for ARM64, 86 MB" width="300"></a>
+  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.8 for ARM64" width="300"></a>
 </p>
 
 <p align="center">
-  Android 7.0+ · <a href="#android-screenshots">See the app</a> · <a href="#download-and-install-on-android">Android builds</a> · <a href="#windows-and-linux-downloads">Desktop builds</a>
+  Android 7.0+ · Windows x64 · Linux x64 · <a href="#android-screenshots">See the app</a> · <a href="#download-and-install-on-android">Android builds</a> · <a href="#windows-and-linux-downloads">Desktop builds</a>
 </p>
 
 ## What can you do with All in One?
@@ -20,41 +20,38 @@
 | --- | --- |
 | **Web and social video downloader** | Download supported videos from YouTube, Facebook, TikTok, other webpages, and direct media links. The built-in browser can detect media loaded on a page. |
 | **Multi-source movie streaming** | Browse integrated movie catalogs, choose an available source, and watch in the built-in player. Catalogs and playback vary by provider. |
-| **Downloads and offline playback** | Keep saved media organized and play completed downloads offline. |
+| **Downloads and offline playback** | Browse downloaded movies by poster and play them with one tap. Open a series and switch among its downloaded seasons. Web videos stay grouped by website and channel. |
+| **Audio and video controls** | Choose available video resolutions or audio-only formats, manage downloads, and play saved media with the built-in player. |
 | **Private Vault** | Keep personal media in a dedicated vault with a PIN and optional fingerprint or supported biometric unlock on Android. |
 | **GitHub release updates** | Android checks GitHub at startup, when you return to the app, and periodically while it is open. You can also check from Settings. A newer release blocks access and opens the APK download. |
 
 All in One is useful if you regularly switch between a web browser, a video downloader, a movie player, and a private media folder. Download and stream media you have permission to use.
 
+### Download a video or save the audio
+
+Paste a link on **Home** to see the formats available for that video, or open a website in the in-app browser and use the download button when the app detects media. Choose a resolution such as **1080p or 4K** when offered, or choose an audio-only format. Follow the transfer in **Downloads** and play the completed file offline.
+
+### Stream a movie or download a series
+
+Open **Movies**, select a title and choose a playback source. If the provider offers a downloadable source, choose a quality and download the movie, an individual episode, or a season. Under **Downloads → Downloaded**, tap the movie poster to play the saved file. On a series poster, choose a downloaded season to see its episodes and file count.
+
+### Keep personal media in the Vault
+
+Open **Vault** and set a PIN. On supported Android devices, Settings can enable biometric unlock. Use a completed download's options to move it into the Vault.
+
 ## Android screenshots
 
-### Home and Movies
+Captured from All in One v1.0.8 on Android. Select an image to open it at full size.
 
-| Home | Movies |
+| Home and web video tools | Movies and series | Active downloads | Private Vault |
+| :---: | :---: | :---: | :---: |
+| [<img src="docs/media/android-home-v1.0.8.jpg" alt="All in One Android home screen with a video URL field and web media shortcuts" width="215">](docs/media/android-home-v1.0.8.jpg) | [<img src="docs/media/android-movies-v1.0.8.jpg" alt="All in One movie and series catalog on Android" width="215">](docs/media/android-movies-v1.0.8.jpg) | [<img src="docs/media/android-downloads-v1.0.8.jpg" alt="Big Buck Bunny 4K video download in progress with pause and cancel controls" width="215">](docs/media/android-downloads-v1.0.8.jpg) | [<img src="docs/media/android-vault-v1.0.8.jpg" alt="A downloaded MP4 file stored in the Android Private Vault" width="215">](docs/media/android-vault-v1.0.8.jpg) |
+
+| YouTube format picker | Completed website download |
 | :---: | :---: |
-| [<img src="docs/media/home-video-discovery.jpg" alt="Home screen with the video link field, platform shortcuts, and trending videos" width="250">](docs/media/home-video-discovery.jpg) | [<img src="docs/media/movies-catalog.jpg" alt="Main Movies screen with a featured title, catalog categories, and trending movies" width="250">](docs/media/movies-catalog.jpg) |
-| Paste a video link or open a platform shortcut. | Browse featured titles, movies, series, anime, and genres. |
+| [<img src="docs/media/android-youtube-formats-v1.0.8.jpg" alt="YouTube format picker showing 4K, 1440p, 1080p and lower MP4 resolutions" width="215">](docs/media/android-youtube-formats-v1.0.8.jpg) | [<img src="docs/media/android-completed-v1.0.8.jpg" alt="A downloaded MP4 in its website folder with play and Move to Vault controls" width="215">](docs/media/android-completed-v1.0.8.jpg) |
 
-### Downloads and Vault
-
-Click any screenshot to view it at full size.
-
-| YouTube 4K picker | YouTube audio options | Active download |
-| :---: | :---: | :---: |
-| [<img src="docs/media/youtube-4k-formats.jpg" alt="Big Buck Bunny on YouTube with 4K, 1440p, and 1080p MP4 options" width="215">](docs/media/youtube-4k-formats.jpg) | [<img src="docs/media/youtube-audio-formats.jpg" alt="YouTube format picker showing additional resolutions and the audio-only MP3 option" width="215">](docs/media/youtube-audio-formats.jpg) | [<img src="docs/media/active-download-progress.jpg" alt="An active MP4 download at 21 percent with speed, ETA, and pause controls" width="215">](docs/media/active-download-progress.jpg) |
-
-| Completed download | Demo video in the Vault | Movie download option |
-| :---: | :---: | :---: |
-| [<img src="docs/media/completed-demo-download.jpg" alt="Downloaded MP4 with playback and the option to move it into the Vault" width="215">](docs/media/completed-demo-download.jpg) | [<img src="docs/media/demo-video-in-vault.jpg" alt="An MP4 demo clip stored in the unlocked Secret Vault with a play button" width="215">](docs/media/demo-video-in-vault.jpg) | [<img src="docs/media/movie-source-download.jpg" alt="Movie details with an available MP4 source and separate play and download buttons" width="215">](docs/media/movie-source-download.jpg) |
-
-The YouTube images show the formats listed for that video. The download and Vault images use the same demo MP4 served from the emulator's local test server. Movie sources and available resolutions vary by title and provider.
-
-<details>
-<summary>Play the animated app tour</summary>
-
-![Android app tour showing 4K options, a download in progress, a private Vault video, and a movie source download button](docs/media/android-tour.gif)
-
-</details>
+The format picker and progress screen use Blender’s *Big Buck Bunny*. The completed download and Vault screens show Mozilla's public sample MP4. Movie sources and download formats depend on the provider and title.
 
 ## Download and install on Android
 
@@ -62,10 +59,10 @@ The YouTube images show the formats listed for that video. The download and Vaul
 
 | Android APK | Download size | Device |
 | --- | ---: | --- |
-| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-arm64-v8a.apk) | ~86 MB | Most modern Android phones and tablets |
-| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-armeabi-v7a.apk) | ~86 MB | Older 32-bit ARM devices |
-| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/split-all-in-one-v1.0.7-x86_64.apk) | ~89 MB | Compatible Intel or AMD Android devices and emulators |
-| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/all-in-one-v1.0.7.apk) | ~229 MB | Contains all three CPU architectures in one installer |
+| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-arm64-v8a.apk) | ~87 MB | Most modern Android phones and tablets |
+| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-armeabi-v7a.apk) | ~87 MB | Older 32-bit ARM devices |
+| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-x86_64.apk) | ~90 MB | Compatible Intel or AMD Android devices and emulators |
+| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/all-in-one-v1.0.8.apk) | ~230 MB | Contains all three CPU architectures in one installer |
 
 Each architecture-specific APK includes the app and the media engines for its CPU. The listed size is the APK download size. Installed storage usage can be higher.
 
@@ -77,8 +74,8 @@ Each architecture-specific APK includes the app and the media engines for its CP
 
 | Platform | Package | Run |
 | --- | --- | --- |
-| Windows x64 | [Portable ZIP](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/all-in-one-v1.0.7-windows-x64.zip) | Extract the entire ZIP and open `snaptube_pure.exe` |
-| Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.7/all-in-one-v1.0.7-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
+| Windows x64 | [Portable ZIP](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/all-in-one-v1.0.8-windows-x64.zip) | Extract the entire ZIP and open `snaptube_pure.exe` |
+| Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/all-in-one-v1.0.8-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
 
 Windows needs the x64 Visual C++ Runtime and WebView2 for the in-app browser. Keep the executable, DLLs, and data folder together. [Microsoft Visual C++ Runtime](https://aka.ms/vc14/vc_redist.x64.exe) · [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
 
@@ -90,7 +87,7 @@ For desktop download and media conversion features that call external tools, ins
 
 | Area | Packages and tools |
 | --- | --- |
-| UI and state | Flutter, Dart, `provider`, `cupertino_icons`, `intl` |
+| UI and state | Flutter, Dart, `ChangeNotifier`, `cupertino_icons` |
 | Networking and release updates | `http`, `dio`, `pub_semver`, `url_launcher` |
 | Browser and source runtime | `webview_flutter`, vendored `webview_win_floating`, `flutter_js` |
 | Downloads and media processing | Local `ytdlp_flutter`, `youtube_explode_dart`, `ffmpeg_kit_flutter_new_min`, youtubedl-android, yt-dlp, FFmpeg, and QuickJS |
@@ -102,7 +99,7 @@ See pinned dependencies in [pubspec.yaml](pubspec.yaml) and [pubspec.lock](pubsp
 
 ### Build from source
 
-Use Flutter with Dart 3.13.5 or later in the Dart 3 series, JDK 21, and Android SDK Platform 37.
+Use Flutter with Dart 3.13.5 or later in the Dart 3 series, **JDK 21** (required by the Android Gradle plugin's lint tooling) and Android SDK Platform 37. The app bytecode targets Java 17. Release builds require the release keystore configured in `android/key.properties`.
 
 ```sh
 flutter pub get

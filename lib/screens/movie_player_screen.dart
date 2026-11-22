@@ -7,16 +7,19 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/movie_model.dart';
+import '../models/video_item.dart';
 import '../services/download_manager.dart';
 import '../services/extractor_service.dart';
 import '../services/permission_service.dart';
 import '../services/playback_controls.dart';
 import '../services/player_service.dart';
 import '../services/preference_service.dart';
+import '../services/provider_engine/provider_models.dart';
 import '../services/stream_fallback_service.dart';
 import '../services/watch_history_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/remote_image.dart';
+import 'audio_player_screen.dart';
 
 class MoviePlayerScreen extends StatefulWidget {
   final MovieItem movie;
@@ -81,6 +84,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   int _analyzedServerIndex = 0;
   int _totalCandidateServers = 0;
   bool _analysisInFlight = false;
+  bool _usingAutomaticSource = false;
+  int _sourceRequest = 0;
   final Set<String> _failedSourceKeys = {};
   List<ProviderStreamReport> _lastProviderReports = const [];
 
@@ -152,13 +157,12 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       }
     }
 
-    // Automatically analyze servers and select the fastest playable server!
     if (widget.trailerOnly) {
       _playTrailer();
     } else if (widget.isLiveTv) {
       unawaited(_connectLiveTv());
     } else {
-      _autoAnalyzeAndConnect();
+      unawaited(_initVideoPlayer());
     }
     _resetControlsTimer();
   }
@@ -186,6 +190,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         });
         return;
       }
+      // A retry (or a second trailer request) must not leak the old native
+      // player instance.
+      _videoController?.removeListener(_videoListener);
+      await _videoController?.dispose();
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(liveUrl),
         httpHeaders: StreamFallbackService.streamHeadersFor(liveUrl),
@@ -210,6 +218,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       }
     } catch (e) {
       debugPrint('Trailer load failed: $e');
+      _videoController?.removeListener(_videoListener);
+      await _videoController?.dispose();
+      _videoController = null;
       if (!mounted) return;
       setState(() {
         _isAnalyzingServers = false;
@@ -223,6 +234,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   @override
   void dispose() {
     unawaited(_playbackControls.restoreBrightness());
+    unawaited(_playbackControls.keepScreenOn(false));
     _videoController?.removeListener(_videoListener);
     _videoController?.dispose();
     _hudDismissTimer?.cancel();
@@ -398,11 +410,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     // Guard: never run two analysis passes concurrently (prevents the
     // infinite re-test loop that caused the endless spinner).
     if (_analysisInFlight) return;
+    final request = ++_sourceRequest;
+    _usingAutomaticSource = true;
     _analysisInFlight = true;
     if (resetFailures) _failedSourceKeys.clear();
 
     try {
-      if (!mounted) return;
+      if (!mounted || request != _sourceRequest) return;
       setState(() {
         _isAnalyzingServers = true;
         _analyzedServerIndex = 0;
@@ -425,7 +439,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       } catch (_) {
         reports = const [];
       }
-      if (!mounted) return;
+      if (!mounted || request != _sourceRequest) return;
       _lastProviderReports = reports;
 
       // Build the play queue: ranked candidates, skipping known-dead servers.
@@ -445,7 +459,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
       // Phase 2: try each provider in ranked order until one actually plays.
       for (int i = 0; i < queue.length; i++) {
-        if (!mounted) return;
+        if (!mounted || request != _sourceRequest) return;
         final report = queue[i];
         final candidate = report.source;
         final key = StreamFallbackService.sourceKey(candidate);
@@ -469,6 +483,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         _videoController = null;
         oldController?.removeListener(_videoListener);
         await oldController?.dispose();
+        if (!mounted || request != _sourceRequest) return;
 
         try {
           final controller = url.startsWith('http')
@@ -490,7 +505,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
               ? const Duration(seconds: 20)
               : const Duration(seconds: 16);
           await controller.initialize().timeout(initTimeout);
-          if (!mounted) return;
+          if (!mounted || request != _sourceRequest) return;
 
           if (controller.value.isInitialized && !controller.value.hasError) {
             // Playable server confirmed!
@@ -554,6 +569,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           }
           throw Exception('Player reported an unusable stream');
         } catch (e) {
+          if (!mounted || request != _sourceRequest) return;
           debugPrint('Server "${candidate.serverName}" failed: $e');
           _videoController?.removeListener(_videoListener);
           await _videoController?.dispose();
@@ -570,7 +586,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       }
 
       // No native playback succeeded from the real provider URLs.
-      if (!mounted) return;
+      if (!mounted || request != _sourceRequest) return;
 
       // There is deliberately NO silent fallback to a YouTube trailer / sample
       // clip here — the user must only ever watch the REAL movie. If none of
@@ -580,91 +596,134 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         _isBuffering = false;
         _isVideoInitialized = false;
         _videoErrorMessage =
-            'Tested ${_failedSourceKeys.length} server(s) for "${widget.movie.title}" — none responded.\nThe real movie is unavailable from the provider right now. Tap "Re-Scan All Providers" to try again.';
+            'Tested ${_failedSourceKeys.length} server(s) for "${widget.movie.title}" — none responded.\nThe real movie is unavailable from the provider right now. Choose another server or retry.';
       });
     } finally {
       _analysisInFlight = false;
     }
   }
 
-  /// Initialize video player for a specific chosen source
   Future<void> _initVideoPlayer() async {
-    final streamUrl = _currentSource.streamUrl.isNotEmpty
-        ? _currentSource.streamUrl
-        : _currentSource.downloadUrl;
-
-    if (streamUrl.isEmpty) {
-      _videoErrorMessage = 'No valid stream URL found for this server.';
-      setState(() => _isBuffering = false);
-      return;
-    }
-
+    final request = ++_sourceRequest;
+    _usingAutomaticSource = false;
+    final source = _currentSource;
+    final streamUrl = source.streamUrl.isNotEmpty
+        ? source.streamUrl
+        : source.downloadUrl;
+    final old = _videoController;
+    _videoController = null;
+    old?.removeListener(_videoListener);
+    unawaited(_playbackControls.keepScreenOn(false));
     setState(() {
+      _isAnalyzingServers = false;
+      _isVideoInitialized = false;
       _isBuffering = true;
       _videoErrorMessage = null;
+      _currentQuality = source.resolution;
     });
 
-    final oldController = _videoController;
-    _videoController = null;
-    oldController?.removeListener(_videoListener);
-    await oldController?.dispose();
-
+    VideoPlayerController? controller;
     try {
-      final controller = streamUrl.startsWith('http')
+      await old?.dispose();
+      if (!mounted || request != _sourceRequest) return;
+      if (streamUrl.isEmpty) throw StateError('No stream URL');
+      final format = source.format.toLowerCase();
+      controller = streamUrl.startsWith('http')
           ? VideoPlayerController.networkUrl(
               Uri.parse(streamUrl),
-              httpHeaders: _headersFor(_currentSource, streamUrl),
-              formatHint: _currentSource.format == 'm3u8'
-                  ? VideoFormat.hls
-                  : null,
+              httpHeaders: _headersFor(source, streamUrl),
+              formatHint: switch (format) {
+                'm3u8' || 'hls' => VideoFormat.hls,
+                'mpd' || 'dash' => VideoFormat.dash,
+                _ => null,
+              },
             )
           : VideoPlayerController.file(File(streamUrl));
       _videoController = controller;
-
-      await controller.initialize().timeout(const Duration(seconds: 10));
-      if (!mounted) return;
-
-      if (controller.value.isInitialized && !controller.value.hasError) {
-        await controller.setVolume(_volume);
-        await controller.setPlaybackSpeed(_playbackSpeed);
-
-        if (_currentSeconds > 0) {
-          await controller.seekTo(Duration(seconds: _currentSeconds.toInt()));
-        }
-
-        controller.addListener(_videoListener);
-
-        setState(() {
-          _isVideoInitialized = true;
-          _isBuffering = false;
-          final dur = controller.value.duration.inSeconds.toDouble();
-          if (dur > 0) {
-            _totalSeconds = dur;
+      await controller.initialize().timeout(const Duration(seconds: 15));
+      if (!mounted || request != _sourceRequest) return;
+      if (controller.value.hasError) throw StateError('Source rejected');
+      if (const {'m3u8', 'hls', 'mpd', 'dash'}.contains(format) &&
+          controller.isVideoTrackSupportAvailable()) {
+        final resolution = providerResolution(source.resolution);
+        final height =
+            int.tryParse(resolution.replaceAll('p', '')) ??
+            int.tryParse(source.resolution.toLowerCase().replaceAll('p', ''));
+        if (height != null) {
+          final tracks = await controller.getVideoTracks();
+          if (!mounted || request != _sourceRequest) return;
+          final widescreenWidth = (height * 16 / 9).round();
+          final matching = tracks
+              .where(
+                (track) => source.hlsVariantResolution != null
+                    ? '${track.width}x${track.height}' ==
+                          source.hlsVariantResolution
+                    : track.height == height ||
+                          (track.width == widescreenWidth &&
+                              (track.height ?? 0) <= height),
+              )
+              .firstOrNull;
+          if (matching == null && tracks.isNotEmpty) {
+            throw StateError('The selected resolution is unavailable');
           }
-        });
-
-        if (_isPlaying) {
-          await controller.play();
+          if (matching != null && !matching.isSelected) {
+            await controller.selectVideoTrack(matching);
+          }
         }
-      } else {
-        throw Exception('Failed to initialize stream');
       }
-    } catch (e) {
-      debugPrint('VideoPlayer single init notice: $e');
-      if (mounted) {
-        // Mark the chosen server dead, then automatically fall through to the
-        // next healthy provider across the entire installed provider pool.
-        _failedSourceKeys.add(StreamFallbackService.sourceKey(_currentSource));
-        _autoAnalyzeAndConnect();
+      if (!mounted || request != _sourceRequest) return;
+      await controller.setVolume(_volume);
+      await controller.setPlaybackSpeed(_playbackSpeed);
+      if (controller.value.duration > Duration.zero && _currentSeconds > 0) {
+        await controller.seekTo(
+          Duration(milliseconds: (_currentSeconds * 1000).round()),
+        );
+      }
+      if (!mounted || request != _sourceRequest) return;
+
+      controller.addListener(_videoListener);
+      setState(() {
+        _isVideoInitialized = true;
+        _isBuffering = false;
+        final duration = controller!.value.duration.inMilliseconds / 1000;
+        if (duration > 0) _totalSeconds = duration;
+      });
+      if (_isPlaying) await controller.play();
+    } catch (_) {
+      if (!mounted || request != _sourceRequest) return;
+      _showSelectedSourceError();
+      if (identical(controller, _videoController)) {
+        _videoController = null;
+        controller?.removeListener(_videoListener);
+        await controller?.dispose();
       }
     }
+  }
+
+  void _showSelectedSourceError() {
+    unawaited(_playbackControls.keepScreenOn(false));
+    setState(() {
+      _isVideoInitialized = false;
+      _isBuffering = false;
+      _videoErrorMessage =
+          '${_currentSource.resolution} from ${_currentSource.serverName} could not play.';
+    });
   }
 
   void _videoListener() {
     if (!mounted || _videoController == null) return;
     final val = _videoController!.value;
+    unawaited(
+      _playbackControls.keepScreenOn(
+        (val.isPlaying || val.isBuffering) && !val.hasError,
+      ),
+    );
 
     if (val.hasError) {
+      if (!widget.isLiveTv && !_usingAutomaticSource) {
+        _showSelectedSourceError();
+        return;
+      }
       debugPrint('Stream error detected: ${val.errorDescription}');
       // Smart failover: blacklist the failing server and jump to the next
       // healthy provider. Guarded so this can never loop indefinitely.
@@ -758,6 +817,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         _videoController!.pause();
         setState(() => _isPlaying = false);
       } else {
+        if (PlayerService.instance.isAudioView) PlayerService.instance.close();
         _videoController!.play();
         setState(() => _isPlaying = true);
       }
@@ -902,7 +962,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     if (_isLocked) return;
 
     setState(() {
-      _seekDeltaSeconds += details.primaryDelta! * 1.5;
+      _seekDeltaSeconds += (details.primaryDelta ?? 0) * 1.5;
       _showSeekHud = true;
       _showBrightnessHud = false;
       _showVolumeHud = false;
@@ -917,6 +977,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     _skip(_seekDeltaSeconds);
     _seekDeltaSeconds = 0.0;
 
+    _hudDismissTimer?.cancel();
     _hudDismissTimer = Timer(const Duration(milliseconds: 1000), () {
       if (mounted) {
         setState(() {
@@ -1343,12 +1404,14 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                         ElevatedButton.icon(
                           onPressed: () => widget.isLiveTv
                               ? _connectLiveTv(resetFailures: true)
-                              : _autoAnalyzeAndConnect(resetFailures: true),
+                              : widget.trailerOnly
+                              ? _playTrailer()
+                              : _initVideoPlayer(),
                           icon: const Icon(Icons.refresh_rounded, size: 16),
                           label: Text(
                             widget.isLiveTv
                                 ? 'Retry Channel'
-                                : 'Re-Scan All Providers',
+                                : 'Retry selected source',
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
@@ -1533,6 +1596,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                       label: 'Audio/Subs',
                       color: AppColors.accentPurple,
                       onTap: _showAudioAndSubtitlesPicker,
+                    ),
+
+                    _buildHeaderAction(
+                      icon: Icons.headphones_rounded,
+                      label: 'Audio only',
+                      color: AppColors.accentPurple,
+                      onTap: _openAudioPlayer,
                     ),
 
                     // Seasons & Episodes (if series)
@@ -1722,15 +1792,18 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                           gradient: AppColors.primaryGradient,
                           shape: BoxShape.circle,
                         ),
-                        child: IconButton(
-                          icon: Icon(
-                            _isPlaying
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 32,
+                        child: Tooltip(
+                          message: _isPlaying ? 'Pause' : 'Play',
+                          child: IconButton(
+                            icon: Icon(
+                              _isPlaying
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                            onPressed: _togglePlay,
                           ),
-                          onPressed: _togglePlay,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1810,6 +1883,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                             movie: widget.movie,
                             source: activeSource,
                             customTitle: customTitle,
+                            seasonNumber: widget.movie.isSeries
+                                ? _currentSeasonNumber
+                                : null,
                           );
 
                           if (context.mounted) {
@@ -1948,153 +2024,62 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
   // Pickers & Modals
   void _showQualityPicker() {
-    showModalBottomSheet(
+    final sources = {
+      for (final source in [
+        _currentSource,
+        ...widget.movie.sources,
+        ..._lastProviderReports.map((report) => report.source),
+      ])
+        if (source.streamUrl.isNotEmpty || source.downloadUrl.isNotEmpty)
+          (
+            source.resolution,
+            source.format,
+            source.serverName,
+            source.streamUrl,
+            source.downloadUrl,
+          ): source,
+    }.values.toList();
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        final qualities = [
-          {'label': '4K Ultra HD (2160p)', 'badge': 'UHD', 'res': '4K UHD'},
-          {'label': '1080p Full HD', 'badge': 'FHD', 'res': '1080p Full HD'},
-          {'label': '720p HD', 'badge': 'HD', 'res': '720p HD'},
-          {
-            'label': '480p Standard Definition',
-            'badge': 'SD',
-            'res': '480p SD',
-          },
-          {
-            'label': '360p Data Saver',
-            'badge': 'Low',
-            'res': '360p Data Saver',
-          },
-          {'label': 'Auto (Best for Network)', 'badge': 'Auto', 'res': 'Auto'},
-        ];
-
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * .65,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             children: [
-              const Row(
-                children: [
-                  Icon(
-                    Icons.settings_suggest_rounded,
-                    color: AppColors.accentGold,
+              const ListTile(title: Text('Available quality')),
+              for (final source in sources)
+                ListTile(
+                  leading: const Icon(Icons.hd_outlined),
+                  title: Text(source.resolution),
+                  subtitle: Text(
+                    '${source.serverName} · ${source.format.toUpperCase()}',
                   ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Video Quality (YouTube Style)',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    ...qualities.map((q) {
-                      final isSelected =
-                          _currentQuality.contains(q['res']!) ||
-                          (_currentQuality == q['res']);
-                      return ListTile(
-                        dense: true,
-                        leading: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.accentGold
-                                : Colors.white12,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            q['badge']!,
-                            style: TextStyle(
-                              color: isSelected ? Colors.black : Colors.white70,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          q['label']!,
-                          style: TextStyle(
-                            color: isSelected
-                                ? AppColors.accentGold
-                                : Colors.white,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        trailing: isSelected
-                            ? const Icon(
-                                Icons.check_rounded,
-                                color: AppColors.accentGold,
-                              )
-                            : null,
-                        onTap: () {
-                          setState(() {
-                            _currentQuality = q['res']!;
-                            if (q['res'] == 'Auto') {
-                              // Auto = let the multi-provider analyzer pick the best server
-                            } else {
-                              // Search the cross-provider scan pool first, then the
-                              // movie's own servers, for a matching resolution.
-                              final resNeedle = q['res']!.toLowerCase();
-                              final pool = _lastProviderReports.isNotEmpty
-                                  ? _lastProviderReports
-                                        .map((r) => r.source)
-                                        .toList()
-                                  : widget.movie.sources;
-                              final matching = pool
-                                  .where(
-                                    (s) => s.resolution.toLowerCase().contains(
-                                      resNeedle,
-                                    ),
-                                  )
-                                  .toList();
-                              if (matching.isNotEmpty) {
-                                _currentSource = matching.first;
-                              }
-                            }
-                          });
-                          Navigator.pop(ctx);
-                          if (widget.isLiveTv) {
-                            _connectLiveTv(resetFailures: true);
-                          } else if (q['res'] == 'Auto') {
-                            _autoAnalyzeAndConnect(resetFailures: true);
-                          } else {
-                            _initVideoPlayer();
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Switched to ${q['label']}'),
-                              duration: const Duration(seconds: 1),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                      );
-                    }),
-                  ],
+                  trailing:
+                      (source.resolution == _currentSource.resolution &&
+                          source.streamUrl == _currentSource.streamUrl &&
+                          source.downloadUrl == _currentSource.downloadUrl)
+                      ? const Icon(Icons.check_rounded)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _currentSource = source;
+                    if (widget.isLiveTv) {
+                      _connectLiveTv(resetFailures: true);
+                    } else {
+                      _initVideoPlayer();
+                    }
+                  },
                 ),
-              ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -2564,6 +2549,68 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         );
       },
     );
+  }
+
+  Future<void> _openAudioPlayer() async {
+    final controller = _videoController;
+    if (controller == null || !controller.value.isInitialized) return;
+    final url = controller.dataSourceType == DataSourceType.file
+        ? Uri.parse(controller.dataSource).toFilePath()
+        : controller.dataSource;
+    final source = _currentSource;
+    final player = PlayerService.instance;
+    final itemId =
+        'movie:${widget.movie.id}:$_currentSeasonNumber:$_currentEpisodeNumber';
+    await controller.pause();
+    if (!mounted || !identical(_videoController, controller)) return;
+    if (player.isAudioView &&
+        player.currentItem?.id == itemId &&
+        player.currentItem?.videoUrl == url) {
+      player.expand();
+    } else {
+      player.playVideoItem(
+        VideoItem(
+          id: itemId,
+          title: widget.movie.title,
+          author: '',
+          thumbnailUrl: widget.movie.posterUrl,
+          videoUrl: url,
+          platform: 'Movies',
+        ),
+        audioOnly: true,
+        headers: _headersFor(source, url),
+        mimeType: switch (source.format.toLowerCase()) {
+          'm3u8' => 'application/x-mpegURL',
+          'mpd' => 'application/dash+xml',
+          _ => null,
+        },
+        position: controller.value.position,
+      );
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (routeContext) => AudioPlayerScreen(
+          returnToVideo: () {
+            final position = Duration(
+              milliseconds: (player.currentSeconds * 1000).round(),
+            );
+            player.close();
+            Navigator.of(routeContext).pop();
+            if (!mounted || !identical(_videoController, controller)) return;
+            unawaited(_resumeVideo(controller, position));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resumeVideo(
+    VideoPlayerController controller,
+    Duration position,
+  ) async {
+    await controller.seekTo(position);
+    if (mounted && identical(_videoController, controller))
+      await controller.play();
   }
 
   void _launchSystemPlayer() {

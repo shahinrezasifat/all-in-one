@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:snaptube_pure/models/download_task.dart';
+import 'package:snaptube_pure/theme/app_colors.dart';
 import 'package:snaptube_pure/widgets/download_item_tile.dart';
 
 void main() {
@@ -19,6 +20,7 @@ void main() {
       originalUrl: 'https://example.test/video',
       status: DownloadStatus.downloading,
       totalBytes: 4096,
+      statusNote: 'Checking download size…',
     );
     Future<void> render() => tester.pumpWidget(
       MaterialApp(
@@ -39,9 +41,27 @@ void main() {
     task.speedBytesPerSec = 4096;
     await render();
     expect(find.text('Analyzing video…'), findsNothing);
-    expect(find.byType(LinearProgressIndicator), findsNothing);
+    final active = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(active.value, .25);
+    expect(active.color, AppColors.primary);
     expect(find.text('25%'), findsOneWidget);
     expect(find.text('4 KB/s'), findsOneWidget);
+
+    task.totalBytesIsEstimate = true;
+    await render();
+    expect(find.text('≈25%'), findsOneWidget);
+
+    task.totalBytes = 0;
+    await render();
+    expect(find.textContaining('Total unknown'), findsOneWidget);
+    expect(
+      tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator),
+      ).value,
+      isNull,
+    );
 
     task.downloadedBytes = 0;
     task.status = DownloadStatus.paused;
@@ -52,6 +72,11 @@ void main() {
     task.status = DownloadStatus.failed;
     await render();
     expect(find.text('Download Failed'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .color,
+      AppColors.primary,
+    );
   });
 }

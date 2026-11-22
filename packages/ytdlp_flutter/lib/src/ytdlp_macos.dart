@@ -88,10 +88,20 @@ class YtdlpMacos extends YtdlpPlatform {
   Future<void> init() => _ensureBinary();
 
   @override
-  Future<VideoInfo> getVideoInfo(String url) async {
+  Future<VideoInfo> getVideoInfo(String url, {
+    String? format,
+    Map<String, String> headers = const {},
+  }) async {
     final bin = await _ensureBinary();
     final result = await Process.run(
-        bin, ['--no-playlist', '-J', url]);
+        bin, [
+          '--no-playlist',
+          '-J',
+          if (format != null) ...['-f', format],
+          for (final header in headers.entries)
+            ...['--add-headers', '${header.key}:${header.value}'],
+          url,
+        ]);
     if (result.exitCode != 0) {
       throw YtdlpException('yt-dlp -J failed (exit ${result.exitCode})',
           details: result.stderr.toString());
@@ -152,6 +162,7 @@ class YtdlpMacos extends YtdlpPlatform {
           onProgress?.call(YtdlpProgress(
             downloadedBytes: downloaded,
             totalBytes: total,
+            totalBytesIsEstimate: int.tryParse(parts[1]) == null,
             fraction: (downloaded != null && total != null && total > 0)
                 ? downloaded / total
                 : null,

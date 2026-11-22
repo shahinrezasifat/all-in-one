@@ -6,6 +6,18 @@ import 'provider_models.dart';
 
 class CloudStreamRuntime {
   static const _channel = MethodChannel('snaptube_pure/cloudstream');
+  static final _formatListeners = <int, void Function(MovieSource)>{};
+  static int _nextFormatRequest = 0;
+
+  static Future<void> _onPlatformCall(MethodCall call) async {
+    if (call.method != 'resolvedFormat') return;
+    final arguments = call.arguments as Map<Object?, Object?>;
+    final listener = _formatListeners[arguments['requestId']];
+    final row = arguments['format'];
+    if (listener != null && row is Map<Object?, Object?>) {
+      listener(_unscopedSource(row));
+    }
+  }
 
   static bool get supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -160,42 +172,74 @@ class CloudStreamRuntime {
   static Future<List<MovieSource>> resolve(
     MovieItem item, {
     String? episodeData,
+    void Function(List<MovieSource>)? onFormats,
   }) async {
-    final rows = await _channel.invokeListMethod<Map<Object?, Object?>>(
-      'resolve',
-      {
-        'repoId': item.repoId,
-        'providerId': item.providerId,
-        'apiName': item.episodeUrl,
-        'url': item.detailUrl,
-        if (episodeData != null) 'episodeData': episodeData,
-      },
+    final requestId = onFormats == null ? null : ++_nextFormatRequest;
+    MovieSource withProvider(MovieSource source) => source.copyWith(
+      repoId: item.repoId,
+      repoName: item.repoName,
+      providerId: item.providerId,
+      providerName: item.providerName,
     );
-    return [
-      for (final row in rows ?? const [])
-        if (row['url'] case final String url
-            when url.startsWith('https://') || url.startsWith('http://'))
-          MovieSource(
-            serverName: row['name'] as String,
-            resolution: (row['quality'] as int? ?? 0) > 0
-                ? "${row['quality']}p"
-                : 'Auto',
-            downloadUrl: url,
-            fileSize: '',
-            format: row['hls'] == true ? 'm3u8' : _fileFormat(url),
-            repoId: item.repoId,
-            repoName: item.repoName,
-            providerId: item.providerId,
-            providerName: item.providerName,
-            headers: Map<String, String>.from(row['headers'] as Map),
-          ),
-    ];
+    if (requestId != null && onFormats != null) {
+      if (_formatListeners.isEmpty) {
+        _channel.setMethodCallHandler(_onPlatformCall);
+      }
+      _formatListeners[requestId] = (source) {
+        if (_isWebUrl(source.downloadUrl)) onFormats([withProvider(source)]);
+      };
+    }
+    try {
+      final rows = await _channel.invokeListMethod<Map<Object?, Object?>>(
+        'resolve',
+        {
+          'repoId': item.repoId,
+          'providerId': item.providerId,
+          'apiName': item.episodeUrl,
+          'url': item.detailUrl,
+          if (episodeData != null) 'episodeData': episodeData,
+          if (requestId != null) 'requestId': requestId,
+        },
+      );
+      return [
+        for (final row in rows ?? const [])
+          if (_isWebUrl(row['url'])) withProvider(_unscopedSource(row)),
+      ];
+    } finally {
+      if (requestId != null) _formatListeners.remove(requestId);
+    }
+  }
+
+  static bool _isWebUrl(Object? url) =>
+      url is String &&
+      (url.startsWith('http://') || url.startsWith('https://'));
+
+  static MovieSource _unscopedSource(Map<Object?, Object?> row) {
+    final url = row['url'] as String? ?? '';
+    final name = row['name'] as String? ?? '';
+    return MovieSource(
+      serverName: name,
+      resolution: providerResolution(
+        (row['quality'] ?? '').toString(),
+        labels: [name],
+      ),
+      downloadUrl: url,
+      fileSize: '',
+      format: row['hls'] == true ? 'm3u8' : _fileFormat(url),
+      headers: Map<String, String>.from(row['headers'] as Map? ?? const {}),
+    );
   }
 
   static String _fileFormat(String url) {
     final extension = Uri.tryParse(url)?.path.split('.').last.toLowerCase();
     return switch (extension) {
-      'm3u8' || 'mkv' || 'webm' || 'mov' || 'avi' || 'ts' => extension!,
+      'm3u8' ||
+      'mpd' ||
+      'mkv' ||
+      'webm' ||
+      'mov' ||
+      'avi' ||
+      'ts' => extension!,
       _ => 'mp4',
     };
   }

@@ -27,6 +27,21 @@ class VaultItem {
     this.downloadFolderIds = const [],
   });
 
+  VaultItem copyWith({String? vaultPath}) => VaultItem(
+    id: id,
+    title: title,
+    originalPath: originalPath,
+    vaultPath: vaultPath ?? this.vaultPath,
+    ext: ext,
+    isAudio: isAudio,
+    fileSize: fileSize,
+    addedAt: addedAt,
+    folderId: folderId,
+    sourceFolder: sourceFolder,
+    downloadRecord: downloadRecord,
+    downloadFolderIds: downloadFolderIds,
+  );
+
   bool get isImage {
     final e = ext.toLowerCase().replaceAll('.', '');
     return [

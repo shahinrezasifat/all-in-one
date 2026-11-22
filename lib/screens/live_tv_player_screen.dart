@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../services/playback_controls.dart';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -21,6 +23,14 @@ class LiveTvPlayerScreen extends StatefulWidget {
 
 class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
   VideoPlayerController? _player;
+  final _playbackControls = PlaybackControls();
+
+  void _syncScreenAwake() {
+    final value = _player?.value;
+    unawaited(_playbackControls.keepScreenOn(
+      value != null && value.isPlaying && !value.hasError,
+    ));
+  }
   bool _loading = true;
   bool _connecting = false;
 
@@ -34,6 +44,8 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
   void dispose() {
     final player = _player;
     _player = null;
+    _syncScreenAwake();
+    player?.removeListener(_syncScreenAwake);
     if (player != null) unawaited(player.dispose());
     super.dispose();
   }
@@ -46,6 +58,8 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
       _player = null;
       _loading = true;
     });
+    _syncScreenAwake();
+    previous?.removeListener(_syncScreenAwake);
     await previous?.dispose();
 
     try {
@@ -81,6 +95,8 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
           await controller.play();
           if (!mounted) return;
           setState(() => _player = controller);
+          controller.addListener(_syncScreenAwake);
+          _syncScreenAwake();
           retained = true;
           return;
         } catch (_) {

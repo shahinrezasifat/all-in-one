@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_win_floating/webview_plugin.dart'
     show WindowsWebViewPlatform, WindowsWebViewControllerCreationParams;
+
 import '../models/extract_result.dart';
 import '../models/site_model.dart';
 import '../services/ad_blocker_service.dart';
@@ -27,17 +29,21 @@ class BrowserScreen extends StatefulWidget {
   final SiteModel initialSite;
   final VoidCallback? onCloseBrowser;
 
+  /// When embedded in the main navigation shell, the parent owns the system
+  /// back gesture. It registers a handler here so it can let the WebView step
+  /// back through its own history before falling back to the section stack.
+  final void Function(Future<bool> Function()? handler)? onBackHandlerChanged;
+
   const BrowserScreen({
     super.key,
     required this.initialSite,
     this.onCloseBrowser,
+    this.onBackHandlerChanged,
   });
 
   static void open(BuildContext context, SiteModel site) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (ctx) => BrowserScreen(initialSite: site),
-      ),
+      MaterialPageRoute(builder: (ctx) => BrowserScreen(initialSite: site)),
     );
   }
 
@@ -73,12 +79,15 @@ class _BrowserScreenState extends State<BrowserScreen> {
         ),
       );
       if (add != true || !mounted) return;
-      final added = await MovieRepositoryService.instance.addCustomRepository('', url);
+      final added = await MovieRepositoryService.instance.addCustomRepository(
+        '',
+        url,
+      );
       if (!mounted) return;
       if (added) {
-        await Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => const ZangetsuProvidersHubScreen(),
-        ));
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ZangetsuProvidersHubScreen()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not add the repository.')),
@@ -88,6 +97,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
       _importingRepository = false;
     }
   }
+
   // ---- Shared browser state ----
   final TextEditingController _addressCtrl = TextEditingController();
   final FocusNode _addressFocus = FocusNode();
@@ -138,14 +148,42 @@ class _BrowserScreenState extends State<BrowserScreen> {
     if (!kIsWeb) {
       _setupWebView();
     }
+    widget.onBackHandlerChanged?.call(_handleSystemBack);
   }
 
   @override
   void dispose() {
+    widget.onBackHandlerChanged?.call(null);
     _mediaWatcher?.cancel();
     _addressFocus.dispose();
     _addressCtrl.dispose();
     super.dispose();
+  }
+
+  /// Returns true when the WebView consumed the back gesture itself.
+  Future<bool> _handleSystemBack() async {
+    final controller = _controller;
+    if (controller == null) return false;
+    try {
+      if (await controller.canGoBack()) {
+        await controller.goBack();
+        return true;
+      }
+    } catch (_) {
+      // A disposed engine must never block navigation.
+    }
+    return false;
+  }
+
+  /// The in-toolbar arrow is an explicit "leave browser" action: it always
+  /// returns to the home page, independent of the WebView's own history.
+  void _handleToolbarBack() {
+    final close = widget.onCloseBrowser;
+    if (close != null) {
+      close();
+    } else if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -155,7 +193,20 @@ class _BrowserScreenState extends State<BrowserScreen> {
   String _normalizeInput(String raw) {
     var t = raw.trim();
     if (t.isEmpty) return '';
-    if (!t.startsWith('http://') && !t.startsWith('https://')) {
+    if (t.startsWith('http://')) {
+      // The app blocks cleartext traffic; upgrade legacy links to HTTPS,
+      // except local development servers which are explicitly allowed.
+      final uri = Uri.tryParse(t);
+      final local =
+          uri != null &&
+          const {
+            'localhost',
+            '127.0.0.1',
+            '[::1]',
+            '10.0.2.2',
+          }.contains(uri.host);
+      if (!local) t = t.replaceFirst('http://', 'https://');
+    } else if (!t.startsWith('https://')) {
       if (t.contains('.') && !t.contains(' ')) {
         t = 'https://$t';
       } else {
@@ -163,9 +214,11 @@ class _BrowserScreenState extends State<BrowserScreen> {
       }
     }
     // Always prefer mobile version for YouTube
-    if (t.startsWith('https://www.youtube.com') || t.startsWith('http://www.youtube.com')) {
+    if (t.startsWith('https://www.youtube.com') ||
+        t.startsWith('http://www.youtube.com')) {
       t = t.replaceFirst('www.youtube.com', 'm.youtube.com');
-    } else if (t.startsWith('https://youtube.com') || t.startsWith('http://youtube.com')) {
+    } else if (t.startsWith('https://youtube.com') ||
+        t.startsWith('http://youtube.com')) {
       t = t.replaceFirst('youtube.com', 'm.youtube.com');
     }
     return t;
@@ -318,83 +371,91 @@ class _BrowserScreenState extends State<BrowserScreen> {
         ..setBackgroundColor(Colors.white);
       controller.setUserAgent(mobileUserAgent);
       controller.setNavigationDelegate(
-          NavigationDelegate(
-            onNavigationRequest: (request) {
-              if (Uri.tryParse(request.url)?.scheme.toLowerCase() == 'cloudstreamrepo') {
-                if (request.isMainFrame) unawaited(_importRepository(request.url));
-                return NavigationDecision.prevent;
-              }
-              if (AdBlockerService.instance.isAdUrl(request.url)) {
-                debugPrint('[AdBlocker] Blocked ad navigation: ${request.url}');
-                AdBlockerService.instance.recordBlocked();
-                return NavigationDecision.prevent;
-              }
-              return NavigationDecision.navigate;
-            },
-            onProgress: (p) {
-              if (mounted) setState(() => _progress = p / 100.0);
-              if (AdBlockerService.instance.isEnabled && (p == 15 || p == 40 || p == 70 || p == 90)) {
-                controller
-                    .runJavaScript(AdBlockerService.instance.getAdBlockerScript())
-                    .catchError((_) {});
-              }
-            },
-            onUrlChange: (change) {
-              if (mounted && change.url != null) _syncPageUrl(change.url!);
-            },
-            onPageStarted: (url) {
-              if (!mounted) return;
-              setState(() {
-                _pageLoading = true;
-                _currentUrl = url;
-                _addressCtrl.text = url;
-                // A new navigation invalidates the previous page's media.
-                _resetMediaDetection();
-              });
+        NavigationDelegate(
+          onNavigationRequest: (request) {
+            if (Uri.tryParse(request.url)?.scheme.toLowerCase() ==
+                'cloudstreamrepo') {
+              if (request.isMainFrame)
+                unawaited(_importRepository(request.url));
+              return NavigationDecision.prevent;
+            }
+            if (AdBlockerService.instance.isAdUrl(request.url)) {
+              debugPrint('[AdBlocker] Blocked ad navigation: ${request.url}');
+              AdBlockerService.instance.recordBlocked();
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+          onProgress: (p) {
+            if (mounted) setState(() => _progress = p / 100.0);
+            if (AdBlockerService.instance.isEnabled &&
+                (p == 15 || p == 40 || p == 70 || p == 90)) {
               controller
-                  .runJavaScript(AdBlockerService.instance.getResponsiveScreenScript())
+                  .runJavaScript(AdBlockerService.instance.getAdBlockerScript())
                   .catchError((_) {});
-              if (AdBlockerService.instance.isEnabled) {
-                controller
-                    .runJavaScript(AdBlockerService.instance.getAdBlockerScript())
-                    .catchError((_) {});
-              }
-            },
-            onPageFinished: (url) async {
-              if (!mounted) return;
-              setState(() => _pageLoading = false);
+            }
+          },
+          onUrlChange: (change) {
+            if (mounted && change.url != null) _syncPageUrl(change.url!);
+          },
+          onPageStarted: (url) {
+            if (!mounted) return;
+            setState(() {
+              _pageLoading = true;
+              _currentUrl = url;
+              _addressCtrl.text = url;
+              // A new navigation invalidates the previous page's media.
+              _resetMediaDetection();
+            });
+            controller
+                .runJavaScript(
+                  AdBlockerService.instance.getResponsiveScreenScript(),
+                )
+                .catchError((_) {});
+            if (AdBlockerService.instance.isEnabled) {
               controller
-                  .runJavaScript(AdBlockerService.instance.getResponsiveScreenScript())
+                  .runJavaScript(AdBlockerService.instance.getAdBlockerScript())
                   .catchError((_) {});
-              if (AdBlockerService.instance.isEnabled) {
-                controller
-                    .runJavaScript(AdBlockerService.instance.getAdBlockerScript())
-                    .catchError((_) {});
+            }
+          },
+          onPageFinished: (url) async {
+            if (!mounted) return;
+            setState(() => _pageLoading = false);
+            controller
+                .runJavaScript(
+                  AdBlockerService.instance.getResponsiveScreenScript(),
+                )
+                .catchError((_) {});
+            if (AdBlockerService.instance.isEnabled) {
+              controller
+                  .runJavaScript(AdBlockerService.instance.getAdBlockerScript())
+                  .catchError((_) {});
+            }
+            try {
+              final t = await controller.runJavaScriptReturningResult(
+                'document.title',
+              );
+              final title = t.toString().replaceAll('"', '').trim();
+              if (mounted && title.isNotEmpty) {
+                setState(() => _pageTitle = title);
               }
-              try {
-                final t =
-                    await controller.runJavaScriptReturningResult('document.title');
-                final title = t.toString().replaceAll('"', '').trim();
-                if (mounted && title.isNotEmpty) {
-                  setState(() => _pageTitle = title);
-                }
-              } catch (_) {}
-            },
-            onWebResourceError: (error) {
-              if (!mounted) return;
-              setState(() => _pageLoading = false);
-              if (error.isForMainFrame == true) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to load page: ${error.description}'),
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
-          ),
-        );
+            } catch (_) {}
+          },
+          onWebResourceError: (error) {
+            if (!mounted) return;
+            setState(() => _pageLoading = false);
+            if (error.isForMainFrame == true) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to load page: ${error.description}'),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          },
+        ),
+      );
       controller.loadRequest(Uri.parse(_normalizeInput(_currentUrl)));
       _controller = controller;
       _startMediaWatcher();
@@ -411,7 +472,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
   /// video/audio starts, pop up the download button automatically.
   void _startMediaWatcher() {
     _mediaWatcher?.cancel();
-    _mediaWatcher = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+    _mediaWatcher = Timer.periodic(const Duration(milliseconds: 1500), (
+      _,
+    ) async {
       final c = _controller;
       if (c == null || !mounted) return;
       c
@@ -421,12 +484,19 @@ class _BrowserScreenState extends State<BrowserScreen> {
         c
             .runJavaScript(AdBlockerService.instance.getAdBlockerScript())
             .catchError((_) {});
-        c.runJavaScriptReturningResult('window.__tubBlockedAdsCount || 0').then((res) {
-          final count = int.tryParse(res.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-          if (count > 0 && mounted) {
-            AdBlockerService.instance.setPageBlockedCount(count);
-          }
-        }).catchError((_) {});
+        c
+            .runJavaScriptReturningResult('window.__tubBlockedAdsCount || 0')
+            .then((res) {
+              final count =
+                  int.tryParse(
+                    res.toString().replaceAll(RegExp(r'[^0-9]'), ''),
+                  ) ??
+                  0;
+              if (count > 0 && mounted) {
+                AdBlockerService.instance.setPageBlockedCount(count);
+              }
+            })
+            .catchError((_) {});
       }
       if (_pageLoading || _checkingForMedia) return;
       _checkingForMedia = true;
@@ -446,9 +516,12 @@ class _BrowserScreenState extends State<BrowserScreen> {
         if (video is! Map<String, dynamic>) return;
         final source = video['src'];
         final uri = source is String ? Uri.tryParse(source) : null;
-        final directSource = uri != null && const ['http', 'https'].contains(uri.scheme)
-            ? uri.toString() : '';
-        if (!_mediaDetected || (directSource.isNotEmpty && directSource != _mediaSrc)) {
+        final directSource =
+            uri != null && const ['http', 'https'].contains(uri.scheme)
+            ? uri.toString()
+            : '';
+        if (!_mediaDetected ||
+            (directSource.isNotEmpty && directSource != _mediaSrc)) {
           setState(() {
             _mediaDetected = true;
             _mediaSrc = directSource;
@@ -492,7 +565,8 @@ class _BrowserScreenState extends State<BrowserScreen> {
 
   void _syncPageUrl(String url) {
     final uri = Uri.tryParse(url);
-    if (uri == null || !const ['http', 'https'].contains(uri.scheme) ||
+    if (uri == null ||
+        !const ['http', 'https'].contains(uri.scheme) ||
         url == _currentUrl) {
       return;
     }
@@ -507,7 +581,8 @@ class _BrowserScreenState extends State<BrowserScreen> {
     final controller = _controller;
     if (controller != null) {
       try {
-        final raw = await controller.runJavaScriptReturningResult('location.href')
+        final raw = await controller
+            .runJavaScriptReturningResult('location.href')
             .timeout(const Duration(seconds: 2));
         final url = _decodeJsResult(raw);
         final uri = Uri.tryParse(url);
@@ -532,7 +607,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
         return;
       }
       if (YtDlpService.isYouTubeSite(url)) {
-        _showDownloadMessage('Open a YouTube video, then tap Download this video.');
+        _showDownloadMessage(
+          'Open a YouTube video, then tap Download this video.',
+        );
         return;
       }
       final result = await _extractWebsiteMedia(url, _mediaSrc);
@@ -545,7 +622,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
       }
     } catch (error) {
       debugPrint('Browser download analysis failed: $error');
-      if (mounted) _showDownloadMessage('Could not check this page. Tap Download to retry.');
+      if (mounted)
+        _showDownloadMessage(
+          'Could not check this page. Tap Download to retry.',
+        );
     } finally {
       if (mounted) setState(() => _isExtracting = false);
     }
@@ -557,7 +637,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
     );
   }
 
-  Future<ExtractResult?> _extractWebsiteMedia(String pageUrl, String directSrc) async {
+  Future<ExtractResult?> _extractWebsiteMedia(
+    String pageUrl,
+    String directSrc,
+  ) async {
     ExtractResult? result;
 
     // 1. Known platforms have dedicated extractors.
@@ -624,13 +707,18 @@ class _BrowserScreenState extends State<BrowserScreen> {
           .runJavaScriptReturningResult(_mediaHarvestJs)
           .timeout(const Duration(seconds: 5));
       final text = _decodeJsResult(raw);
-      if (text.isEmpty) return const _HarvestedMedia(title: '', poster: '', urls: []);
+      if (text.isEmpty)
+        return const _HarvestedMedia(title: '', poster: '', urls: []);
 
       final data = jsonDecode(text);
-      if (data is! Map) return const _HarvestedMedia(title: '', poster: '', urls: []);
+      if (data is! Map)
+        return const _HarvestedMedia(title: '', poster: '', urls: []);
 
       final urls = (data['urls'] is List)
-          ? (data['urls'] as List).map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+          ? (data['urls'] as List)
+                .map((e) => e.toString())
+                .where((e) => e.isNotEmpty)
+                .toList()
           : const <String>[];
       return _HarvestedMedia(
         title: data['title']?.toString() ?? '',
@@ -695,115 +783,138 @@ class _BrowserScreenState extends State<BrowserScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-              ListTile(
-                leading: const Icon(Icons.public_rounded, color: AppColors.primary),
-                title: Text(
-                  _pageTitle.isNotEmpty ? _pageTitle : _currentUrl,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                ListTile(
+                  leading: const Icon(
+                    Icons.public_rounded,
+                    color: AppColors.primary,
+                  ),
+                  title: Text(
+                    _pageTitle.isNotEmpty ? _pageTitle : _currentUrl,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    _currentUrl,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                subtitle: Text(_currentUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.arrow_forward_rounded),
-                title: const Text('Forward'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _goForward();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.refresh_rounded),
-                title: const Text('Reload Page'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _reloadPage();
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  AdBlockerService.instance.isEnabled
-                      ? Icons.shield_rounded
-                      : Icons.shield_outlined,
-                  color: AdBlockerService.instance.isEnabled
-                      ? AppColors.accentGreen
-                      : Colors.grey,
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.arrow_forward_rounded),
+                  title: const Text('Forward'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _goForward();
+                  },
                 ),
-                title: const Text('uBlock Origin AdBlocker'),
-                subtitle: Text(
-                  AdBlockerService.instance.isEnabled
-                      ? 'Active • ${AdBlockerService.instance.blockedCount} ads & trackers blocked'
-                      : 'Disabled',
+                ListTile(
+                  leading: const Icon(Icons.refresh_rounded),
+                  title: const Text('Reload Page'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _reloadPage();
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showAdBlockerSheet(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.security_update_good_rounded, color: AppColors.accentGreen),
-                title: const Text('Bypass Anti-Adblock Popup'),
-                subtitle: const Text('Dismiss any "AdBlocker Detected" warning modal & unlock page'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _bypassAntiAdblock();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.star_outline_rounded, color: AppColors.accentGold),
-                title: const Text('Bookmark This Page'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _bookmarkCurrentPage();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.download_rounded, color: AppColors.primary),
-                title: const Text('Extract & Download Media From Page'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _extractCurrentPage();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.copy_rounded),
-                title: const Text('Copy Page URL'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Clipboard.setData(ClipboardData(text: _currentUrl));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('URL copied'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.open_in_new_rounded),
-                title: const Text('Open in System Browser (optional)'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (_currentUrl.isNotEmpty) {
-                    launchUrl(Uri.parse(_currentUrl), mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
-            ],
+                ListTile(
+                  leading: Icon(
+                    AdBlockerService.instance.isEnabled
+                        ? Icons.shield_rounded
+                        : Icons.shield_outlined,
+                    color: AdBlockerService.instance.isEnabled
+                        ? AppColors.accentGreen
+                        : Colors.grey,
+                  ),
+                  title: const Text('uBlock Origin AdBlocker'),
+                  subtitle: Text(
+                    AdBlockerService.instance.isEnabled
+                        ? 'Active • ${AdBlockerService.instance.blockedCount} ads & trackers blocked'
+                        : 'Disabled',
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showAdBlockerSheet(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.security_update_good_rounded,
+                    color: AppColors.accentGreen,
+                  ),
+                  title: const Text('Bypass Anti-Adblock Popup'),
+                  subtitle: const Text(
+                    'Dismiss any "AdBlocker Detected" warning modal & unlock page',
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _bypassAntiAdblock();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.star_outline_rounded,
+                    color: AppColors.accentGold,
+                  ),
+                  title: const Text('Bookmark This Page'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _bookmarkCurrentPage();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.download_rounded,
+                    color: AppColors.primary,
+                  ),
+                  title: const Text('Extract & Download Media From Page'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _extractCurrentPage();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.copy_rounded),
+                  title: const Text('Copy Page URL'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Clipboard.setData(ClipboardData(text: _currentUrl));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('URL copied'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.open_in_new_rounded),
+                  title: const Text('Open in System Browser (optional)'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (_currentUrl.isNotEmpty) {
+                      launchUrl(
+                        Uri.parse(_currentUrl),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
 
   Future<void> _bypassAntiAdblock() async {
     final c = _controller;
     if (c == null) return;
     try {
-      await c.runJavaScript(AdBlockerService.instance.getBypassAntiAdblockScript());
+      await c.runJavaScript(
+        AdBlockerService.instance.getBypassAntiAdblockScript(),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -811,9 +922,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
               children: [
                 Icon(Icons.check_circle_rounded, color: AppColors.accentGreen),
                 SizedBox(width: 8),
-                Expanded(
-                  child: Text('Anti-adblock bypassed & page unlocked!'),
-                ),
+                Expanded(child: Text('Anti-adblock bypassed & page unlocked!')),
               ],
             ),
             duration: Duration(seconds: 2),
@@ -848,13 +957,20 @@ class _BrowserScreenState extends State<BrowserScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: (adBlock.isEnabled ? AppColors.accentGreen : Colors.grey)
-                                .withValues(alpha: 0.15),
+                            color:
+                                (adBlock.isEnabled
+                                        ? AppColors.accentGreen
+                                        : Colors.grey)
+                                    .withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            adBlock.isEnabled ? Icons.shield_rounded : Icons.shield_outlined,
-                            color: adBlock.isEnabled ? AppColors.accentGreen : Colors.grey,
+                            adBlock.isEnabled
+                                ? Icons.shield_rounded
+                                : Icons.shield_outlined,
+                            color: adBlock.isEnabled
+                                ? AppColors.accentGreen
+                                : Colors.grey,
                             size: 28,
                           ),
                         ),
@@ -865,7 +981,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
                             children: [
                               const Text(
                                 'uBlock Origin Protection',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
                               ),
                               Text(
                                 adBlock.isEnabled
@@ -873,7 +992,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
                                     : 'Ad protection is turned off',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: adBlock.isEnabled ? AppColors.accentGreen : Colors.grey,
+                                  color: adBlock.isEnabled
+                                      ? AppColors.accentGreen
+                                      : Colors.grey,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -931,13 +1052,23 @@ class _BrowserScreenState extends State<BrowserScreen> {
                             Navigator.pop(ctx);
                             _bypassAntiAdblock();
                           },
-                          icon: const Icon(Icons.security_update_good_rounded, size: 16, color: AppColors.accentGreen),
-                          label: const Text('Bypass Anti-Adblock', style: TextStyle(fontSize: 12)),
+                          icon: const Icon(
+                            Icons.security_update_good_rounded,
+                            size: 16,
+                            color: AppColors.accentGreen,
+                          ),
+                          label: const Text(
+                            'Bypass Anti-Adblock',
+                            style: TextStyle(fontSize: 12),
+                          ),
                         ),
                         if (adBlock.blockedCount > 0)
                           TextButton(
                             onPressed: () => adBlock.resetCounter(),
-                            child: const Text('Reset Counter', style: TextStyle(fontSize: 12)),
+                            child: const Text(
+                              'Reset Counter',
+                              style: TextStyle(fontSize: 12),
+                            ),
                           ),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
@@ -952,7 +1083,13 @@ class _BrowserScreenState extends State<BrowserScreen> {
                             _reloadPage();
                           },
                           icon: const Icon(Icons.refresh_rounded, size: 17),
-                          label: const Text('Reload Page', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          label: const Text(
+                            'Reload Page',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -976,9 +1113,18 @@ class _BrowserScreenState extends State<BrowserScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(desc, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(
+                desc,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ],
           ),
         ),
@@ -1003,11 +1149,18 @@ class _BrowserScreenState extends State<BrowserScreen> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.smartphone_rounded, color: AppColors.primary, size: 24),
+                    Icon(
+                      Icons.smartphone_rounded,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
                     SizedBox(width: 10),
                     Text(
                       'Browser Display Size',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
                     ),
                   ],
                 ),
@@ -1029,21 +1182,27 @@ class _BrowserScreenState extends State<BrowserScreen> {
                   title: 'Mobile Standard (430px)',
                   subtitle: 'Default phone screen (Pixel 8 / Galaxy S24)',
                   width: _defaultMobileWidth,
-                  selected: !_isFullScreenMode && _currentViewportWidth == _defaultMobileWidth,
+                  selected:
+                      !_isFullScreenMode &&
+                      _currentViewportWidth == _defaultMobileWidth,
                 ),
                 _buildViewportOption(
                   ctx,
                   title: 'Mobile Compact (390px)',
                   subtitle: 'Compact phone screen (iPhone standard)',
                   width: _compactMobileWidth,
-                  selected: !_isFullScreenMode && _currentViewportWidth == _compactMobileWidth,
+                  selected:
+                      !_isFullScreenMode &&
+                      _currentViewportWidth == _compactMobileWidth,
                 ),
                 _buildViewportOption(
                   ctx,
                   title: 'Mobile Max / Plus (480px)',
                   subtitle: 'Larger phone screen (Pro Max / Plus size)',
                   width: _plusMobileWidth,
-                  selected: !_isFullScreenMode && _currentViewportWidth == _plusMobileWidth,
+                  selected:
+                      !_isFullScreenMode &&
+                      _currentViewportWidth == _plusMobileWidth,
                 ),
               ],
             ),
@@ -1088,7 +1247,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
           }
         });
         _controller
-            ?.runJavaScript(AdBlockerService.instance.getResponsiveScreenScript())
+            ?.runJavaScript(
+              AdBlockerService.instance.getResponsiveScreenScript(),
+            )
             .catchError((_) {});
         Navigator.pop(ctx);
       },
@@ -1111,7 +1272,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => Navigator.of(context).pop(),
+          onTap: _handleToolbarBack,
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
@@ -1157,14 +1318,19 @@ class _BrowserScreenState extends State<BrowserScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  _isFullScreenMode ? Icons.desktop_windows_rounded : Icons.smartphone_rounded,
+                  _isFullScreenMode
+                      ? Icons.desktop_windows_rounded
+                      : Icons.smartphone_rounded,
                   size: 16,
                   color: AppColors.primary,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(width: 4),
                 const Icon(Icons.arrow_drop_down_rounded, size: 18),
@@ -1176,33 +1342,49 @@ class _BrowserScreenState extends State<BrowserScreen> {
     );
   }
 
-  Widget _buildMobileHeader(bool isDark, Color brandColor, {bool isDesktop = false}) {
-    // Floating (direct) navigation bar — no solid slab, no divider under it.
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+  Widget _buildMobileHeader(
+    bool isDark,
+    Color brandColor, {
+    bool isDesktop = false,
+  }) {
+    final surface = isDark ? const Color(0xFF141621) : Colors.white;
+    final border = isDark ? const Color(0xFF262A3C) : const Color(0xFFE6E8F0);
+    final soft = isDark
+        ? Colors.white.withValues(alpha: .07)
+        : AppColors.primary.withValues(alpha: .07);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(bottom: BorderSide(color: border)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? .30 : .06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, size: 21),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-            tooltip: 'Back',
-            onPressed: _goBack,
+          _toolbarButton(
+            icon: Icons.arrow_back_rounded,
+            tooltip: 'Back to home',
+            color: isDark ? Colors.white : AppColors.lightTextPrimary,
+            background: soft,
+            onTap: _handleToolbarBack,
           ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: _buildAddressBar(isDark, brandColor),
-          ),
-          IconButton(
+          const SizedBox(width: 8),
+          Expanded(child: _buildAddressBar(isDark, brandColor)),
+          const SizedBox(width: 8),
+          _toolbarButton(
+            icon: Icons.download_rounded,
             tooltip: 'Download this video',
-            icon: _isExtracting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.download_rounded, size: 22),
             color: AppColors.primary,
-            onPressed: _isExtracting ? null : _extractCurrentPage,
+            background: AppColors.primary.withValues(alpha: .12),
+            onTap: _isExtracting ? null : _extractCurrentPage,
+            busy: _isExtracting,
           ),
           const SizedBox(width: 6),
           ListenableBuilder(
@@ -1211,61 +1393,34 @@ class _BrowserScreenState extends State<BrowserScreen> {
               final adBlock = AdBlockerService.instance;
               final isEnabled = adBlock.isEnabled;
               final count = adBlock.blockedCount;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      isEnabled ? Icons.shield_rounded : Icons.shield_outlined,
-                      color: isEnabled ? AppColors.accentGreen : Colors.grey,
-                      size: 20,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                    tooltip: isEnabled
-                        ? 'AdBlocker Active ($count blocked)'
-                        : 'AdBlocker Disabled',
-                    onPressed: () => _showAdBlockerSheet(context),
-                  ),
-                  if (isEnabled && count > 0)
-                    Positioned(
-                      top: 4,
-                      right: 2,
-                      child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: AppColors.accentGreen,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          constraints: const BoxConstraints(minWidth: 13, minHeight: 13),
-                          child: Text(
-                            count > 99 ? '99+' : '$count',
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              return _toolbarButton(
+                icon: isEnabled ? Icons.shield_rounded : Icons.shield_outlined,
+                tooltip: isEnabled
+                    ? 'AdBlocker Active ($count blocked)'
+                    : 'AdBlocker Disabled',
+                color: isEnabled ? AppColors.accentGreen : Colors.grey,
+                background: isEnabled
+                    ? AppColors.accentGreen.withValues(alpha: .12)
+                    : soft,
+                onTap: () => _showAdBlockerSheet(context),
+                badge: isEnabled && count > 0
+                    ? (count > 99 ? '99+' : '$count')
+                    : null,
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.more_vert_rounded, size: 20),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+          const SizedBox(width: 6),
+          _toolbarButton(
+            icon: Icons.more_vert_rounded,
             tooltip: 'Menu',
-            onPressed: _showBrowserMenu,
+            color: isDark ? Colors.white70 : Colors.black54,
+            background: soft,
+            onTap: _showBrowserMenu,
           ),
           if (isDesktop) ...[
             const SizedBox(width: 2),
             TextButton.icon(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: _handleToolbarBack,
               icon: const Icon(Icons.close_rounded, size: 16),
               label: const Text('Exit Browser', style: TextStyle(fontSize: 12)),
               style: TextButton.styleFrom(
@@ -1281,6 +1436,81 @@ class _BrowserScreenState extends State<BrowserScreen> {
     );
   }
 
+  /// One consistent, softly-tinted round-square action for the browser toolbar.
+  Widget _toolbarButton({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required Color background,
+    required VoidCallback? onTap,
+    String? badge,
+    bool busy = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                busy
+                    ? SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: color,
+                        ),
+                      )
+                    : Icon(icon, size: 19, color: color),
+                if (badge != null)
+                  Positioned(
+                    right: 2,
+                    top: 2,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 3,
+                          vertical: 1,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 14,
+                          minHeight: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentGreen,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          badge,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
@@ -1290,117 +1520,130 @@ class _BrowserScreenState extends State<BrowserScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final brandColor = Color(widget.initialSite.colorHex);
 
+    final page = Scaffold(
+      backgroundColor: isDark
+          ? const Color(0xFF0C0D14)
+          : const Color(0xFFE4E8F0),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final screenWidth = constraints.maxWidth;
+            final isDesktop = screenWidth > 540;
+            final mobileWidth = _isFullScreenMode
+                ? screenWidth
+                : _currentViewportWidth.clamp(320.0, screenWidth);
+
+            return Stack(
+              children: [
+                // Centered Mobile Screen Container
+                Center(
+                  child: Container(
+                    width: mobileWidth,
+                    height: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF131520) : Colors.white,
+                      border: isDesktop && !_isFullScreenMode
+                          ? Border.symmetric(
+                              horizontal: BorderSide(
+                                color: isDark
+                                    ? const Color(0xFF26293A)
+                                    : const Color(0xFFCCD2DE),
+                                width: 1.5,
+                              ),
+                            )
+                          : null,
+                      boxShadow: isDesktop && !_isFullScreenMode
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                blurRadius: 30,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Column(
+                      children: [
+                        _buildMobileHeader(
+                          isDark,
+                          brandColor,
+                          isDesktop: isDesktop,
+                        ),
+                        if (_pageLoading)
+                          LinearProgressIndicator(
+                            value: _progress,
+                            minHeight: 2,
+                            backgroundColor: brandColor.withValues(alpha: 0.15),
+                            color: AppColors.primary,
+                          ),
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              (!_supportsWebView || _controller == null)
+                                  ? _buildWebPlaceholder(isDark)
+                                  : WebViewWidget(controller: _controller!),
+                              if (_mediaDetected)
+                                Positioned(
+                                  right: 16,
+                                  bottom: 12,
+                                  child: FloatingActionButton(
+                                    heroTag: null,
+                                    tooltip: 'Download detected video',
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    shape: const CircleBorder(),
+                                    onPressed: _isExtracting
+                                        ? null
+                                        : _extractCurrentPage,
+                                    child: _isExtracting
+                                        ? const SizedBox.square(
+                                            dimension: 23,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.download_rounded),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (isDesktop) ...[
+                  if (!_isFullScreenMode)
+                    Positioned(
+                      top: 14,
+                      left: 18,
+                      child: _buildDesktopBackButton(isDark),
+                    ),
+                  Positioned(
+                    top: 14,
+                    right: 18,
+                    child: _buildDesktopViewportBadge(isDark),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    // The navigation shell owns the system back gesture for the embedded
+    // browser. A standalone, pushed BrowserScreen still handles its own.
+    if (widget.onCloseBrowser != null) return page;
     return PopScope(
       canPop: !_supportsWebView,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
         await _goBack();
       },
-      child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF0C0D14) : const Color(0xFFE4E8F0),
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final screenWidth = constraints.maxWidth;
-              final isDesktop = screenWidth > 540;
-              final mobileWidth = _isFullScreenMode
-                  ? screenWidth
-                  : _currentViewportWidth.clamp(320.0, screenWidth);
-
-              return Stack(
-                children: [
-                  // Centered Mobile Screen Container
-                  Center(
-                    child: Container(
-                      width: mobileWidth,
-                      height: double.infinity,
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF131520) : Colors.white,
-                        border: isDesktop && !_isFullScreenMode
-                            ? Border.symmetric(
-                                horizontal: BorderSide(
-                                  color: isDark ? const Color(0xFF26293A) : const Color(0xFFCCD2DE),
-                                  width: 1.5,
-                                ),
-                              )
-                            : null,
-                        boxShadow: isDesktop && !_isFullScreenMode
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.35),
-                                  blurRadius: 30,
-                                  spreadRadius: 2,
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Column(
-                        children: [
-                          _buildMobileHeader(isDark, brandColor, isDesktop: isDesktop),
-                          if (_pageLoading)
-                            LinearProgressIndicator(
-                              value: _progress,
-                              minHeight: 2,
-                              backgroundColor: brandColor.withValues(alpha: 0.15),
-                              color: AppColors.primary,
-                            ),
-                          Expanded(
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                (!_supportsWebView || _controller == null)
-                                    ? _buildWebPlaceholder(isDark)
-                                    : WebViewWidget(controller: _controller!),
-                                if (_mediaDetected)
-                                  Positioned(
-                                    right: 16,
-                                    bottom: 12,
-                                    child: FloatingActionButton(
-                                      heroTag: null,
-                                      tooltip: 'Download detected video',
-                                      backgroundColor: AppColors.primary,
-                                      foregroundColor: Colors.white,
-                                      shape: const CircleBorder(),
-                                      onPressed: _isExtracting
-                                          ? null
-                                          : _extractCurrentPage,
-                                      child: _isExtracting
-                                          ? const SizedBox.square(
-                                              dimension: 23,
-                                              child: CircularProgressIndicator(
-                                                color: Colors.white,
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(Icons.download_rounded),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (isDesktop) ...[
-                    if (!_isFullScreenMode)
-                      Positioned(
-                        top: 14,
-                        left: 18,
-                        child: _buildDesktopBackButton(isDark),
-                      ),
-                    Positioned(
-                      top: 14,
-                      right: 18,
-                      child: _buildDesktopViewportBadge(isDark),
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+      child: page,
     );
   }
 
@@ -1418,7 +1661,11 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 color: AppColors.primary.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.public_rounded, size: 52, color: AppColors.primary),
+              child: const Icon(
+                Icons.public_rounded,
+                size: 52,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: 18),
             Text(
@@ -1443,10 +1690,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 padding: const EdgeInsets.only(bottom: 20),
                 child: Text(
                   'Web engine unavailable: $_engineError',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.primary,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AppColors.primary),
                   textAlign: TextAlign.center,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -1461,17 +1705,30 @@ class _BrowserScreenState extends State<BrowserScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                   onPressed: _extractCurrentPage,
                   icon: const Icon(Icons.download_rounded, size: 19),
-                  label: const Text('Extract Media From URL', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    'Extract Media From URL',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                   onPressed: () {
                     setState(() => _engineError = null);
@@ -1483,8 +1740,13 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 ),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                   onPressed: () => launchUrl(
                     Uri.parse(_currentUrl),
@@ -1502,41 +1764,56 @@ class _BrowserScreenState extends State<BrowserScreen> {
   }
 
   Widget _buildAddressBar(bool isDark, Color brandColor) {
+    final field = isDark ? const Color(0xFF1E2130) : const Color(0xFFF3F4F8);
+    final border = isDark ? const Color(0xFF2C3045) : const Color(0xFFE5E7EF);
+    final hint = isDark
+        ? AppColors.darkTextTertiary
+        : AppColors.lightTextTertiary;
+    final actionColor = isDark ? Colors.white60 : Colors.black45;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // During window resizing / split-screen the header can give this field
-        // almost no width. Drop the decorative icons and padding in that case
-        // instead of overflowing the Row.
-        final compact = constraints.maxWidth < 90;
+        // almost no width. Drop the decorative actions in that case instead of
+        // overflowing the Row.
+        final compact = constraints.maxWidth < 110;
         return Container(
-          height: 38,
+          height: 40,
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1B1D2A) : Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(20),
+            color: field,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: border),
           ),
-          padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 10),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10),
           child: Row(
             children: [
-              if (!compact) ...[
-                Icon(
-                  Icons.lock_rounded,
-                  size: 14,
-                  color: AppColors.accentGreen.withValues(alpha: 0.8),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: brandColor.withValues(alpha: .16),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 6),
-              ],
+                child: Icon(Icons.public_rounded, size: 14, color: brandColor),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _addressCtrl,
                   focusNode: _addressFocus,
-                  style: const TextStyle(fontSize: 12),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                  ),
                   textInputAction: TextInputAction.go,
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    hintText: _pageTitle.isNotEmpty ? _pageTitle : 'Enter URL or search',
-                    hintStyle: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                    hintText: 'Search or enter URL',
+                    hintStyle: TextStyle(fontSize: 12, color: hint),
                   ),
                   onSubmitted: (val) {
                     _addressFocus.unfocus();
@@ -1545,32 +1822,32 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 ),
               ),
               if (!compact)
-                if (_pageLoading)
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _controller?.loadRequest(Uri.parse('about:blank')),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.close_rounded, size: 16, color: Colors.grey),
-                    ),
-                  )
-                else
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: _reloadPage,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.refresh_rounded, size: 16, color: Colors.grey),
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () {
+                    if (_pageLoading) {
+                      _controller?.loadRequest(Uri.parse('about:blank'));
+                    } else {
+                      _reloadPage();
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      _pageLoading
+                          ? Icons.close_rounded
+                          : Icons.refresh_rounded,
+                      size: 16,
+                      color: actionColor,
                     ),
                   ),
+                ),
             ],
           ),
         );
       },
     );
   }
-
-
 }
 
 class _HarvestedMedia {

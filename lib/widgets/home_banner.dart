@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../models/movie_model.dart';
 import '../services/image_cache_service.dart';
-import 'movie_detail_sheet.dart';
 import 'looping_control_content.dart';
 import 'remote_image.dart';
 
@@ -109,7 +108,7 @@ class _HomeBannerState extends State<HomeBanner> {
                       if (Theme.of(context).brightness == Brightness.light)
                         _posterGlow(current),
                       if (movies.length == 1)
-                        ?Center(
+                        Center(
                           child: SizedBox(
                             width: height * .69,
                             height: height,
@@ -232,7 +231,7 @@ class _HomeBannerState extends State<HomeBanner> {
                     ),
                     IconButton(
                       tooltip: 'Movie details',
-                      onPressed: () => MovieDetailSheet.show(context, current),
+                      onPressed: () => widget.onOpen(current),
                       icon: LoopingControlContent(
                         trigger: _settledIndex,
                         delay: const Duration(milliseconds: 900),

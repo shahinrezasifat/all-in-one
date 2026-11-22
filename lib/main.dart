@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -127,6 +128,22 @@ class MainNavigationScreen extends StatefulWidget {
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
+/// One entry in the app's section back-stack. Browsers carry their own site so
+/// a system back can land on the exact browser the user previously visited.
+class _AppSection {
+  const _AppSection(this.index, {this.site});
+
+  /// -1 represents the in-app browser; 0..4 are the bottom navigation tabs.
+  static const int browser = -1;
+
+  final int index;
+  final SiteModel? site;
+
+  bool get isBrowser => index == browser;
+
+  bool get isHome => index == 0 && !isBrowser;
+}
+
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
@@ -138,6 +155,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   String? _searchQuery;
   SiteModel? _activeBrowserSite;
+  Future<bool> Function()? _browserBackHandler;
+  DateTime? _lastBackAt;
+
+  /// Top of this list is the section currently on screen.
+  final List<_AppSection> _sectionHistory = [
+    const _AppSection(0), // Home
+  ];
+
+  bool get _isBrowserActive => _activeBrowserSite != null;
+
+  void _pushSection(_AppSection section) {
+    final last = _sectionHistory.last;
+    if (last.index == section.index && last.site == section.site) return;
+    _sectionHistory.add(section);
+  }
+
+  void _applySection(_AppSection section) {
+    setState(() {
+      _activeBrowserSite = section.site;
+      _currentIndex = section.isBrowser ? 0 : section.index;
+    });
+  }
 
   void _navigateToSearch(String query) {
     setState(() {
@@ -148,21 +187,62 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _openBrowser(SiteModel site) {
-    setState(() {
-      _activeBrowserSite = site;
-      _currentIndex = 0;
-    });
+    _pushSection(_AppSection(_AppSection.browser, site: site));
+    _applySection(_sectionHistory.last);
   }
 
+  /// Explicit browser arrow / Exit: always land on Home, wherever we came from.
   void _closeBrowser() {
-    setState(() {
-      _activeBrowserSite = null;
-    });
+    while (_sectionHistory.isNotEmpty && _sectionHistory.last.isBrowser) {
+      _sectionHistory.removeLast();
+    }
+    if (_sectionHistory.isEmpty || !_sectionHistory.last.isHome) {
+      _sectionHistory.add(const _AppSection(0));
+    }
+    _applySection(_sectionHistory.last);
   }
 
   void _selectTab(int index) {
     HapticFeedback.selectionClick();
-    setState(() => _currentIndex = index);
+    if (!_isBrowserActive && _currentIndex == index) return;
+    _pushSection(_AppSection(index));
+    _applySection(_sectionHistory.last);
+  }
+
+  Future<void> _handleSystemBack() async {
+    // The browser gets the first chance to step back through its own pages.
+    if (_isBrowserActive) {
+      final handled = await _browserBackHandler?.call() ?? false;
+      if (handled) return;
+    }
+
+    // Otherwise walk back through the sections the user actually visited.
+    if (_sectionHistory.length > 1) {
+      _sectionHistory.removeLast();
+      _applySection(_sectionHistory.last);
+      return;
+    }
+
+    // We are on Home with nothing left to unwind: require a second back press
+    // before leaving the app, with a short hint on the first press.
+    final now = DateTime.now();
+    final previous = _lastBackAt;
+    if (previous == null ||
+        now.difference(previous) > const Duration(seconds: 2)) {
+      _lastBackAt = now;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Press back again to exit'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+    _lastBackAt = null;
+    await SystemNavigator.pop();
   }
 
   @override
@@ -178,6 +258,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             key: ValueKey(_activeBrowserSite!.url),
             initialSite: _activeBrowserSite!,
             onCloseBrowser: _closeBrowser,
+            onBackHandlerChanged: (handler) => _browserBackHandler = handler,
           )
         : HomeScreen(
             key: ValueKey(_searchQuery),
@@ -202,9 +283,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ],
     );
 
+    late final Widget body;
     if (isDesktop) {
       // Minimal vertical side rail — quiet surface, one soft active pill.
-      return Scaffold(
+      body = Scaffold(
         body: Row(
           children: [
             _buildSideRail(isDark),
@@ -215,99 +297,109 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
       );
-    }
-
-    // The navigation is a true floating pill layered over the content — no
-    // docked bar, no separator line. Screens get a bottom inset so nothing is
-    // hidden behind it, and the pill itself lifts above the system gesture area.
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarDividerColor: Colors.transparent,
-        systemNavigationBarIconBrightness: isDark
-            ? Brightness.light
-            : Brightness.dark,
-        systemNavigationBarContrastEnforced: false,
-      ),
-      child: Scaffold(
-        resizeToAvoidBottomInset: false,
-        extendBody: true,
-        body: Stack(
-          fit: StackFit.expand,
-          children: [content, const YouTubePopupPlayer(miniPlayerBottom: 104)],
+    } else {
+      // The navigation is a true floating pill layered over the content — no
+      // docked bar, no separator line. Screens get a bottom inset so nothing is
+      // hidden behind it, and the pill itself lifts above the system gesture area.
+      body = AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarIconBrightness: isDark
+              ? Brightness.light
+              : Brightness.dark,
+          systemNavigationBarContrastEnforced: false,
         ),
-        bottomNavigationBar: ListenableBuilder(
-          listenable: PlayerService.instance,
-          builder: (context, child) => PlayerService.instance.isExpanded
-              ? const SizedBox.shrink()
-              : child!,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Center(
-                heightFactor: 1,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Container(
-                    height: 68,
-                    decoration: BoxDecoration(
-                      color: (isDark ? AppColors.darkCard : Colors.white)
-                          .withValues(alpha: isDark ? 0.90 : 0.93),
-                      borderRadius: BorderRadius.circular(34),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: isDark ? 0.55 : 0.16,
+        child: Scaffold(
+          resizeToAvoidBottomInset: false,
+          extendBody: true,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              content,
+              const YouTubePopupPlayer(miniPlayerBottom: 104),
+            ],
+          ),
+          bottomNavigationBar: ListenableBuilder(
+            listenable: PlayerService.instance,
+            builder: (context, child) => PlayerService.instance.isExpanded
+                ? const SizedBox.shrink()
+                : child!,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Center(
+                  heightFactor: 1,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Container(
+                      height: 68,
+                      decoration: BoxDecoration(
+                        // Solid, opaque surface — a crisp bar reads cleaner than
+                        // a blurred/translucent one over a busy video feed.
+                        color: isDark ? AppColors.darkCard : Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.50 : 0.12,
+                            ),
+                            blurRadius: 24,
+                            spreadRadius: -10,
+                            offset: const Offset(0, 8),
                           ),
-                          blurRadius: 14,
-                          spreadRadius: -6,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(34),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                        child: Row(
-                          children: [
-                            _navItem(
-                              0,
-                              Icons.home_outlined,
-                              Icons.home_rounded,
-                              'Home',
-                            ),
-                            _navItem(
-                              1,
-                              Icons.lock_outline_rounded,
-                              Icons.lock_rounded,
-                              'Vault',
-                            ),
-                            _navItem(
-                              2,
-                              Icons.movie_outlined,
-                              Icons.movie_rounded,
-                              'Movies',
-                            ),
-                            _navItem(
-                              3,
-                              Icons.download_outlined,
-                              Icons.download_rounded,
-                              'Downloads',
-                              showBadge: true,
-                            ),
-                            _navItem(
-                              4,
-                              Icons.settings_outlined,
-                              Icons.settings_rounded,
-                              'Settings',
-                            ),
-                          ],
-                        ),
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.07),
+                            blurRadius: 18,
+                            spreadRadius: -12,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          _navItem(
+                            0,
+                            Icons.home_outlined,
+                            Icons.home_rounded,
+                            'Home',
+                          ),
+                          _navItem(
+                            1,
+                            Icons.lock_outline_rounded,
+                            Icons.lock_rounded,
+                            'Vault',
+                          ),
+                          _navItem(
+                            2,
+                            Icons.movie_outlined,
+                            Icons.movie_rounded,
+                            'Movies',
+                          ),
+                          _navItem(
+                            3,
+                            Icons.download_outlined,
+                            Icons.download_rounded,
+                            'Downloads',
+                            showBadge: true,
+                          ),
+                          _navItem(
+                            4,
+                            Icons.settings_outlined,
+                            Icons.settings_rounded,
+                            'Settings',
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -316,7 +408,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ),
           ),
         ),
-      ),
+      );
+    }
+
+    // A single PopScope owns the whole shell: system back unwinds visited
+    // sections first and only exits after a confirmed double press on Home.
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_handleSystemBack());
+      },
+      child: body,
     );
   }
 
@@ -330,22 +432,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       child: Column(
         children: [
           const SizedBox(height: 22),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.bolt_rounded,
-              color: AppColors.primary,
-              size: 22,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(13),
+            child: Image.asset(
+              'assets/images/app_logo.png',
+              width: 40,
+              height: 40,
             ),
           ),
           const SizedBox(height: 6),
           const Text(
-            'Tub',
+            'All in One',
             style: TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.w800,
@@ -476,15 +573,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 260),
                   curve: Curves.easeOutCubic,
-                  width: 46,
-                  height: 30,
+                  width: 50,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: selected
                         ? AppColors.primary.withValues(
-                            alpha: isDark ? 0.20 : 0.14,
+                            alpha: isDark ? 0.24 : 0.15,
                           )
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: _navIcon(
                     icon,

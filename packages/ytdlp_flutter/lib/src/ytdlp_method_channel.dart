@@ -28,6 +28,7 @@ class MethodChannelYtdlp extends YtdlpPlatform {
         fraction: received != null && total != null && total > 0 ? received / total : null,
         downloadedBytes: received,
         totalBytes: total,
+        totalBytesIsEstimate: event['totalBytesIsEstimate'] == true,
         etaSeconds: (event['etaSeconds'] as num?)?.toInt(),
         speedBytesPerSecond: (event['speedBytesPerSecond'] as num?)?.toDouble(),
       ));
@@ -40,9 +41,16 @@ class MethodChannelYtdlp extends YtdlpPlatform {
   }
 
   @override
-  Future<VideoInfo> getVideoInfo(String url) async {
+  Future<VideoInfo> getVideoInfo(String url, {
+    String? format,
+    Map<String, String> headers = const {},
+  }) async {
     final jsonString =
-        await _channel.invokeMethod<String>('getVideoInfo', {'url': url});
+        await _channel.invokeMethod<String>('getVideoInfo', {
+      'url': url,
+      if (format != null) 'format': format,
+      if (headers.isNotEmpty) 'headers': headers,
+    });
     if (jsonString == null || jsonString.isEmpty) {
       throw const YtdlpException('getVideoInfo returned no data');
     }

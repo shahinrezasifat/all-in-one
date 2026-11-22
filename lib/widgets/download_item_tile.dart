@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../models/download_task.dart';
+import '../screens/audio_player_screen.dart';
 import '../screens/vault_screen.dart';
 import '../services/download_manager.dart';
 import '../services/gallery_media_service.dart';
@@ -17,6 +18,15 @@ class DownloadItemTile extends StatelessWidget {
   final DownloadTask task;
 
   const DownloadItemTile({super.key, required this.task});
+
+  void _play(BuildContext context) {
+    PlayerService.instance.playDownloadTask(task);
+    if (task.isAudioTask && ModalRoute.of(context)?.isFirst == false) {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => const AudioPlayerScreen()),
+      );
+    }
+  }
 
   void _showFolderAssignDialog(BuildContext context) {
     showDialog(
@@ -269,7 +279,7 @@ class DownloadItemTile extends StatelessWidget {
                       if (task.isImageTask) {
                         ImageViewerDialog.show(context, task);
                       } else {
-                        PlayerService.instance.playDownloadTask(task);
+                        _play(context);
                       }
                     },
                   ),
@@ -587,7 +597,16 @@ class DownloadItemTile extends StatelessWidget {
     final isFailed = task.status == DownloadStatus.failed;
     final isDownloading = task.status == DownloadStatus.downloading;
     final isPaused = task.status == DownloadStatus.paused;
+    final isQueued = task.status == DownloadStatus.queued;
     final isPreparing = task.isPreparing;
+    final total = task.displayTotalBytes;
+    final approximate = total > 0 && task.totalBytesIsEstimate;
+    final totalLabel = total > 0
+        ? '${approximate ? '≈' : ''}${formatBytes(total)}'
+        : 'Total unknown';
+    final percentLabel = task.hasDownloadProgress
+        ? '${approximate && !task.isConverting ? '≈' : ''}${(task.progress * 100).floor()}%'
+        : '—';
 
     // Card border color based on status
 
@@ -615,7 +634,7 @@ class DownloadItemTile extends StatelessWidget {
                   if (task.isImageTask) {
                     ImageViewerDialog.show(context, task);
                   } else {
-                    PlayerService.instance.playDownloadTask(task);
+                    _play(context);
                   }
                 }
               : null,
@@ -870,7 +889,7 @@ class DownloadItemTile extends StatelessWidget {
                             size: 36,
                           ),
                           onPressed: () {
-                            PlayerService.instance.playDownloadTask(task);
+                            _play(context);
                           },
                         )
                       else
@@ -882,7 +901,7 @@ class DownloadItemTile extends StatelessWidget {
                             size: 36,
                           ),
                           onPressed: () {
-                            PlayerService.instance.playDownloadTask(task);
+                            _play(context);
                           },
                         ),
                       IconButton(
@@ -919,9 +938,11 @@ class DownloadItemTile extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          task.isVideoTask
-                              ? 'Analyzing video…'
-                              : 'Preparing download…',
+                          task.statusNote == 'Starting download…'
+                              ? 'Starting download'
+                              : task.isVideoTask
+                                  ? 'Analyzing video…'
+                                  : 'Preparing download…',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w800,
@@ -930,10 +951,17 @@ class DownloadItemTile extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          task.statusNote ??
-                              'Waiting for the download to start',
+                          task.statusNote == 'Starting download…'
+                              ? (total > 0 ? 'Download size checked' : 'Total unknown')
+                              : task.statusNote ?? 'Waiting for the download to start',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                        if (total > 0) ...[
+                          const SizedBox(height: 4),
+                          Text('Total $totalLabel · $percentLabel',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
@@ -1017,7 +1045,7 @@ class DownloadItemTile extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                              ] else if (isPaused) ...[
+                              ] else if (isPaused || isQueued) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 7,
@@ -1029,9 +1057,9 @@ class DownloadItemTile extends StatelessWidget {
                                     ),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Text(
-                                    'Paused',
-                                    style: TextStyle(
+                                  child: Text(
+                                    isQueued ? 'Queued' : 'Paused',
+                                    style: const TextStyle(
                                       color: AppColors.accentGold,
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
@@ -1094,13 +1122,10 @@ class DownloadItemTile extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
 
-                        // Downloaded / Total in clean GB/MB
                         Flexible(
-                          flex: 0,
                           child: Text(
-                            task.totalBytes > 0
-                                ? '${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}'
-                                : formatBytes(task.downloadedBytes),
+                            '${formatBytes(task.downloadedBytes)} / $totalLabel',
+                            textAlign: TextAlign.end,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -1121,9 +1146,7 @@ class DownloadItemTile extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            task.totalBytes > 0 || task.isConverting
-                                ? '${(task.progress * 100).toInt()}%'
-                                : '—',
+                            percentLabel,
                             style: const TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w900,
@@ -1136,67 +1159,15 @@ class DownloadItemTile extends StatelessWidget {
 
                     const SizedBox(height: 8),
 
-                    // High-Res Gradient Progress Bar (Full Width)
-                    ClipRRect(
+                    LinearProgressIndicator(
+                      value: isDownloading && !task.hasDownloadProgress
+                          ? null
+                          : task.progress,
+                      minHeight: 6,
                       borderRadius: BorderRadius.circular(8),
-                      child: Stack(
-                        children: [
-                          Container(
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF232734)
-                                  : Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          FractionallySizedBox(
-                            widthFactor: task.isConverting
-                                ? task.convertProgress.clamp(0.01, 1.0)
-                                : task.progress.clamp(0.01, 1.0),
-                            child: Container(
-                              height: 8,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: isFailed
-                                      ? [
-                                          AppColors.accentRed,
-                                          Colors.redAccent.shade100,
-                                        ]
-                                      : (task.isConverting
-                                            ? [
-                                                AppColors.accentGold,
-                                                Colors.orangeAccent,
-                                              ]
-                                            : (isPaused
-                                                  ? [
-                                                      Colors.amber.shade600,
-                                                      Colors.amber.shade300,
-                                                    ]
-                                                  : [
-                                                      AppColors.primary,
-                                                      const Color(0xFF00E676),
-                                                    ])),
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color:
-                                        (isFailed
-                                                ? AppColors.accentRed
-                                                : (task.isConverting
-                                                      ? AppColors.accentGold
-                                                      : AppColors.primary))
-                                            .withValues(alpha: 0.4),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      color: AppColors.primary,
+                      backgroundColor: AppColors.primary.withValues(alpha: .14),
+                      semanticsLabel: 'Download progress',
                     ),
                   ],
                   const SizedBox(height: 10),
@@ -1265,7 +1236,7 @@ class DownloadItemTile extends StatelessWidget {
                             : (isPaused ? 'Resume' : 'Pause'),
                         onTap: isFailed
                             ? () => DownloadManager.instance.resumeTask(task)
-                            : (isDownloading
+                            : (isDownloading || isQueued
                                   ? () =>
                                         DownloadManager.instance.pauseTask(task)
                                   : () => DownloadManager.instance.resumeTask(

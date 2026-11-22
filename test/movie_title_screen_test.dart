@@ -57,6 +57,13 @@ void main() {
             'quality': 720,
             'headers': <String, String>{},
           },
+          if ((call.arguments as Map)['episodeData'] == 'first')
+            {
+              'url': 'https://example.test/first-fhd.mp4',
+              'name': 'Fixture server',
+              'quality': 1080,
+              'headers': <String, String>{},
+            },
         ],
         _ => null,
       };
@@ -94,6 +101,17 @@ void main() {
       final appBar = tester.getRect(find.byType(AppBar));
       final backdrop = tester.getRect(find.byType(ListView).first);
       expect(backdrop.top, appBar.bottom);
+
+      await tester.tap(find.text('Full season'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose language'), findsOneWidget);
+      await tester.tap(find.text('Original'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose resolution'), findsOneWidget);
+      expect(find.text('720p'), findsOneWidget);
+      expect(find.text('1080p'), findsNothing);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
 
       await tester.tap(find.text('The opening episode'));
       await tester.pumpAndSettle();

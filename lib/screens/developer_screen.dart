@@ -6,8 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/github_profile_service.dart';
 
-const _githubUsername = 'shahinrezasifat';
-const _githubProfile = 'https://github.com/$_githubUsername';
+const _githubUsername = GithubProfileService.username;
+const _githubProfile = GithubProfileService.profileUrl;
 
 /// Neon palette used across the cyberpunk developer terminal.
 const _neonCyan = Color(0xFF22D3EE);

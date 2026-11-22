@@ -18,6 +18,7 @@ Future<void> analyzeAndPickFormat(
   required String url,
   String analyzingText = 'Checking available formats',
 }) async {
+  url = YtDlpService.youtubeVideoUrl(url) ?? url.trim();
   final navigator = Navigator.of(context);
   final messenger = ScaffoldMessenger.of(context);
 
@@ -67,8 +68,11 @@ Future<void> analyzeAndPickFormat(
       messenger,
       'Could not read this video: ${_short(failure.toString())}',
       () {
+        // The snackbar can be tapped long after the Navigator state is gone.
+        // Always use a live context from the messenger that owns the snackbar.
+        if (!navigator.mounted || !messenger.mounted) return;
         analyzeAndPickFormat(
-          navigator.context,
+          messenger.context,
           url: url,
           analyzingText: analyzingText,
         );
@@ -84,8 +88,11 @@ Future<void> analyzeAndPickFormat(
       'No downloadable quality was returned for this video. It may be '
       'private, age restricted or region blocked.',
       () {
+        // The snackbar can be tapped long after the Navigator state is gone.
+        // Always use a live context from the messenger that owns the snackbar.
+        if (!navigator.mounted || !messenger.mounted) return;
         analyzeAndPickFormat(
-          navigator.context,
+          messenger.context,
           url: url,
           analyzingText: analyzingText,
         );

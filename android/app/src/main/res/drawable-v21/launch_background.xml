@@ -3,7 +3,7 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="?android:colorBackground" />
 
-    <!-- Tub Pure launch logo -->
+    <!-- All in One launch logo -->
     <item>
         <bitmap
             android:gravity="center"

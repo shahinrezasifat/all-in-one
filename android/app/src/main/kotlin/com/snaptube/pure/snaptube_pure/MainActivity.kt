@@ -1,5 +1,8 @@
 package com.snaptube.pure.snaptube_pure
 
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
@@ -18,6 +21,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.nio.ByteBuffer
@@ -38,11 +43,70 @@ class MainActivity : FlutterActivity() {
     private val scanChannelName = "snaptube_pure/media_scan"
     private val systemUiChannelName = "snaptube_pure/system_ui"
     private var brightnessOwner: Int? = null
+    private val awakeOwners = mutableSetOf<Int>()
+    private var vaultAuthentication: CancellationSignal? = null
+
+    override fun provideFlutterEngine(context: Context): FlutterEngine? =
+        FlutterEngineCache.getInstance().get("main")
+
+    // Active downloads run on the Dart engine even after the task is dismissed.
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
+    override fun onDestroy() {
+        vaultAuthentication?.cancel()
+        super.onDestroy()
+    }
     private var mediaVolumeTarget = 0.0
     private var lastMediaVolume: Int? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        FlutterEngineCache.getInstance().put("main", flutterEngine)
+
+        val app = applicationContext
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "snaptube_pure/background")
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "downloads" -> {
+                            val intent = Intent(app, DownloadForegroundService::class.java)
+                            if (call.arguments == true) ContextCompat.startForegroundService(app, intent)
+                            else app.stopService(intent)
+                            result.success(null)
+                        }
+                        "audioOpen" -> {
+                            val headers = Bundle()
+                            call.argument<Map<String, String>>("headers")?.forEach { (key, value) ->
+                                headers.putString(key, value)
+                            }
+                            val intent = Intent(app, AudioPlaybackService::class.java).setAction("open")
+                                .putExtra("path", call.argument<String>("path"))
+                                .putExtra("title", call.argument<String>("title"))
+                                .putExtra("token", call.argument<Int>("token") ?: -1)
+                                .putExtra("position", call.argument<Number>("position")?.toLong() ?: 0L)
+                                .putExtra("mimeType", call.argument<String>("mimeType"))
+                                .putExtra("volume", call.argument<Number>("volume")?.toFloat() ?: 1f)
+                                .putExtra("speed", call.argument<Number>("speed")?.toFloat() ?: 1f)
+                                .putExtra("loop", call.argument<Boolean>("loop") ?: false)
+                                .putExtra("play", call.argument<Boolean>("play") ?: true)
+                                .putExtra("headers", headers)
+                            ContextCompat.startForegroundService(app, intent)
+                            result.success(null)
+                        }
+                        "audioState" -> result.success(AudioPlaybackService.instance?.snapshot())
+                        "audioStop" -> result.success(app.stopService(Intent(app, AudioPlaybackService::class.java)))
+                        "audioControl" -> {
+                            val control = requireNotNull(call.argument<String>("control"))
+                            val value = requireNotNull(call.argument<Number>("value"))
+                            AudioPlaybackService.instance?.control(control, value)
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (error: Exception) {
+                    result.error("background", error.message, null)
+                }
+            }
         CloudStreamRuntime.attach(this, flutterEngine.dartExecutor.binaryMessenger)
 
         MethodChannel(
@@ -52,6 +116,15 @@ class MainActivity : FlutterActivity() {
             val owner = call.argument<Int>("owner")
             val delta = call.argument<Double>("delta")
             when (call.method) {
+                "keepScreenOn" -> {
+                    if (owner != null) {
+                        if (call.argument<Boolean>("enabled") == true) awakeOwners.add(owner)
+                        else awakeOwners.remove(owner)
+                        if (awakeOwners.isEmpty()) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        else window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                    result.success(null)
+                }
                 "brightness" -> {
                     if (owner == null || delta == null || !delta.isFinite()) {
                         result.error("invalid_gesture", "Missing brightness gesture", null)
@@ -255,20 +328,28 @@ class MainActivity : FlutterActivity() {
             result.success(false)
             return
         }
+        if (vaultAuthentication != null) {
+            result.success(false)
+            return
+        }
+        val cancellation = CancellationSignal()
+        vaultAuthentication = cancellation
         var replied = false
         fun finish(authenticated: Boolean) {
             if (replied) return
             replied = true
+            vaultAuthentication = null
             result.success(authenticated)
         }
         val builder = BiometricPrompt.Builder(this)
-            .setTitle("Secret Vault")
+            .setTitle("Unlock vault")
             .setNegativeButton("Use PIN", mainExecutor) { _, _ -> finish(false) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setConfirmationRequired(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
         }
         builder.build().authenticate(
-            CancellationSignal(),
+            cancellation,
             mainExecutor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(outcome: BiometricPrompt.AuthenticationResult) {

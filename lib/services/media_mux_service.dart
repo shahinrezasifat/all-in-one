@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new_min/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -36,7 +36,9 @@ class MediaMuxService {
   static final MediaMuxService instance = MediaMuxService._();
   MediaMuxService._();
 
-  static const MethodChannel _channel = MethodChannel('snaptube_pure/media_mux');
+  static const MethodChannel _channel = MethodChannel(
+    'snaptube_pure/media_mux',
+  );
 
   /// Native mux passes report progress against their output path token.
   final Map<String, ConvertProgress> _nativeProgressHooks = {};
@@ -48,7 +50,8 @@ class MediaMuxService {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'muxProgress') {
         final token = (call.arguments as Map?)?['token']?.toString() ?? '';
-        final p = ((call.arguments as Map?)?['progress'] as num?)?.toDouble() ?? 0;
+        final p =
+            ((call.arguments as Map?)?['progress'] as num?)?.toDouble() ?? 0;
         _nativeProgressHooks[token]?.call(p.clamp(0.0, 1.0));
       }
     });
@@ -102,7 +105,9 @@ class MediaMuxService {
         } on MissingPluginException {
           // No native handler registered - fall through to ffmpeg
         } catch (e) {
-          debugPrint('Native MediaMuxer failed: $e. Falling back to FFmpegKit...');
+          debugPrint(
+            'Native MediaMuxer failed: $e. Falling back to FFmpegKit...',
+          );
         } finally {
           _nativeProgressHooks.remove(outputPath);
         }
@@ -111,20 +116,32 @@ class MediaMuxService {
       if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
         final durationMs = await durationMsOf(videoPath);
         final lower = outputPath.toLowerCase();
-        final isMp4 = lower.endsWith('.mp4') || lower.endsWith('.m4v') || lower.endsWith('.mov');
+        final isMp4 =
+            lower.endsWith('.mp4') ||
+            lower.endsWith('.m4v') ||
+            lower.endsWith('.mov');
         final ffmpegKitArgs = <String>[
           '-y',
-          '-v', 'error',
-          '-i', videoPath,
-          '-i', audioPath,
-          '-map', '0:v:0',
-          '-map', '1:a:0',
-          '-c', 'copy',
+          '-v',
+          'error',
+          '-i',
+          videoPath,
+          '-i',
+          audioPath,
+          '-map',
+          '0:v:0',
+          '-map',
+          '1:a:0',
+          '-c',
+          'copy',
           if (isMp4) ...['-strict', '-2', '-movflags', '+faststart'],
           outputPath,
         ];
-        final kitOk = await _runFfmpegKit(ffmpegKitArgs,
-            durationMsHint: durationMs, onProgress: onProgress);
+        final kitOk = await _runFfmpegKit(
+          ffmpegKitArgs,
+          durationMsHint: durationMs,
+          onProgress: onProgress,
+        );
         if (kitOk && _isNonEmptyFile(outputPath)) {
           onProgress?.call(1.0);
           return const MuxResult(success: true);
@@ -132,8 +149,12 @@ class MediaMuxService {
         _deleteIfExists(outputPath);
       }
 
-      return await _mergeWithFfmpeg(videoPath, audioPath, outputPath,
-          onProgress: onProgress);
+      return await _mergeWithFfmpeg(
+        videoPath,
+        audioPath,
+        outputPath,
+        onProgress: onProgress,
+      );
     } catch (e) {
       debugPrint('Merge failed for $outputPath: $e');
       return MuxResult(success: false, error: e.toString());
@@ -173,11 +194,9 @@ class MediaMuxService {
     for (final candidate in candidates) {
       if (candidate.startsWith('/') && !File(candidate).existsSync()) continue;
       try {
-        final probe = await Process.run(
-          candidate,
-          const ['-version'],
-          runInShell: Platform.isWindows,
-        );
+        final probe = await Process.run(candidate, const [
+          '-version',
+        ], runInShell: Platform.isWindows);
         if (probe.exitCode == 0) {
           _resolvedFfmpeg = candidate;
           return candidate;
@@ -197,7 +216,10 @@ class MediaMuxService {
   /// Returns the produced .mp4 path, or null when the tracks cannot live in
   /// an MP4 container on this device — the caller then keeps the original
   /// file and says so honestly.
-  Future<String?> convertToMp4(String inputPath, {ConvertProgress? onProgress}) async {
+  Future<String?> convertToMp4(
+    String inputPath, {
+    ConvertProgress? onProgress,
+  }) async {
     final input = File(inputPath);
     if (!input.existsSync()) return null;
 
@@ -208,16 +230,26 @@ class MediaMuxService {
 
     final durationMs = await durationMsOf(inputPath);
     final remuxArgs = <String>[
-      '-y', '-v', 'error',
-      '-i', inputPath,
-      '-c', 'copy', '-strict', '-2',
-      '-movflags', '+faststart',
+      '-y',
+      '-v',
+      'error',
+      '-i',
+      inputPath,
+      '-c',
+      'copy',
+      '-strict',
+      '-2',
+      '-movflags',
+      '+faststart',
       outPath,
     ];
 
     if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      final ok = await _runFfmpegKit(remuxArgs,
-          durationMsHint: durationMs, onProgress: onProgress);
+      final ok = await _runFfmpegKit(
+        remuxArgs,
+        durationMsHint: durationMs,
+        onProgress: onProgress,
+      );
       if (ok && _isNonEmptyFile(outPath)) {
         onProgress?.call(1.0);
         return outPath;
@@ -228,8 +260,11 @@ class MediaMuxService {
 
     final binary = await _ffmpegBinary();
     if (binary == null) return null;
-    final ok =
-        await _runFfmpegProcess(binary, remuxArgs, onProgress: onProgress);
+    final ok = await _runFfmpegProcess(
+      binary,
+      remuxArgs,
+      onProgress: onProgress,
+    );
     if (ok && _isNonEmptyFile(outPath)) {
       onProgress?.call(1.0);
       return outPath;
@@ -238,7 +273,8 @@ class MediaMuxService {
     return null;
   }
 
-  Future<String?> convertToMp3(String inputPath, {
+  Future<String?> convertToMp3(
+    String inputPath, {
     String? outPath,
     int kbitRate = 320,
     ConvertProgress? onProgress,
@@ -249,21 +285,32 @@ class MediaMuxService {
     final dot = inputPath.lastIndexOf('.');
     final base = dot > 0 ? inputPath.substring(0, dot) : inputPath;
     var out = outPath ?? '$base.mp3';
-    if (out.toLowerCase() == inputPath.toLowerCase()) out = '$inputPath.tmp.mp3';
+    if (out.toLowerCase() == inputPath.toLowerCase())
+      out = '$inputPath.tmp.mp3';
 
     final args = <String>[
-      '-y', '-v', 'error',
-      '-i', inputPath,
+      '-y',
+      '-v',
+      'error',
+      '-i',
+      inputPath,
       '-vn',
-      '-c:a', 'libmp3lame', '-b:a', '${kbitRate}k',
-      '-f', 'mp3',
+      '-c:a',
+      'libmp3lame',
+      '-b:a',
+      '${kbitRate}k',
+      '-f',
+      'mp3',
       out,
     ];
     final durationMs = await durationMsOf(inputPath);
 
     if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      final ok = await _runFfmpegKit(args,
-          durationMsHint: durationMs, onProgress: onProgress);
+      final ok = await _runFfmpegKit(
+        args,
+        durationMsHint: durationMs,
+        onProgress: onProgress,
+      );
       if (ok && _isNonEmptyFile(out)) {
         onProgress?.call(1.0);
         return out;
@@ -288,16 +335,18 @@ class MediaMuxService {
   /// caller's duration hint turns into a real 0..1 slider value. Without a
   /// known duration the slider still creeps on wall-clock against a rolling
   /// maximum, and snaps to 1 the moment ffmpeg reports success.
-  Future<bool> _runFfmpegKit(List<String> args,
-      {
-        required int? durationMsHint,
-        ConvertProgress? onProgress,
-      }) async {
+  Future<bool> _runFfmpegKit(
+    List<String> args, {
+    required int? durationMsHint,
+    ConvertProgress? onProgress,
+  }) async {
     final completer = Completer<bool>();
     int highestTimeMs = 0;
     final startedAt = DateTime.now();
     try {
-      FFmpegKitConfig.enableStatisticsCallback((stat) {
+      // Per-session callback: two parallel conversions must not overwrite (or
+      // clear) each other's progress reporting.
+      final session = await FFmpegSession.create(args, null, null, (stat) {
         final t = stat.getTime();
         if (t > highestTimeMs) highestTimeMs = t;
         final total = durationMsHint ?? 0;
@@ -306,32 +355,31 @@ class MediaMuxService {
         } else {
           // No duration available — creep toward (but never reach) 1.0 on
           // wall-clock so the slider honestly moves while the work runs.
-          final elapsed =
-              DateTime.now().difference(startedAt).inMilliseconds;
+          final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
           final guess = (highestTimeMs > 0)
               ? highestTimeMs / (highestTimeMs + elapsed)
               : elapsed / (elapsed + 15000.0);
           onProgress?.call(guess.clamp(0.0, 0.99));
         }
       });
-      FFmpegKit.executeWithArguments(args).then((session) async {
-        final code = await session.getReturnCode();
-        final logs = ReturnCode.isSuccess(code)
-            ? ''
-            : (await session.getAllLogsAsString())?.trim() ?? '';
-        if (!ReturnCode.isSuccess(code)) {
-          debugPrint('FFmpegKit failed: $logs');
-        }
-        FFmpegKitConfig.enableStatisticsCallback();
-        if (!completer.isCompleted) {
-          completer.complete(ReturnCode.isSuccess(code));
-        }
-      });
+      unawaited(
+        FFmpegKitConfig.ffmpegExecute(session)
+            .then((_) async {
+              final code = await session.getReturnCode();
+              final success = ReturnCode.isSuccess(code);
+              if (!success) {
+                final logs = (await session.getAllLogsAsString())?.trim() ?? '';
+                debugPrint('FFmpegKit failed: $logs');
+              }
+              if (!completer.isCompleted) completer.complete(success);
+            })
+            .catchError((Object error) {
+              debugPrint('FFmpegKit crashed: $error');
+              if (!completer.isCompleted) completer.complete(false);
+            }),
+      );
     } catch (e) {
       debugPrint('FFmpegKit crashed: $e');
-      try {
-        FFmpegKitConfig.enableStatisticsCallback();
-      } catch (_) {}
       return false;
     }
     return completer.future;
@@ -339,20 +387,28 @@ class MediaMuxService {
 
   /// Desktop ffmpeg with `-progress pipe:1`: out_time_ms lines drive the
   /// slider; duration is read off the banner when none was supplied.
-  Future<bool> _runFfmpegProcess(String binary, List<String> args,
-      {ConvertProgress? onProgress}) async {
+  Future<bool> _runFfmpegProcess(
+    String binary,
+    List<String> args, {
+    ConvertProgress? onProgress,
+  }) async {
     // The callers pass '-v error' for quiet logs; the progress pipeline needs
     // the banner (for Duration:) and the machine-readable progress stream.
     final runArgs = <String>[
       '-hide_banner',
-      '-loglevel', 'info',
-      '-progress', 'pipe:1',
+      '-loglevel',
+      'info',
+      '-progress',
+      'pipe:1',
       ...args.where((a) => a != 'error' && a != '-v'),
     ];
     final durMs = RegExp(r'Duration: (\d+):(\d+):(\d+)\.(\d+)');
     try {
-      final proc =
-          await Process.start(binary, runArgs, runInShell: Platform.isWindows);
+      final proc = await Process.start(
+        binary,
+        runArgs,
+        runInShell: Platform.isWindows,
+      );
       int total = 0;
       final done = Completer<bool>();
       proc.stdout.listen((b) {
@@ -373,9 +429,11 @@ class MediaMuxService {
         stderrBuf.write(text);
         final m = durMs.firstMatch(text);
         if (m != null && total == 0) {
-          total = (int.parse(m.group(1)!) * 3600 +
-                  int.parse(m.group(2)!) * 60 +
-                  int.parse(m.group(3)!)) * 1000 +
+          total =
+              (int.parse(m.group(1)!) * 3600 +
+                      int.parse(m.group(2)!) * 60 +
+                      int.parse(m.group(3)!)) *
+                  1000 +
               int.parse(m.group(4)!) * 10;
         }
       });
@@ -405,22 +463,30 @@ class MediaMuxService {
     }
 
     final lower = outputPath.toLowerCase();
-    final isMp4 = lower.endsWith('.mp4') || lower.endsWith('.m4v') || lower.endsWith('.mov');
+    final isMp4 =
+        lower.endsWith('.mp4') ||
+        lower.endsWith('.m4v') ||
+        lower.endsWith('.mov');
 
     final args = <String>[
       '-y',
-      '-v', 'error',
-      '-i', videoPath,
-      '-i', audioPath,
-      '-map', '0:v:0',
-      '-map', '1:a:0',
-      '-c', 'copy',
+      '-v',
+      'error',
+      '-i',
+      videoPath,
+      '-i',
+      audioPath,
+      '-map',
+      '0:v:0',
+      '-map',
+      '1:a:0',
+      '-c',
+      'copy',
       if (isMp4) ...['-movflags', '+faststart'],
       outputPath,
     ];
 
-    final ok =
-        await _runFfmpegProcess(binary, args, onProgress: onProgress);
+    final ok = await _runFfmpegProcess(binary, args, onProgress: onProgress);
     if (ok && _isNonEmptyFile(outputPath)) {
       onProgress?.call(1.0);
       return const MuxResult(success: true);

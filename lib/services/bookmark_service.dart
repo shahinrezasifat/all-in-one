@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/site_model.dart';
 
 class BookmarkService extends ChangeNotifier {
@@ -100,32 +102,40 @@ class BookmarkService extends ChangeNotifier {
     notifyListeners();
   }
 
+  static Uri? parseBookmarkUrl(String input) {
+    final value = input.trim();
+    if (value.isEmpty || RegExp(r'\s').hasMatch(value)) return null;
+    final hasScheme = RegExp(
+      r'^[a-z][a-z0-9+.-]*://',
+      caseSensitive: false,
+    ).hasMatch(value);
+    final uri = Uri.tryParse(hasScheme ? value : 'https://$value');
+    if (uri == null ||
+        !const {'http', 'https'}.contains(uri.scheme) ||
+        uri.host.isEmpty ||
+        (!hasScheme &&
+            !uri.host.contains('.') &&
+            uri.host != 'localhost' &&
+            !uri.host.contains(':'))) {
+      return null;
+    }
+    return uri;
+  }
+
+  static String suggestedName(Uri url) {
+    final name = url.host.replaceFirst(RegExp(r'^www\.'), '').split('.').first;
+    return name.isEmpty
+        ? 'Bookmark'
+        : name[0].toUpperCase() + name.substring(1);
+  }
+
   Future<bool> addBookmark({required String title, required String url}) async {
+    final uri = parseBookmarkUrl(url);
+    if (uri == null) return false;
     await init();
-    String cleanUrl = url.trim();
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      cleanUrl = 'https://$cleanUrl';
-    }
-
-    String cleanTitle = title.trim();
-    if (cleanTitle.isEmpty) {
-      try {
-        final uri = Uri.parse(cleanUrl);
-        cleanTitle = uri.host.replaceFirst('www.', '').split('.').first;
-        if (cleanTitle.isNotEmpty) {
-          cleanTitle = cleanTitle[0].toUpperCase() + cleanTitle.substring(1);
-        }
-      } catch (_) {
-        cleanTitle = 'Bookmark';
-      }
-    }
-
-    String domain = '';
-    try {
-      domain = Uri.parse(cleanUrl).host;
-    } catch (_) {
-      domain = cleanUrl;
-    }
+    final cleanUrl = uri.toString();
+    final cleanTitle = title.trim().isEmpty ? suggestedName(uri) : title.trim();
+    final domain = uri.host;
 
     final faviconUrl = domain.isNotEmpty
         ? 'https://www.google.com/s2/favicons?domain=$domain&sz=128'
@@ -152,7 +162,9 @@ class BookmarkService extends ChangeNotifier {
       isCustom: true,
     );
 
-    _bookmarks.removeWhere((item) => item.url.toLowerCase() == cleanUrl.toLowerCase());
+    _bookmarks.removeWhere(
+      (item) => item.url.toLowerCase() == cleanUrl.toLowerCase(),
+    );
     _bookmarks.add(newSite);
 
     await _save();
@@ -165,27 +177,17 @@ class BookmarkService extends ChangeNotifier {
     required String newTitle,
     required String newUrl,
   }) async {
+    final uri = parseBookmarkUrl(newUrl);
+    if (uri == null) return false;
     await init();
-    String cleanUrl = newUrl.trim();
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      cleanUrl = 'https://$cleanUrl';
-    }
-
-    String cleanTitle = newTitle.trim();
-    if (cleanTitle.isEmpty) {
-      cleanTitle = oldSite.title;
-    }
-
-    String domain = '';
-    try {
-      domain = Uri.parse(cleanUrl).host;
-    } catch (_) {
-      domain = cleanUrl;
-    }
-
-    final faviconUrl = domain.isNotEmpty
-        ? 'https://www.google.com/s2/favicons?domain=$domain&sz=128'
-        : oldSite.icon;
+    final cleanUrl = uri.toString();
+    final cleanTitle = newTitle.trim().isEmpty
+        ? oldSite.title
+        : newTitle.trim();
+    final domain = uri.host;
+    final faviconUrl = Uri.tryParse(oldSite.url)?.host == domain
+        ? oldSite.icon
+        : 'https://www.google.com/s2/favicons?domain=$domain&sz=128';
 
     final updatedSite = SiteModel(
       title: cleanTitle,
@@ -196,7 +198,9 @@ class BookmarkService extends ChangeNotifier {
       isCustom: true,
     );
 
-    final idx = _bookmarks.indexWhere((item) => item.url == oldSite.url && item.title == oldSite.title);
+    final idx = _bookmarks.indexWhere(
+      (item) => item.url == oldSite.url && item.title == oldSite.title,
+    );
     if (idx != -1) {
       _bookmarks[idx] = updatedSite;
     } else {
@@ -210,7 +214,9 @@ class BookmarkService extends ChangeNotifier {
 
   Future<void> removeBookmark(SiteModel site) async {
     await init();
-    _bookmarks.removeWhere((item) => item.url == site.url && item.title == site.title);
+    _bookmarks.removeWhere(
+      (item) => item.url == site.url && item.title == site.title,
+    );
     await _save();
     notifyListeners();
   }

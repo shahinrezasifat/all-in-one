@@ -15,6 +15,7 @@ class MovieSource {
   final String streamUrl;
   final String fileSize;
   final String format;
+  final String? hlsVariantResolution;
   final bool isFastBDIX;
   final String repoId;
   final String repoName;
@@ -29,6 +30,7 @@ class MovieSource {
     String? streamUrl,
     required this.fileSize,
     this.format = 'mp4',
+    this.hlsVariantResolution,
     this.isFastBDIX = false,
     this.repoId = '',
     this.repoName = '',
@@ -44,6 +46,7 @@ class MovieSource {
     String? streamUrl,
     String? fileSize,
     String? format,
+    String? hlsVariantResolution,
     bool? isFastBDIX,
     String? repoId,
     String? repoName,
@@ -57,6 +60,7 @@ class MovieSource {
     streamUrl: streamUrl ?? this.streamUrl,
     fileSize: fileSize ?? this.fileSize,
     format: format ?? this.format,
+    hlsVariantResolution: hlsVariantResolution ?? this.hlsVariantResolution,
     isFastBDIX: isFastBDIX ?? this.isFastBDIX,
     repoId: repoId ?? this.repoId,
     repoName: repoName ?? this.repoName,
@@ -72,6 +76,8 @@ class MovieSource {
     'streamUrl': streamUrl,
     'fileSize': fileSize,
     'format': format,
+    if (hlsVariantResolution != null)
+      'hlsVariantResolution': hlsVariantResolution,
     'isFastBDIX': isFastBDIX,
     'repoId': repoId,
     'repoName': repoName,
@@ -88,6 +94,7 @@ class MovieSource {
         json['streamUrl'] as String? ?? (json['downloadUrl'] as String? ?? ''),
     fileSize: json['fileSize'] as String? ?? '1.2 GB',
     format: json['format'] as String? ?? 'mp4',
+    hlsVariantResolution: json['hlsVariantResolution'] as String?,
     isFastBDIX: json['isFastBDIX'] as bool? ?? false,
     repoId: json['repoId'] as String? ?? '',
     repoName: json['repoName'] as String? ?? '',

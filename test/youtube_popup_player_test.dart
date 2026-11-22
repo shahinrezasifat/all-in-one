@@ -8,6 +8,75 @@ import 'package:snaptube_pure/services/download_manager.dart';
 import 'package:snaptube_pure/widgets/youtube_popup_player.dart';
 
 void main() {
+  testWidgets('player keeps the public download URL separate from local playback', (
+    tester,
+  ) async {
+    final player = PlayerService.instance;
+    addTearDown(player.close);
+    const sourceUrl = 'https://youtu.be/aqz-KE-bpKQ';
+    void play(String url) => player.playDownloadTask(
+      DownloadTask(
+        id: 'saved-video',
+        title: 'Saved video',
+        author: '',
+        thumbnailUrl: '',
+        formatLabel: 'MP4',
+        ext: 'mp4',
+        isAudio: false,
+        category: 'video',
+        originalUrl: url,
+        savePath: '/fixtures/saved-video.mp4',
+      ),
+    );
+
+    play(sourceUrl);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: Stack(children: [YouTubePopupPlayer()])),
+      ),
+    );
+    expect(player.filePath, '/fixtures/saved-video.mp4');
+    expect(player.downloadSourceUrl, sourceUrl);
+    expect(find.text('Download'), findsOneWidget);
+
+    play('');
+    await tester.pump();
+    expect(player.downloadSourceUrl, isNull);
+    expect(find.text('Download'), findsNothing);
+  });
+
+  testWidgets('downloaded audio opens the dedicated audio player', (tester) async {
+    final player = PlayerService.instance;
+    addTearDown(player.close);
+    player.playDownloadTask(
+      DownloadTask(
+        id: 'saved-audio',
+        title: 'Downloaded song',
+        author: 'Artist',
+        thumbnailUrl: '',
+        formatLabel: 'MP3',
+        ext: 'mp3',
+        isAudio: true,
+        category: 'audio',
+        originalUrl: '',
+      ),
+    );
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: Stack(children: [YouTubePopupPlayer()])),
+      ),
+    );
+
+    expect(find.text('Audio player'), findsOneWidget);
+    expect(find.text('Downloaded song'), findsOneWidget);
+    expect(find.byTooltip('Pause audio'), findsOneWidget);
+    expect(find.byKey(const ValueKey('video-player-surface')), findsNothing);
+    expect(find.byTooltip('Return to video'), findsNothing);
+    await tester.tap(find.byTooltip('Close audio'));
+    await tester.pump();
+    expect(player.isHidden, isTrue);
+  });
+
   testWidgets('player previews horizontal scrubs and seeks on release', (
     tester,
   ) async {
@@ -151,6 +220,13 @@ void main() {
     await tester.pump();
     expect(find.text('Now playing'), findsOneWidget);
     expect(orientations.last, ['DeviceOrientation.portraitUp']);
+    await tester.tap(find.byTooltip('Audio only'));
+    await tester.pump();
+    expect(find.text('Audio player'), findsOneWidget);
+    expect(find.byKey(const ValueKey('video-player-surface')), findsNothing);
+    await tester.tap(find.byTooltip('Return to video'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('video-player-surface')), findsOneWidget);
     expect(tester.takeException(), isNull);
     player.toggleLoop();
     await tester.pumpWidget(const SizedBox());

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../models/vault_item.dart';
 import '../models/video_item.dart';
 import '../services/player_service.dart';
+import 'audio_player_screen.dart';
 import '../services/vault_service.dart';
 import '../theme/app_colors.dart';
 
@@ -208,6 +209,7 @@ class _VaultScreenState extends State<VaultScreen> {
   }
 
   Future<void> _useBiometrics({required bool enable}) async {
+    if (_biometricBusy) return;
     final vault = VaultService.instance;
     setState(() => _biometricBusy = true);
     final success = enable
@@ -265,34 +267,13 @@ class _VaultScreenState extends State<VaultScreen> {
         : 'Enter your 4-digit PIN to unlock your vault';
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text(
-          creating ? 'Set up Vault' : 'Secret Vault',
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-        ),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              color: _dark
-                  ? Colors.black.withValues(alpha: .25)
-                  : Colors.white.withValues(alpha: .50),
-            ),
-          ),
-        ),
-      ),
       body: Stack(
         children: [
           Positioned.fill(child: _ambientBackground()),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 72, 24, 24),
+                padding: const EdgeInsets.all(24),
                 child: _glass(
                   blur: 22,
                   padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
@@ -575,8 +556,10 @@ class _VaultScreenState extends State<VaultScreen> {
     final atRoot = _folderPath.isEmpty;
     final total = vault.items.length;
 
+    // The main navigation shell owns the system back gesture. Only folder
+    // navigation is consumed here; at root the shell unwinds its own history.
     return PopScope(
-      canPop: atRoot,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _folderPath.isNotEmpty) _goUp();
       },
@@ -780,50 +763,56 @@ class _VaultScreenState extends State<VaultScreen> {
                           blur: 14,
                           padding: EdgeInsets.zero,
                           borderRadius: BorderRadius.circular(22),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            leading: Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    _accentSoft,
-                                    _accent.withValues(alpha: .04),
-                                  ],
+                          child: Material(
+                            color: Colors.transparent,
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              leading: Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      _accentSoft,
+                                      _accent.withValues(alpha: .04),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: _accent.withValues(alpha: .18),
+                                  ),
                                 ),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: _accent.withValues(alpha: .18),
+                                child: Icon(
+                                  Icons.folder_rounded,
+                                  color: _accent,
                                 ),
                               ),
-                              child: Icon(Icons.folder_rounded, color: _accent),
-                            ),
-                            title: Text(
-                              folder.label,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
+                              title: Text(
+                                folder.label,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                            subtitle: Text(
-                              folder.count == 1
-                                  ? '1 file'
-                                  : '${folder.count} files',
-                              style: theme.textTheme.bodySmall?.copyWith(
+                              subtitle: Text(
+                                folder.count == 1
+                                    ? '1 file'
+                                    : '${folder.count} files',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: _secondaryText,
+                                ),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right_rounded,
                                 color: _secondaryText,
                               ),
+                              onTap: () =>
+                                  setState(() => _folderPath.add(folder.label)),
                             ),
-                            trailing: Icon(
-                              Icons.chevron_right_rounded,
-                              color: _secondaryText,
-                            ),
-                            onTap: () =>
-                                setState(() => _folderPath.add(folder.label)),
                           ),
                         ),
                       ),
@@ -852,85 +841,88 @@ class _VaultScreenState extends State<VaultScreen> {
         blur: 14,
         padding: EdgeInsets.zero,
         borderRadius: BorderRadius.circular(22),
-        child: ListTile(
-          contentPadding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
-          onTap: busy ? null : () => _openItem(item),
-          leading: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [_accentSoft, _accent.withValues(alpha: .04)],
+        child: Material(
+          color: Colors.transparent,
+          child: ListTile(
+            contentPadding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+            onTap: busy ? null : () => _openItem(item),
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_accentSoft, _accent.withValues(alpha: .04)],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: _accent.withValues(alpha: .18)),
               ),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: _accent.withValues(alpha: .18)),
+              child: Icon(icon, color: _accent, size: 22),
             ),
-            child: Icon(icon, color: _accent, size: 22),
-          ),
-          title: Text(
-            item.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+            title: Text(
+              item.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          subtitle: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _accentSoft,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: _accent,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: .4,
+            subtitle: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${item.ext.replaceAll('.', '').toUpperCase()} · ${(item.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: _secondaryText,
-                ),
-              ),
-            ],
-          ),
-          trailing: busy
-              ? SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: _accent,
+                  decoration: BoxDecoration(
+                    color: _accentSoft,
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                )
-              : PopupMenuButton<bool>(
-                  tooltip: 'File options',
-                  color: _dark ? AppColors.darkCard : Colors.white,
-                  onSelected: (restore) =>
-                      _updateItem(vault, item, restore: restore),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: true,
-                      child: Text('Restore to Downloads'),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: _accent,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: .4,
                     ),
-                    PopupMenuItem(value: false, child: Text('Delete')),
-                  ],
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  '${item.ext.replaceAll('.', '').toUpperCase()} · ${(item.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _secondaryText,
+                  ),
+                ),
+              ],
+            ),
+            trailing: busy
+                ? SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _accent,
+                    ),
+                  )
+                : PopupMenuButton<bool>(
+                    tooltip: 'File options',
+                    color: _dark ? AppColors.darkCard : Colors.white,
+                    onSelected: (restore) =>
+                        _updateItem(vault, item, restore: restore),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: true,
+                        child: Text('Restore to Downloads'),
+                      ),
+                      PopupMenuItem(value: false, child: Text('Delete')),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
   }
 
-  /// Videos and audio play in the SAME shared player used by Downloads and
-  /// YouTube (PlayerService -> floating YouTube-style popup player). Only
-  /// images keep a dedicated full-screen viewer.
   void _openItem(VaultItem item) {
     if (item.isImage) {
       Navigator.of(context).push(
@@ -949,6 +941,11 @@ class _VaultScreenState extends State<VaultScreen> {
       platform: 'Vault',
     );
     PlayerService.instance.playVideoItem(video, isAudio: item.isAudio);
+    if (item.isAudio && ModalRoute.of(context)?.isFirst == false) {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => const AudioPlayerScreen()),
+      );
+    }
   }
 
   Future<void> _updateItem(

@@ -6,6 +6,13 @@ import 'movie_detail_sheet.dart';
 import 'remote_image.dart';
 
 class MovieCard extends StatelessWidget {
+  static const catalogGrid = SliverGridDelegateWithMaxCrossAxisExtent(
+    maxCrossAxisExtent: 150,
+    childAspectRatio: .62,
+    crossAxisSpacing: 12,
+    mainAxisSpacing: 14,
+  );
+
   final MovieItem movie;
   final VoidCallback? onTap;
   final bool compact;
@@ -20,6 +27,7 @@ class MovieCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final quality = movie.quality.trim();
 
     return Container(
       decoration: BoxDecoration(
@@ -84,45 +92,45 @@ class MovieCard extends StatelessWidget {
                           ),
                         ),
 
-                        // Top-left Quality badge
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color:
-                                  movie.quality.contains('FLAC') ||
-                                      movie.quality.contains('320')
-                                  ? const Color(0xFF1DB954)
-                                  : (movie.quality.contains('4K')
-                                        ? AppColors.accentGold
-                                        : AppColors.primary),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.4),
-                                  blurRadius: 4,
+                        if (quality.isNotEmpty)
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    movie.quality.contains('FLAC') ||
+                                        movie.quality.contains('320')
+                                    ? const Color(0xFF1DB954)
+                                    : (movie.quality.contains('4K')
+                                          ? AppColors.accentGold
+                                          : AppColors.primary),
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.4),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                movie.quality.contains('FLAC')
+                                    ? 'FLAC HD'
+                                    : (movie.quality.contains('4K')
+                                          ? '4K UHD'
+                                          : quality),
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
                                 ),
-                              ],
-                            ),
-                            child: Text(
-                              movie.quality.contains('FLAC')
-                                  ? 'FLAC HD'
-                                  : (movie.quality.contains('4K')
-                                        ? '4K UHD'
-                                        : '1080p'),
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
                               ),
                             ),
                           ),
-                        ),
 
                         // Top-right Rating badge
                         Positioned(

@@ -6,6 +6,8 @@ import '../services/player_service.dart';
 import '../services/virtual_folder_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/download_item_tile.dart';
+import '../widgets/movie_card.dart';
+import '../widgets/remote_image.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -21,6 +23,41 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   String? _openedWebsite; // e.g. 'YouTube'
   String? _openedChannel; // e.g. 'MrBeast'
   String _inFolderFilter = 'All'; // Filter inside opened folder: 'All', 'Videos', 'Music', 'Images', 'Movies'
+
+  static final _episodeTitle = RegExp(
+    r'^(.*?) - (?:(?:Season\s+(\d+)\s*·\s*)?Episode\s+\d+|S(\d+)E\d+)\b',
+    caseSensitive: false,
+  );
+  static final _numberedSeason = RegExp(
+    r'^Season\s+(\d+)$',
+    caseSensitive: false,
+  );
+
+  String? _seriesTitle(DownloadTask task) =>
+      task.series?.title ?? _episodeTitle.firstMatch(task.title)?.group(1);
+
+  String _downloadedSeason(DownloadTask task) {
+    final episode = _episodeTitle.firstMatch(task.title);
+    final seasonNumber = episode?.group(2) ?? episode?.group(3);
+    final path = (task.savePath ?? '').split(RegExp(r'[/\\]'));
+    final label =
+        task.seriesSeason ??
+        (seasonNumber != null
+            ? 'Season $seasonNumber'
+            : task.seriesEpisodeUrl != null && path.length >= 3
+            ? path[path.length - 2]
+            : 'Season unspecified');
+    final number = int.tryParse(
+      _numberedSeason.firstMatch(label)?.group(1) ?? '',
+    );
+    return number == null ? label : 'Season $number';
+  }
+
+  Map<String, Map<String, List<DownloadTask>>> _websiteFolders(
+    DownloadManager manager,
+  ) => manager.organizeWebsiteFolders(
+    manager.completedTasks.where((task) => task.category != 'movie'),
+  );
 
   void _showCreateFolderDialog() {
     final ctrl = TextEditingController();
@@ -386,6 +423,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                 manager,
                                 folderService,
                                 isDark,
+                                completedList.where(
+                                  (task) => task.category == 'movie',
+                                ),
                               )
                             : (_openedFolderType != null
                                   ? _buildFolderContentDetailView(
@@ -416,15 +456,55 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     DownloadManager manager,
     VirtualFolderService folderService,
     bool isDark,
+    Iterable<DownloadTask> movieTasks,
   ) {
-    final websiteFolders = manager.organizedWebsiteFolders;
+    final websiteFolders = _websiteFolders(manager);
     final userFolders = folderService.folders;
+    final titles = <(bool, String, String), List<DownloadTask>>{};
+    final knownSeries = {
+      for (final task in movieTasks)
+        if (task.series case final series?)
+          (series.title, series.posterUrl): (
+            true,
+            series.providerId,
+            series.id,
+          ),
+    };
+    for (final task in movieTasks) {
+      final title = _seriesTitle(task);
+      final series = task.series;
+      final key = title == null
+          ? (false, '', task.id)
+          : series != null
+          ? (true, series.providerId, series.id)
+          : knownSeries[(title, task.thumbnailUrl)] ??
+                (true, task.thumbnailUrl, title);
+      titles.putIfAbsent(key, () => []).add(task);
+    }
+    final movieGroups = titles.values.toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (movieGroups.isNotEmpty) ...[
+            Text(
+              'Movies & Series',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            GridView.builder(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: MovieCard.catalogGrid,
+              itemCount: movieGroups.length,
+              itemBuilder: (context, index) =>
+                  _buildDownloadedPoster(movieGroups[index]),
+            ),
+            const SizedBox(height: 20),
+          ],
           // 1. AUTO-ORGANIZED WEBSITE FOLDERS (YouTube, Facebook, etc.)
           if (websiteFolders.isNotEmpty) ...[
             Row(
@@ -480,6 +560,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               itemBuilder: (context, index) {
                 final website = websiteFolders.keys.elementAt(index);
                 final channels = websiteFolders[website]!;
+                final isSeries = channels.values.any(
+                  (tasks) => tasks.any((task) => task.series != null),
+                );
+                final folderLabel = isSeries ? 'Seasons' : 'Channels';
                 final totalFiles = channels.values.fold<int>(
                   0,
                   (s, l) => s + l.length,
@@ -489,11 +573,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     channels.containsKey('Unknown');
                 final subtitle = hasOnlyUnknown
                     ? '$totalFiles Files (Direct)'
-                    : '${channels.keys.length} Channels • $totalFiles Files';
+                    : '${channels.keys.length} $folderLabel • $totalFiles Files';
                 return _buildGridFolderTile(
                   title: website,
                   subtitle: subtitle,
-                  icon: _iconForWebsite(website),
+                  icon: isSeries
+                      ? Icons.video_library_rounded
+                      : _iconForWebsite(website),
                   color: _colorForWebsite(website),
                   count: totalFiles,
                   isDark: isDark,
@@ -579,7 +665,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           ],
 
           // 3. NOTICE IF ZERO FOLDERS OF ANY KIND EXIST
-          if (websiteFolders.isEmpty && userFolders.isEmpty)
+          if (websiteFolders.isEmpty &&
+              userFolders.isEmpty &&
+              movieGroups.isEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -618,11 +706,171 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     );
   }
 
+  Widget _buildDownloadedPoster(List<DownloadTask> tasks) {
+    final task = tasks.first;
+    final series = task.series;
+    final seriesTitle = _seriesTitle(task);
+    final title = seriesTitle ?? task.title;
+    final manager = DownloadManager.instance;
+
+    void showFiles() {
+      String? selectedSeason;
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (context) => FractionallySizedBox(
+          heightFactor: .65,
+          child: StatefulBuilder(
+            builder: (context, updateSheet) => ListenableBuilder(
+              listenable: manager,
+              builder: (context, _) {
+                final completed = manager.completedTasks.toSet();
+                final files = tasks.where(completed.contains).toList();
+                final seasons = <String, List<DownloadTask>>{};
+                if (seriesTitle != null) {
+                  for (final file in files) {
+                    seasons
+                        .putIfAbsent(_downloadedSeason(file), () => [])
+                        .add(file);
+                  }
+                }
+                final labels = seasons.keys.toList()
+                  ..sort((a, b) {
+                    final first = int.tryParse(
+                      _numberedSeason.firstMatch(a)?.group(1) ?? '',
+                    );
+                    final second = int.tryParse(
+                      _numberedSeason.firstMatch(b)?.group(1) ?? '',
+                    );
+                    if (first != null && second != null)
+                      return first.compareTo(second);
+                    if (first != null) return -1;
+                    if (second != null) return 1;
+                    return a.compareTo(b);
+                  });
+                final activeSeason = seasons.containsKey(selectedSeason)
+                    ? selectedSeason
+                    : labels.firstOrNull;
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleLarge),
+                    if (labels.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Downloaded seasons',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final label in labels)
+                            ChoiceChip(
+                              label: Text(label),
+                              selected: label == activeSeason,
+                              onSelected: (_) => updateSheet(() {
+                                selectedSeason = label;
+                              }),
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    if (files.isEmpty) const Text('No downloaded files'),
+                    if (seriesTitle == null)
+                      for (final file in files)
+                        DownloadItemTile(key: ValueKey(file.id), task: file),
+                    if (activeSeason != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          '$activeSeason · ${seasons[activeSeason]!.length} downloaded',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      for (final file in seasons[activeSeason]!)
+                        DownloadItemTile(key: ValueKey(file.id), task: file),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: seriesTitle == null
+            ? () => PlayerService.instance.playDownloadTask(task)
+            : showFiles,
+        onLongPress: showFiles,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  SmartNetworkImage(
+                    url: task.thumbnailUrl,
+                    fallbackUrl: series?.posterUrl,
+                    placeholderIcon: Icons.movie_rounded,
+                    placeholderColor: AppColors.darkSurface,
+                  ),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: IconButton.filledTonal(
+                      tooltip: seriesTitle == null
+                          ? 'Download options'
+                          : 'Episodes',
+                      onPressed: showFiles,
+                      icon: Icon(
+                        seriesTitle == null
+                            ? Icons.more_vert_rounded
+                            : Icons.video_library_rounded,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Website Channels View: Shows channels inside the opened website
   Widget _buildWebsiteChannelsView(DownloadManager manager, bool isDark) {
     final website = _openedWebsite!;
-    final websiteMap = manager.organizedWebsiteFolders;
+    final websiteMap = _websiteFolders(manager);
     final channels = websiteMap[website] ?? <String, List<DownloadTask>>{};
+    final isSeries = channels.values.any(
+      (tasks) => tasks.any((task) => task.series != null),
+    );
+    final folderLabel = isSeries ? 'seasons' : 'channels';
     final totalFiles = channels.values.fold<int>(0, (s, l) => s + l.length);
 
     return SingleChildScrollView(
@@ -667,7 +915,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        '${channels.length} channels • $totalFiles files',
+                        '${channels.length} $folderLabel • $totalFiles files',
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.grey,
@@ -704,7 +952,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '$website Channels (চ্যানেল ফোল্ডার)',
+                  isSeries ? 'Seasons' : '$website Channels (চ্যানেল ফোল্ডার)',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -740,7 +988,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 final displayTitle = channelName == 'Unknown'
                     ? 'Unknown (Direct)'
                     : channelName;
-                final icon = channelName == 'Unknown'
+                final icon = isSeries || channelName == 'Unknown'
                     ? Icons.folder_rounded
                     : Icons.account_circle_rounded;
                 return _buildGridFolderTile(
@@ -775,7 +1023,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   Widget _buildChannelContentDetailView(DownloadManager manager, bool isDark) {
     final website = _openedWebsite!;
     final channel = _openedChannel!;
-    final websiteMap = manager.organizedWebsiteFolders;
+    final websiteMap = _websiteFolders(manager);
     final channels = websiteMap[website] ?? <String, List<DownloadTask>>{};
     final allInChannel = channels[channel] ?? <DownloadTask>[];
     List<DownloadTask> tasks = List<DownloadTask>.from(allInChannel);
@@ -810,7 +1058,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   onPressed: () {
                     setState(() {
                       final websiteChannels =
-                          manager.organizedWebsiteFolders[website] ?? {};
+                          _websiteFolders(manager)[website] ?? {};
                       if (websiteChannels.keys.length <= 1 &&
                           websiteChannels.containsKey('Unknown')) {
                         _openedWebsite = null;
@@ -844,6 +1092,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       Text(
                         channel == 'Unknown'
                             ? '${allInChannel.length} files in this site'
+                            : allInChannel.any((task) => task.series != null)
+                            ? '${allInChannel.length} episodes'
                             : '${allInChannel.length} items in this channel',
                         style: const TextStyle(
                           fontSize: 11,
@@ -1415,7 +1665,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 final mgr = DownloadManager.instance;
                 if (isAnyDownloading) {
                   for (final t in activeList) {
-                    if (t.status == DownloadStatus.downloading) {
+                    if (t.status == DownloadStatus.downloading ||
+                        t.status == DownloadStatus.queued) {
                       mgr.pauseTask(t);
                     }
                   }

@@ -13,6 +13,7 @@ import '../services/search_service.dart';
 import '../services/trending_engine_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/analyze_download_flow.dart';
+import '../widgets/bookmark_editor_sheet.dart';
 import '../widgets/remote_image.dart';
 import '../widgets/speed_dial_grid.dart';
 import '../widgets/video_card.dart';
@@ -39,11 +40,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
 
-  String _selectedCategory = 'All';
   bool _isExtracting = false;
   bool _isSearching = false;
 
-  List<String> _suggestions = [];
+  int _searchRequest = 0;
   List<VideoItem> _searchResults = [];
   String _activeSearchQuery = '';
 
@@ -53,26 +53,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loadingFeed = true;
   bool _loadingMoreFeed = false;
   bool _hasMoreFeed = true;
-  String _feedCategoryKey = '';
 
   // Multi-Select Batch Download state
   bool _isMultiSelect = false;
   final Set<VideoItem> _selectedVideos = {};
 
-  // Clean, text-only feed filters — no playful emoji-style category icons.
-  static const List<String> _categories = [
-    'All',
-    'Music',
-    'Gaming',
-    'Technology',
-    'Shorts',
-    'Comedy',
-    'News',
-  ];
-
   @override
   void initState() {
     super.initState();
+    _searchFocus.addListener(_refreshSearchField);
     BookmarkService.instance.init();
     PreferenceService.instance.ready.then((_) {
       if (mounted) setState(() {});
@@ -88,8 +77,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _urlController.dispose();
-    _searchController.dispose();
+    _searchFocus.removeListener(_refreshSearchField);
     _searchFocus.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -99,7 +89,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_loadingMoreFeed) return;
     setState(() => _loadingMoreFeed = true);
     final batch = await TrendingEngineService.instance.fetchFreshBatch(
-      category: _selectedCategory,
       count: 8,
       forceRefresh: forceRefresh,
     );
@@ -110,8 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       _loadingMoreFeed = false;
       _loadingFeed = false;
-      if (batch.isEmpty ||
-          !TrendingEngineService.instance.hasMore(_selectedCategory)) {
+      if (batch.isEmpty || !TrendingEngineService.instance.hasMore('All')) {
         _hasMoreFeed = false;
       }
     });
@@ -122,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Force a brand-new randomised feed (called by the header refresh button).
   void _refreshFeed() {
-    if (_isSearching) return;
+    if (_isSearching || _loadingMoreFeed) return;
     setState(() {
       _feedVideos.clear();
       _hasMoreFeed = true;
@@ -136,22 +124,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadFeedPage();
   }
 
-  /// When the category changes, restart the feed from a fresh trending page.
-  void _ensureFeedCategory() {
-    if (_feedCategoryKey == _selectedCategory) return;
-    _feedCategoryKey = _selectedCategory;
-    _feedVideos.clear();
-    _hasMoreFeed = true;
-    _loadingFeed = true;
-    _loadFeedPage();
-  }
-
-  /// Run a search AND record it in the recent-search history so the home screen
-  /// can surface what the user actually looked for.
+  /// Record submitted queries for matching while the user types.
   Future<void> _executeSearch(String query) async {
     final q = query.trim();
     if (q.isEmpty) return;
 
+    final request = ++_searchRequest;
     _searchFocus.unfocus();
     // Persist the query in the recent-search history (video surface) AND teach
     // the trending engine which channel/topic the user cares about.
@@ -160,13 +138,12 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _isSearching = true;
       _activeSearchQuery = q;
-      _suggestions = [];
       _searchController.text = q;
     });
 
     final results = await SearchService.instance.searchVideos(q);
 
-    if (mounted) {
+    if (mounted && request == _searchRequest) {
       setState(() {
         _searchResults = results;
         _isSearching = false;
@@ -179,18 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Clear the active search and return to the live feed.
   void _clearSearch() {
+    _searchRequest++;
     _searchController.clear();
     setState(() {
+      _isSearching = false;
       _activeSearchQuery = '';
       _searchResults = [];
-      _suggestions = [];
     });
-  }
-
-  /// Tap a recent-search chip to re-run that query instantly.
-  void _reuseRecentSearch(String query) {
-    _searchController.text = query;
-    _executeSearch(query);
   }
 
   /// Footer for the live feed's infinite scroll: a spinner while the next page
@@ -225,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Center(
           child: Text(
-            'No unseen videos left • Tap shuffle for a fresh random batch',
+            'You’re caught up.',
             style: TextStyle(
               fontSize: 12,
               color: isDark ? Colors.white54 : Colors.black45,
@@ -282,168 +254,239 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _onSearchChanged(String query) async {
-    setState(() {}); // Trigger rebuild to toggle right button state
-
-    if (query.trim().isEmpty || _submittedLink(query) != null) {
-      setState(() {
-        _suggestions = [];
-      });
-      return;
-    }
-
-    final list = await SearchService.instance.getSearchSuggestions(query);
-    if (mounted && _searchFocus.hasFocus && _searchController.text == query) {
-      setState(() {
-        _suggestions = list;
-      });
-    }
+  void _refreshSearchField() {
+    if (mounted) setState(() {});
   }
 
-  void _showAddBookmarkDialog() {
-    final titleCtrl = TextEditingController();
-    final urlCtrl = TextEditingController();
+  Future<void> _pasteSearchLink() async {
+    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim();
+    if (!mounted) return;
+    if (text == null || _submittedLink(text) == null) {
+      _searchFocus.requestFocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Copy a video link to paste it here.')),
+      );
+      return;
+    }
+    _searchController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _searchFocus.requestFocus();
+    _refreshSearchField();
+  }
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'Add Bookmark',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Site Name',
-                hintText: 'e.g. Reddit',
-              ),
+  Widget _buildSearchPanel() {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final query = _searchController.text.trim().toLowerCase();
+    final isLink = _submittedLink(query) != null;
+    final matches =
+        _searchFocus.hasFocus && query.characters.length >= 2 && !isLink
+        ? PreferenceService.instance.recentVideoSearches
+              .where((entry) => entry.toLowerCase().contains(query))
+              .take(5)
+              .toList()
+        : const <String>[];
+    final accent = dark ? AppColors.primaryLight : AppColors.primary;
+    final surface = dark ? AppColors.darkCard : Colors.white;
+    final border = dark ? AppColors.darkBorder : AppColors.lightBorder;
+    final muted = dark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Single, calm search field — no decorative gradient wrapper.
+        Material(
+          color: surface,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? .22 : .06),
+                  blurRadius: 16,
+                  spreadRadius: -6,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: urlCtrl,
-              decoration: const InputDecoration(
-                labelText: 'URL',
-                hintText: 'https://...',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final title = titleCtrl.text.trim();
-              final url = urlCtrl.text.trim();
-              if (url.isNotEmpty) {
-                Navigator.pop(ctx);
-                await BookmarkService.instance.addBookmark(
-                  title: title,
-                  url: url,
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Bookmark "${title.isNotEmpty ? title : url}" added successfully!',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Icon(Icons.search_rounded, color: accent, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocus,
+                      decoration: InputDecoration(
+                        hintText: 'Search videos or paste a link',
+                        hintStyle: TextStyle(
+                          color: dark
+                              ? AppColors.darkTextTertiary
+                              : AppColors.lightTextTertiary,
+                          fontSize: 14,
+                        ),
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                        ),
                       ),
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 2),
+                      onChanged: (_) => _refreshSearchField(),
+                      onSubmitted: _submitSearchOrLink,
+                      textInputAction: TextInputAction.go,
                     ),
-                  );
-                }
-              }
-            },
-            child: const Text('Add Bookmark'),
+                  ),
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      tooltip: 'Clear search',
+                      onPressed: _clearSearch,
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: dark ? Colors.white54 : Colors.black45,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  IconButton(
+                    tooltip: 'Paste link',
+                    onPressed: _isExtracting ? null : _pasteSearchLink,
+                    icon: Icon(Icons.link_rounded, size: 19, color: accent),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 2),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _isExtracting || query.isEmpty
+                          ? null
+                          : () => _submitSearchOrLink(_searchController.text),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: .26),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: _isExtracting
+                            ? const Center(
+                                child: SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              )
+                            : const Tooltip(
+                                message: 'Search videos',
+                                child: Icon(
+                                  Icons.arrow_forward_rounded,
+                                  color: Colors.white,
+                                  size: 21,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (matches.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? .20 : .07),
+                  blurRadius: 18,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+                    child: Text(
+                      'RECENT SEARCHES',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                        color: dark
+                            ? AppColors.darkTextTertiary
+                            : AppColors.lightTextTertiary,
+                      ),
+                    ),
+                  ),
+                  for (final entry in matches)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(
+                        Icons.history_rounded,
+                        size: 18,
+                        color: accent,
+                      ),
+                      title: Text(
+                        entry,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: muted),
+                      ),
+                      trailing: Icon(
+                        Icons.north_west_rounded,
+                        size: 15,
+                        color: muted,
+                      ),
+                      onTap: () => _executeSearch(entry),
+                    ),
+                ],
+              ),
+            ),
           ),
         ],
-      ),
+      ],
     );
   }
 
-  void _showEditBookmarkDialog(SiteModel site) {
-    final titleCtrl = TextEditingController(text: site.title);
-    final urlCtrl = TextEditingController(text: site.url);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.edit_rounded, color: AppColors.accentGold),
-            SizedBox(width: 8),
-            Text(
-              'Edit Bookmark',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleCtrl,
-              decoration: InputDecoration(
-                labelText: 'Site Name',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: urlCtrl,
-              decoration: InputDecoration(
-                labelText: 'URL',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () async {
-              final newTitle = titleCtrl.text.trim();
-              final newUrl = urlCtrl.text.trim();
-              if (newUrl.isNotEmpty) {
-                Navigator.pop(ctx);
-                await BookmarkService.instance.editBookmark(
-                  oldSite: site,
-                  newTitle: newTitle,
-                  newUrl: newUrl,
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Bookmark updated successfully!'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text(
-              'Save Changes',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-          ),
-        ],
+  Future<void> _showBookmarkEditor([SiteModel? site]) async {
+    final saved = await BookmarkEditorSheet.show(context, site: site);
+    if (saved != true || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(site == null ? 'Bookmark added' : 'Bookmark updated'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -722,19 +765,138 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Widget _buildQuickAccess(Color accent) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Quick access',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: _showBookmarkEditor,
+                icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                label: const Text('Add bookmark'),
+                style: FilledButton.styleFrom(
+                  foregroundColor: accent,
+                  backgroundColor: accent.withValues(alpha: dark ? .17 : .09),
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          AnimatedBuilder(
+            animation: BookmarkService.instance,
+            builder: (context, _) => SpeedDialGrid(
+              sites: BookmarkService.instance.bookmarks,
+              onSiteTap: (site) {
+                if (widget.onOpenBrowser != null) {
+                  widget.onOpenBrowser!(site);
+                } else {
+                  BrowserScreen.open(context, site);
+                }
+              },
+              onEditBookmark: _showBookmarkEditor,
+              onDeleteBookmark: (site) async {
+                await BookmarkService.instance.removeBookmark(site);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Removed ${site.title}')),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          Divider(
+            height: 1,
+            color: dark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeedHeader({
+    required bool showingResults,
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    final actionStyle = TextButton.styleFrom(
+      foregroundColor: theme.colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              showingResults
+                  ? 'Results for "$_activeSearchQuery"'
+                  : 'Trending now',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          if (!showingResults)
+            TextButton(
+              onPressed: _loadingMoreFeed ? null : _refreshFeed,
+              style: actionStyle,
+              child: const Text('Refresh'),
+            ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _isMultiSelect = !_isMultiSelect;
+                if (!_isMultiSelect) _selectedVideos.clear();
+              });
+            },
+            style: _isMultiSelect
+                ? actionStyle.copyWith(
+                    foregroundColor: WidgetStatePropertyAll(accent),
+                  )
+                : actionStyle,
+            child: Text(_isMultiSelect ? 'Done' : 'Batch'),
+          ),
+          if (showingResults)
+            TextButton(
+              onPressed: _clearSearch,
+              style: actionStyle,
+              child: const Text('Clear'),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark ? AppColors.primaryLight : AppColors.primary;
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
-    // Restart the live feed whenever the category pill changes.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _ensureFeedCategory();
-    });
-    final displayedVideos = _activeSearchQuery.isNotEmpty
-        ? _searchResults
-        : _feedVideos;
-    final recentSearches = PreferenceService.instance.recentVideoSearches;
+    final showingResults = _activeSearchQuery.isNotEmpty;
+    final displayedVideos = showingResults ? _searchResults : _feedVideos;
 
     return Scaffold(
       body: SafeArea(
@@ -755,498 +917,20 @@ class _HomeScreenState extends State<HomeScreen> {
               },
               child: CustomScrollView(
                 slivers: [
-                  // Unified Search Bar & Top Speed Dial
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 14),
-                          Text(
-                            'Home',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // 2. Calm search field — the focus ring belongs to the
-                          //    input only; suggestions float in their own surface.
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? AppColors.darkCard
-                                      : AppColors.lightCard,
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: isDark ? .18 : .06,
-                                      ),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    const SizedBox(width: 14),
-                                    Icon(
-                                      Icons.search_rounded,
-                                      color: isDark
-                                          ? Colors.white54
-                                          : Colors.black45,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _searchController,
-                                        focusNode: _searchFocus,
-                                        decoration: const InputDecoration(
-                                          hintText:
-                                              'Search or paste a video link',
-                                          hintStyle: TextStyle(fontSize: 13),
-                                          border: InputBorder.none,
-                                          enabledBorder: InputBorder.none,
-                                          focusedBorder: InputBorder.none,
-                                          contentPadding: EdgeInsets.symmetric(
-                                            vertical: 16,
-                                          ),
-                                        ),
-                                        onChanged: _onSearchChanged,
-                                        textInputAction: TextInputAction.go,
-                                        onSubmitted: _submitSearchOrLink,
-                                      ),
-                                    ),
-                                    if (_searchController.text.isNotEmpty)
-                                      IconButton(
-                                        icon: Icon(
-                                          Icons.close_rounded,
-                                          size: 18,
-                                          color: isDark
-                                              ? Colors.white54
-                                              : Colors.black45,
-                                        ),
-                                        onPressed: _clearSearch,
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                    IconButton(
-                                      tooltip: 'Paste link',
-                                      icon: const Icon(
-                                        Icons.content_paste_rounded,
-                                        size: 18,
-                                      ),
-                                      onPressed: () async {
-                                        final data = await Clipboard.getData(
-                                          Clipboard.kTextPlain,
-                                        );
-                                        final text = data?.text?.trim();
-                                        if (!mounted ||
-                                            text == null ||
-                                            text.isEmpty)
-                                          return;
-                                        _searchController
-                                            .value = TextEditingValue(
-                                          text: text,
-                                          selection: TextSelection.collapsed(
-                                            offset: text.length,
-                                          ),
-                                        );
-                                        await _onSearchChanged(text);
-                                      },
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: Material(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                        shape: const CircleBorder(),
-                                        child: InkWell(
-                                          customBorder: const CircleBorder(),
-                                          onTap: _isExtracting
-                                              ? null
-                                              : () => _submitSearchOrLink(
-                                                  _searchController.text,
-                                                ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(8),
-                                            child: _isExtracting
-                                                ? const SizedBox(
-                                                    width: 16,
-                                                    height: 16,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          color:
-                                                              AppColors.primary,
-                                                        ),
-                                                  )
-                                                : const Icon(
-                                                    Icons.arrow_forward_rounded,
-                                                    size: 18,
-                                                    color: AppColors.primary,
-                                                  ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              // Suggestions — quiet borderless rows, no dividers.
-                              if (_suggestions.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? AppColors.darkCard
-                                        : AppColors.lightCard,
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      for (final item in _suggestions.take(5))
-                                        Material(
-                                          color: Colors.transparent,
-                                          child: InkWell(
-                                            onTap: () => _executeSearch(item),
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 14,
-                                                    vertical: 10,
-                                                  ),
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.history_rounded,
-                                                    size: 16,
-                                                    color: isDark
-                                                        ? Colors.white38
-                                                        : Colors.black38,
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: Text(
-                                                      item,
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        fontSize: 13,
-                                                        color: isDark
-                                                            ? Colors.white70
-                                                            : Colors.black87,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Icon(
-                                                    Icons.north_west_rounded,
-                                                    size: 14,
-                                                    color: isDark
-                                                        ? Colors.white30
-                                                        : Colors.black38,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-
-                          // Quick access sites — lean header, no helper paragraph.
-                          if (_activeSearchQuery.isEmpty) ...[
-                            const SizedBox(height: 24),
-                            Text(
-                              'Quick access',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Speed Dial with In-App Browser Navigation & BookmarkService
-                            AnimatedBuilder(
-                              animation: BookmarkService.instance,
-                              builder: (context, _) {
-                                final sites =
-                                    BookmarkService.instance.bookmarks;
-                                return SpeedDialGrid(
-                                  sites: sites,
-                                  onSiteTap: (site) {
-                                    if (widget.onOpenBrowser != null) {
-                                      widget.onOpenBrowser!(site);
-                                    } else {
-                                      BrowserScreen.open(context, site);
-                                    }
-                                  },
-                                  onAddBookmark: _showAddBookmarkDialog,
-                                  onEditBookmark: _showEditBookmarkDialog,
-                                  onDeleteBookmark: (site) async {
-                                    await BookmarkService.instance
-                                        .removeBookmark(site);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'Removed ${site.title}',
-                                              ),
-                                            ),
-                                          );
-                                    }
-                                  },
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 22),
-                          ] else ...[
-                            const SizedBox(height: 14),
-                          ],
-
-                          // Recent Searches — the queries the user actually ran on
-                          // YouTube, so re-entering the app surfaces what they
-                          // cared about instead of an identical static feed.
-                          if (_activeSearchQuery.isEmpty &&
-                              recentSearches.isNotEmpty) ...[
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Recent searches',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () => PreferenceService.instance
-                                      .clearRecentSearches(isAudio: false),
-                                  style: TextButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  child: const Text(
-                                    'Clear',
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: 36,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: recentSearches.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(width: 8),
-                                itemBuilder: (context, index) {
-                                  final q = recentSearches[index];
-                                  return ActionChip(
-                                    avatar: const Icon(
-                                      Icons.search_rounded,
-                                      size: 15,
-                                      color: AppColors.primary,
-                                    ),
-                                    label: Text(
-                                      q,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    backgroundColor: isDark
-                                        ? AppColors.darkCard
-                                        : Colors.grey.shade200,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    onPressed: () => _reuseRecentSearch(q),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                          ],
-
-                          // Feed header — quiet title, neutral icon, compact action.
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      _activeSearchQuery.isNotEmpty
-                                          ? Icons.search_rounded
-                                          : Icons.trending_up_rounded,
-                                      size: 19,
-                                      color: AppColors.primary,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _activeSearchQuery.isNotEmpty
-                                            ? 'Results for "$_activeSearchQuery"'
-                                            : 'Trending now',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              if (_activeSearchQuery.isEmpty)
-                                IconButton(
-                                  tooltip: 'Fresh random videos',
-                                  icon: Icon(
-                                    Icons.shuffle_rounded,
-                                    size: 17,
-                                    color: isDark
-                                        ? AppColors.primaryLight
-                                        : AppColors.primaryDark,
-                                  ),
-                                  onPressed: _refreshFeed,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                              TextButton.icon(
-                                onPressed: () {
-                                  setState(() {
-                                    _isMultiSelect = !_isMultiSelect;
-                                    if (!_isMultiSelect)
-                                      _selectedVideos.clear();
-                                  });
-                                },
-                                icon: Icon(
-                                  _isMultiSelect
-                                      ? Icons.close_rounded
-                                      : Icons.download_done_rounded,
-                                  size: 16,
-                                ),
-                                label: Text(
-                                  _isMultiSelect ? 'Done' : 'Batch',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: _isMultiSelect
-                                      ? AppColors.primary
-                                      : (isDark
-                                            ? Colors.white60
-                                            : Colors.black54),
-                                  visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
-                                ),
-                              ),
-                              if (_activeSearchQuery.isNotEmpty)
-                                TextButton(
-                                  onPressed: _clearSearch,
-                                  child: const Text(
-                                    'Clear',
-                                    style: TextStyle(color: AppColors.primary),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-
-                          // Minimal text-only feed filters — no icons, no emoji vibe.
-                          if (_activeSearchQuery.isEmpty)
-                            SizedBox(
-                              height: 36,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: _categories.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(width: 6),
-                                itemBuilder: (context, index) {
-                                  final cat = _categories[index];
-                                  final selected = cat == _selectedCategory;
-
-                                  return Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () => setState(
-                                        () => _selectedCategory = cat,
-                                      ),
-                                      borderRadius: BorderRadius.circular(20),
-                                      splashColor: AppColors.primary.withValues(
-                                        alpha: 0.08,
-                                      ),
-                                      highlightColor: AppColors.primary
-                                          .withValues(alpha: 0.04),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 220,
-                                        ),
-                                        curve: Curves.easeOutCubic,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: selected
-                                              ? AppColors.primary.withValues(
-                                                  alpha: isDark ? 0.16 : 0.10,
-                                                )
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          cat,
-                                          style: TextStyle(
-                                            color: selected
-                                                ? (isDark
-                                                      ? AppColors.primaryLight
-                                                      : AppColors.primaryDark)
-                                                : (isDark
-                                                      ? AppColors
-                                                            .darkTextSecondary
-                                                      : AppColors
-                                                            .lightTextSecondary),
-                                            fontWeight: selected
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            fontSize: 12.5,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-
-                          const SizedBox(height: 14),
-                        ],
-                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _buildSearchPanel(),
+                    ),
+                  ),
+                  if (!showingResults)
+                    SliverToBoxAdapter(child: _buildQuickAccess(accent))
+                  else
+                    const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                  SliverToBoxAdapter(
+                    child: _buildFeedHeader(
+                      showingResults: showingResults,
+                      accent: accent,
                     ),
                   ),
 
@@ -1268,7 +952,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         )
-                      : displayedVideos.isEmpty
+                      : showingResults && displayedVideos.isEmpty
                       ? const SliverToBoxAdapter(
                           child: Padding(
                             padding: EdgeInsets.all(40),

@@ -28,7 +28,7 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var progressChannel: EventChannel
     private lateinit var context: Context
 
-    private val executor: ExecutorService = Executors.newCachedThreadPool()
+    private var executor: ExecutorService = Executors.newCachedThreadPool()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var progressSink: EventChannel.EventSink? = null
 
@@ -39,6 +39,7 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
     private var lastUpdateStatus: String = "not-attempted"
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        if (executor.isShutdown) executor = Executors.newCachedThreadPool()
         context = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, "ytdlp_flutter")
         channel.setMethodCallHandler(this)
@@ -57,6 +58,8 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
         progressChannel.setStreamHandler(null)
+        progressSink = null
+        executor.shutdownNow()
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -73,6 +76,10 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
                     val request = mediaRequest(url).apply {
                         addOption("--dump-single-json")
                         addOption("--no-playlist")
+                        call.argument<String>("format")?.let { addOption("-f", it) }
+                        call.argument<Map<String, String>>("headers").orEmpty().forEach { (name, value) ->
+                            addCommands(listOf("--add-headers", "$name:$value"))
+                        }
                     }
                     YoutubeDL.getInstance().execute(request).out.trim()
                 }
@@ -162,6 +169,7 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
             addOption("--continue")
             addOption("--retries", "8")
             addOption("--fragment-retries", "8")
+            addOption("--concurrent-fragments", "6")
             addOption("--extractor-retries", "4")
             addCommands(listOf("--retry-sleep", "http:exp=1:8", "--retry-sleep", "fragment:exp=1:8"))
             val host = Uri.parse(url).host.orEmpty().lowercase()
@@ -187,6 +195,7 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
         }
         val received = mutableMapOf<String, Long>()
         val totals = mutableMapOf<String, Long>()
+        val estimates = mutableSetOf<String>()
         val response = YoutubeDL.getInstance().execute(request, taskId) { _, _, line ->
             if (line.startsWith("TUB_PROGRESS ")) {
                 val fields = line.removePrefix("TUB_PROGRESS ").split(' ', limit = 7)
@@ -195,13 +204,17 @@ class YtdlpFlutterPlugin : FlutterPlugin, MethodCallHandler {
                 if (bytes != null && file != null) {
                     val finished = fields[0] == "finished"
                     received[file] = bytes
-                    val total = if (finished) bytes else
-                        fields[2].toLongOrNull() ?: fields[3].toLongOrNull()
-                    if (total != null && total > 0) totals[file] = maxOf(total, bytes)
+                    val exact = if (finished) bytes else fields[2].toLongOrNull()
+                    val total = exact ?: fields[3].toLongOrNull()
+                    if (total != null && total > 0) {
+                        totals[file] = maxOf(total, bytes)
+                        if (exact == null) estimates.add(file) else estimates.remove(file)
+                    }
                     val event = mapOf(
                         "taskId" to taskId,
                         "downloadedBytes" to received.values.sum(),
                         "totalBytes" to if (totals.size == received.size) totals.values.sum() else null,
+                        "totalBytesIsEstimate" to estimates.isNotEmpty(),
                         "speedBytesPerSecond" to if (finished) null else fields[4].toDoubleOrNull(),
                         "etaSeconds" to fields[5].toLongOrNull(),
                     )

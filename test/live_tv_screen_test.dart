@@ -6,11 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snaptube_pure/screens/movie_screen.dart';
-import 'package:snaptube_pure/screens/live_tv_player_screen.dart';
+import 'package:snaptube_pure/screens/movie_player_screen.dart';
 import 'package:snaptube_pure/widgets/home_banner.dart';
 
 // The video player plugin exposes its platform contract for test fakes.
-// ignore: depend_on_referenced_packages
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 void main() {
@@ -96,7 +95,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump();
-      expect(find.byType(LiveTvPlayerScreen), findsOneWidget);
+      // Live TV is routed through the shared player with isLiveTv enabled.
+      expect(find.byType(MoviePlayerScreen), findsOneWidget);
+      expect(
+        tester
+            .widget<MoviePlayerScreen>(find.byType(MoviePlayerScreen))
+            .isLiveTv,
+        isTrue,
+      );
       expect(player.createRequests, 1);
       expect(player.playRequests, 1);
       expect(find.textContaining('Download'), findsNothing);

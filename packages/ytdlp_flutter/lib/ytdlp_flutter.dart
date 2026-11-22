@@ -21,8 +21,11 @@ class Ytdlp {
   static Future<void> init() => _platform.init();
 
   /// Fetch metadata for [url] without downloading anything.
-  static Future<VideoInfo> getVideoInfo(String url) =>
-      _platform.getVideoInfo(url);
+  static Future<VideoInfo> getVideoInfo(String url, {
+    String? format,
+    Map<String, String> headers = const {},
+  }) =>
+      _platform.getVideoInfo(url, format: format, headers: headers);
 
   /// Download the best audio-only stream into [outputDir]; returns the
   /// finished file's absolute path. Keeps the native container (m4a/webm)

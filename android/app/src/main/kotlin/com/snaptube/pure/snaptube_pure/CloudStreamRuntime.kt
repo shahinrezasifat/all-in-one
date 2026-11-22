@@ -22,6 +22,7 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.lang.ref.WeakReference
+import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.Executors
@@ -41,12 +42,16 @@ internal object CloudStreamRuntime {
     private val lock = Any()
     private val plugins = mutableMapOf<String, BasePlugin>()
     private val catalogRequests = Semaphore(12)
+    private var attachedMessenger: BinaryMessenger? = null
 
     fun attach(activity: Activity, messenger: BinaryMessenger) {
+        if (attachedMessenger === messenger) return
+        attachedMessenger = messenger
         CloudStreamApp.setContext(activity)
         setContext(WeakReference<Any>(activity.applicationContext))
         val root = File(activity.filesDir, "cloudstream")
-        MethodChannel(messenger, "snaptube_pure/cloudstream").setMethodCallHandler { call, result ->
+        val channel = MethodChannel(messenger, "snaptube_pure/cloudstream")
+        channel.setMethodCallHandler { call, result ->
             executor.execute {
                 try {
                     val repoId = requireNotNull(call.argument<String>("repoId"))
@@ -100,7 +105,16 @@ internal object CloudStreamRuntime {
                                     "genres" -> withTimeoutOrNull(9000) {
                                         catalogRequests.withPermit { providerCall(api) { api.load(url)?.tags } }
                                     }.orEmpty()
-                                    else -> resolve(api, url, call.argument<String>("episodeData"))
+                                    else -> {
+                                        val requestId = call.argument<Int>("requestId")
+                                        resolve(api, url, call.argument<String>("episodeData")) { row ->
+                                            if (requestId != null) {
+                                                activity.runOnUiThread {
+                                                    channel.invokeMethod("resolvedFormat", mapOf("requestId" to requestId, "format" to row))
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -131,21 +145,55 @@ internal object CloudStreamRuntime {
             sources(activity, file)
             return
         }
-        val endpoint = URL(url)
-        require(endpoint.protocol == "https") { "Extension packages require HTTPS" }
         check(file.parentFile!!.isDirectory || file.parentFile!!.mkdirs())
         val temporary = File.createTempFile("extension-", ".tmp", file.parentFile)
         try {
-            val connection = endpoint.openConnection().apply {
-                connectTimeout = 10000
-                readTimeout = 15000
+            // Follow redirects manually: a HTTPS -> HTTP downgrade must never
+            // deliver executable plugin code over an unauthenticated channel.
+            var endpoint = URL(url)
+            require(endpoint.protocol == "https") { "Extension packages require HTTPS" }
+            var redirects = 0
+            var activeConnection: HttpURLConnection? = null
+            lateinit var input: java.io.InputStream
+            while (true) {
+                val connection = endpoint.openConnection() as? HttpURLConnection
+                    ?: error("Unsupported extension package URL")
+                connection.instanceFollowRedirects = false
+                connection.connectTimeout = 10000
+                connection.readTimeout = 15000
+                val code = connection.responseCode
+                if (code in setOf(
+                        HttpURLConnection.HTTP_MOVED_PERM,
+                        HttpURLConnection.HTTP_MOVED_TEMP,
+                        HttpURLConnection.HTTP_SEE_OTHER,
+                        307,
+                        308,
+                    )
+                ) {
+                    val location = connection.getHeaderField("Location")
+                        ?: error("Extension redirect is missing a target")
+                    endpoint = URL(endpoint, location)
+                    require(endpoint.protocol == "https") {
+                        "Extension packages require HTTPS after redirects"
+                    }
+                    require(++redirects <= 5) { "Too many extension redirects" }
+                    connection.disconnect()
+                    continue
+                }
+                check(code == HttpURLConnection.HTTP_OK) {
+                    "Extension download failed with HTTP $code"
+                }
+                activeConnection = connection
+                input = connection.getInputStream()
+                break
             }
-            connection.getInputStream().use { input ->
+            input.use { source ->
                 temporary.outputStream().use { output ->
+
                     val buffer = ByteArray(8192)
                     var total = 0L
                     while (true) {
-                        val count = input.read(buffer)
+                        val count = source.read(buffer)
                         if (count == -1) break
                         total += count
                         check(total <= 32L * 1024 * 1024) { "Extension package is too large" }
@@ -153,6 +201,7 @@ internal object CloudStreamRuntime {
                     }
                 }
             }
+            activeConnection?.disconnect()
             check(temporary.setReadOnly() && temporary.renameTo(file))
             try {
                 sources(activity, file)
@@ -296,20 +345,33 @@ internal object CloudStreamRuntime {
         }
     }
 
-    private suspend fun resolve(api: MainAPI, url: String, episodeData: String?): List<Map<String, Any?>> {
+    private suspend fun resolve(
+        api: MainAPI,
+        url: String,
+        episodeData: String?,
+        onFormat: (Map<String, Any?>) -> Unit
+    ): List<Map<String, Any?>> {
         val data = episodeData ?: defaultStreamData(api, url) ?: return emptyList()
-        val links = java.util.concurrent.ConcurrentLinkedQueue<ExtractorLink>()
+        val formats = java.util.concurrent.ConcurrentLinkedQueue<Map<String, Any?>>()
         withTimeoutOrNull(25000) {
-            providerCall(api) { api.loadLinks(data, false, {}, { links.add(it) }) }
-        }
-        return links.map {
-            val headers = it.headers.toMutableMap()
-            if (it.referer.isNotBlank() && headers.keys.none { key -> key.equals("referer", true) }) {
-                headers["Referer"] = it.referer
+            providerCall(api) {
+                api.loadLinks(data, false, {}, { link ->
+                    val row = linkRow(link)
+                    formats.add(row)
+                    onFormat(row)
+                })
             }
-            mapOf("url" to it.url, "name" to it.name, "quality" to it.quality,
-                "hls" to it.isM3u8, "headers" to headers)
         }
+        return formats.toList()
+    }
+
+    private fun linkRow(link: ExtractorLink): Map<String, Any?> {
+        val headers = link.headers.toMutableMap()
+        if (link.referer.isNotBlank() && headers.keys.none { key -> key.equals("referer", true) }) {
+            headers["Referer"] = link.referer
+        }
+        return mapOf("url" to link.url, "name" to link.name, "quality" to link.quality,
+            "hls" to link.isM3u8, "headers" to headers)
     }
 
     private suspend fun defaultStreamData(api: MainAPI, url: String): String? {

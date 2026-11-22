@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../models/site_model.dart';
 import '../theme/app_colors.dart';
 import 'remote_image.dart';
@@ -7,7 +8,6 @@ import 'remote_image.dart';
 class SpeedDialGrid extends StatelessWidget {
   final List<SiteModel> sites;
   final Function(SiteModel) onSiteTap;
-  final VoidCallback onAddBookmark;
   final Function(SiteModel)? onEditBookmark;
   final Function(SiteModel)? onDeleteBookmark;
 
@@ -15,7 +15,6 @@ class SpeedDialGrid extends StatelessWidget {
     super.key,
     required this.sites,
     required this.onSiteTap,
-    required this.onAddBookmark,
     this.onEditBookmark,
     this.onDeleteBookmark,
   });
@@ -52,12 +51,22 @@ class SpeedDialGrid extends StatelessWidget {
                       placeholderIcon: Icons.language_rounded,
                     ),
                   ),
-                  title: Text(site.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(site.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  title: Text(
+                    site.title,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    site.url,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.open_in_browser_rounded, color: AppColors.primary),
+                  leading: const Icon(
+                    Icons.open_in_browser_rounded,
+                    color: AppColors.primary,
+                  ),
                   title: const Text('Open in In-App Browser'),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -65,7 +74,10 @@ class SpeedDialGrid extends StatelessWidget {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: AppColors.accentGold),
+                  leading: const Icon(
+                    Icons.edit_outlined,
+                    color: AppColors.accentGold,
+                  ),
                   title: const Text('Edit Bookmark'),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -89,8 +101,14 @@ class SpeedDialGrid extends StatelessWidget {
                 ),
                 if (site.isCustom || onDeleteBookmark != null)
                   ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded, color: AppColors.accentRed),
-                    title: const Text('Delete Bookmark', style: TextStyle(color: AppColors.accentRed)),
+                    leading: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppColors.accentRed,
+                    ),
+                    title: const Text(
+                      'Delete Bookmark',
+                      style: TextStyle(color: AppColors.accentRed),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       onDeleteBookmark?.call(site);
@@ -106,147 +124,92 @@ class SpeedDialGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final displayedSites = sites;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final labelHeight = MediaQuery.textScalerOf(context).scale(12);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 650 ? 8 : 4;
-
+        final columns = constraints.maxWidth >= 680
+            ? 6
+            : constraints.maxWidth >= 272 && labelHeight <= 16
+            ? 4
+            : 3;
         return GridView.builder(
           physics: const NeverScrollableScrollPhysics(),
           shrinkWrap: true,
-          itemCount: displayedSites.length + 1,
+          padding: EdgeInsets.zero,
+          itemCount: sites.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 12,
-            mainAxisExtent: 88,
+            crossAxisCount: columns,
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 4,
+            mainAxisExtent: 59 + labelHeight * 2.4,
           ),
           itemBuilder: (context, index) {
-            if (index == displayedSites.length) {
-              return _buildAddTile(isDark);
-            }
-            final site = displayedSites[index];
-            return _buildSiteTile(context, site, isDark);
+            final site = sites[index];
+            final brand = Color(site.colorHex);
+            final glow = brand.computeLuminance() < .02
+                ? const Color(0xFF25C9BA)
+                : brand;
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => onSiteTap(site),
+                onLongPress: () => _showSiteOptions(context, site),
+                child: Tooltip(
+                  message: site.title,
+                  triggerMode: TooltipTriggerMode.manual,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            gradient: RadialGradient(
+                              colors: [
+                                glow.withValues(alpha: isDark ? .28 : .21),
+                                glow.withValues(alpha: isDark ? .10 : .07),
+                                glow.withValues(alpha: 0),
+                              ],
+                              stops: const [0, .64, 1],
+                            ),
+                          ),
+                          child: SmartNetworkImage(
+                            url: site.icon,
+                            width: 32,
+                            height: 32,
+                            fit: BoxFit.contain,
+                            placeholderIcon: Icons.public_rounded,
+                            accentColor: isDark ? glow : brand,
+                          ),
+                        ),
+                        Flexible(
+                          child: Text(
+                            site.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontSize: 12,
+                              height: 1.15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
           },
         );
       },
-    );
-  }
-
-  Widget _buildSiteTile(BuildContext context, SiteModel site, bool isDark) {
-    final siteColor = Color(site.colorHex);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => onSiteTap(site),
-            onLongPress: () => _showSiteOptions(context, site),
-            borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: siteColor.withValues(alpha: isDark ? 0.10 : 0.06),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SmartNetworkImage(
-                        url: site.icon,
-                        width: 24,
-                        height: 24,
-                        fit: BoxFit.contain,
-                        placeholderIcon: Icons.public_rounded,
-                        accentColor: siteColor,
-                      ),
-                    ),
-                  ),
-                ),
-                if (site.isCustom)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: AppColors.accentGold,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.star, color: Colors.black, size: 8),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        SizedBox(
-          width: 72,
-          child: Text(
-            site.title,
-            maxLines: 1,
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAddTile(bool isDark) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onAddBookmark,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCard : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.add_rounded,
-                    color: AppColors.primary,
-                    size: 26,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'Add',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-            ),
-          ),
-        ],
     );
   }
 }

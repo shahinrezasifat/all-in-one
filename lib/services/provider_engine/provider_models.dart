@@ -7,6 +7,29 @@ library;
 
 import '../../models/movie_model.dart';
 
+/// Normalize a resolution only when the provider supplies one.
+String providerResolution(
+  String quality, {
+  Iterable<String> labels = const [],
+}) {
+  final explicitHeight = RegExp(
+    r'^(2160|1440|1080|720|576|540|480|360|240|144)p?$',
+    caseSensitive: false,
+  ).firstMatch(quality.trim());
+  if (explicitHeight != null) return '${explicitHeight[1]}p';
+  for (final value in [quality, ...labels]) {
+    final height = RegExp(
+      r'\b(2160|1440|1080|720|576|540|480|360|240|144)p\b',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (height != null) return '${height[1]}p';
+    if (RegExp(r'\b4[ .-]?k\b|\bUHD\b', caseSensitive: false).hasMatch(value)) {
+      return '2160p';
+    }
+  }
+  return 'Auto';
+}
+
 class ProviderStream {
   final String url;
   final String quality;

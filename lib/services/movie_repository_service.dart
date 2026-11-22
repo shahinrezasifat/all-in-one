@@ -192,6 +192,22 @@ class MovieRepositoryService extends ChangeNotifier {
     ];
   }
 
+  /// Loopback/emulator hosts are allowed to stay on HTTP (local test servers
+  /// and development endpoints); everything else must use HTTPS.
+  static String _httpsOnly(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'http') return url;
+    if (const {
+      'localhost',
+      '127.0.0.1',
+      '[::1]',
+      '10.0.2.2',
+    }.contains(uri.host)) {
+      return url;
+    }
+    return url.replaceFirst('http://', 'https://');
+  }
+
   static String normalizeRepoUrl(String input) {
     var url = input.trim();
     const schemes = {
@@ -204,12 +220,12 @@ class MovieRepositoryService extends ChangeNotifier {
       if (url.toLowerCase().startsWith(entry.key)) {
         final target = url.substring(entry.key.length);
         final scheme = Uri.tryParse(target)?.scheme.toLowerCase();
-        return scheme == 'https' || scheme == 'http'
-            ? target
-            : '${entry.value}$target';
+        if (scheme == 'http') return _httpsOnly(target);
+        return scheme == 'https' ? target : '${entry.value}$target';
       }
     }
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('http://')) return _httpsOnly(url);
+    if (url.startsWith('https://')) return url;
     // A bare host/path (e.g. raw.githubusercontent.com/.../repo.json) is a URL
     // too; only genuinely scheme-less shortcodes are left untouched.
     if (url.contains('.') && !url.contains(' ')) return 'https://$url';

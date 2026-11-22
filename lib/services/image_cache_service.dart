@@ -60,13 +60,12 @@ class ImageCacheService {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
   static final HttpClient _client = () {
-    final c = HttpClient()
+    // Keep full TLS validation — accepting every certificate would expose
+    // every thumbnail/poster request to man-in-the-middle attacks.
+    return HttpClient()
       ..userAgent = _userAgent
       ..connectionTimeout = const Duration(seconds: 10)
       ..idleTimeout = const Duration(seconds: 10);
-    // Some image CDNs present an incomplete chain to non-browser stacks.
-    c.badCertificateCallback = (cert, host, port) => true;
-    return c;
   }();
 
   /// Restores the on-disk index. Awaited lazily by every entry point, so
@@ -83,8 +82,10 @@ class ImageCacheService {
       for (final e in dir.listSync().whereType<File>()) {
         try {
           final stat = e.statSync();
-          _index[e.uri.pathSegments.last] =
-              _DiskEntry(stat.size, stat.modified);
+          _index[e.uri.pathSegments.last] = _DiskEntry(
+            stat.size,
+            stat.modified,
+          );
           _diskBytes += stat.size;
         } catch (_) {}
       }
@@ -196,8 +197,10 @@ class ImageCacheService {
       final uri = Uri.parse(url);
       if (uri.scheme != 'http' && uri.scheme != 'https') return null;
       final req = await _client.openUrl('GET', uri);
-      req.headers.set(HttpHeaders.acceptHeader,
-          'image/avif,image/webp,image/apng,image/png,image/*;q=0.8,*/*;q=0.5');
+      req.headers.set(
+        HttpHeaders.acceptHeader,
+        'image/avif,image/webp,image/apng,image/png,image/*;q=0.8,*/*;q=0.5',
+      );
       req.followRedirects = true;
       final res = await req.close().timeout(const Duration(seconds: 12));
       if (res.statusCode < 200 || res.statusCode >= 300) {

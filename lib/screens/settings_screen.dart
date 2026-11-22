@@ -22,8 +22,7 @@ import 'zangetsu_providers_hub_screen.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static const String _githubUsername = 'shahinrezasifat';
-  static const String _githubProfile = 'https://github.com/$_githubUsername';
+  static const String _githubProfile = GithubProfileService.profileUrl;
 
   Future<void> _openGithub(BuildContext context) async {
     try {
@@ -406,31 +405,8 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(height: 10),
 
                     _aboutCard(context, accent, isDark, secondaryText),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      leading: Icon(Icons.system_update_outlined, color: accent),
-                      title: const Text('Check for updates'),
-                      subtitle: const Text('GitHub Releases'),
-                      onTap: () async {
-                        final messenger = ScaffoldMessenger.of(context);
-                        messenger
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(const SnackBar(
-                            content: Text('Checking GitHub for updates…'),
-                          ));
-                        final installed = await installedAndroidVersion;
-                        final update = await requestAppUpdate();
-                        if (!context.mounted || !messenger.mounted) return;
-                        messenger.hideCurrentSnackBar();
-                        if (update == null) {
-                          messenger.showSnackBar(SnackBar(content: Text(
-                            installed == null
-                                ? 'APK updates are available on Android.'
-                                : 'No newer release found. Check your connection if you expected an update.',
-                          )));
-                        }
-                      },
-                    ),
+                    const SizedBox(height: 10),
+                    _updateCard(context, accent, isDark, secondaryText),
                   ],
                 ),
               ),
@@ -583,6 +559,133 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
+  // Update card — a clear, tappable call to action instead of a plain list row.
+  // ---------------------------------------------------------------------------
+  Widget _updateCard(
+    BuildContext context,
+    Color accent,
+    bool isDark,
+    Color secondaryText,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () async {
+          final messenger = ScaffoldMessenger.of(context);
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(content: Text('Checking GitHub for updates…')),
+            );
+          final installed = await installedAndroidVersion;
+          final update = await requestAppUpdate();
+          if (!context.mounted || !messenger.mounted) return;
+          messenger.hideCurrentSnackBar();
+          if (update == null) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  installed == null ? 'APK updates are available on Android.' : 'No newer release found. Check your connection if you expected an update.',
+                ),
+              ),
+            );
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkCard : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accent.withValues(alpha: .18)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? .24 : .06),
+                blurRadius: 16,
+                spreadRadius: -8,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: .26),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.system_update_rounded,
+                  color: Colors.white,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Check for updates',
+                      style: TextStyle(
+                        color: isDark
+                            ? Colors.white
+                            : AppColors.lightTextPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'GitHub Releases',
+                      style: TextStyle(color: secondaryText, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: accent.withValues(alpha: .20)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Check now',
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_rounded, size: 14, color: accent),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // About card — modern, tidy, with a clear developer entry
   // ---------------------------------------------------------------------------
   Widget _aboutCard(
@@ -604,7 +707,6 @@ class SettingsScreen extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -614,10 +716,9 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.bolt_rounded,
-                  color: Colors.white,
-                  size: 25,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset('assets/images/app_logo.png'),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1014,7 +1115,7 @@ class SettingsScreen extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'github.com/$_githubUsername',
+                            'github.com/${GithubProfileService.username}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +11,7 @@ import '../services/bookmark_service.dart';
 import '../services/download_manager.dart';
 import '../services/system_ui_service.dart';
 import '../services/player_service.dart';
+import '../screens/audio_player_screen.dart';
 import '../services/playback_controls.dart';
 import '../services/search_service.dart';
 import '../theme/app_colors.dart';
@@ -34,8 +34,7 @@ class YouTubePopupPlayer extends StatefulWidget {
   State<YouTubePopupPlayer> createState() => _YouTubePopupPlayerState();
 }
 
-class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
-    with SingleTickerProviderStateMixin {
+class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
   bool _showControls = true;
   bool _fullscreen = false;
   final _zoom = ValueNotifier<double>(1);
@@ -140,8 +139,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
     if (!PlayerService.instance.isExpanded) {
       unawaited(_playbackControls.restoreBrightness());
     }
-    if (_fullscreen && !PlayerService.instance.isExpanded)
+    final player = PlayerService.instance;
+    if (_fullscreen && (!player.isExpanded || player.isAudioView)) {
       _setFullscreen(false);
+    }
   }
 
   double? _seekPreview;
@@ -201,16 +202,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
   Timer? _doubleTapTimer;
 
   // Audio wave visualizer animation
-  late AnimationController _waveController;
 
   @override
   void initState() {
     super.initState();
     PlayerService.instance.addListener(_restoreOrientationIfHidden);
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
   }
 
   @override
@@ -221,103 +217,248 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
     _hudTimer?.cancel();
     _doubleTapTimer?.cancel();
     _zoom.dispose();
-    _waveController.dispose();
     super.dispose();
-  }
-
-  void _handleDownload(BuildContext context, String videoUrl) async {
-    await analyzeAndPickFormat(context, url: videoUrl);
   }
 
   // ---------------------------------------------------------------------------
   // Advanced Settings Bottom Sheet (Comprehensive Options)
   // ---------------------------------------------------------------------------
-  void _showQualityPicker(BuildContext context, PlayerService player) {
-    final qualities = [
-      'Auto (Adaptive)',
-      '4K Ultra HD (2160p)',
-      '1080p Full HD (60fps)',
-      '720p HD',
-      '480p SD',
-      '360p Data Saver',
-    ];
+  /// One modern sheet used by both quality and spoken-audio pickers.
+  void _showPlayerOptionSheet<T>({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required List<({String label, String? subtitle, T value})> options,
+    required T? selected,
+    required Future<bool> Function(T value) onSelect,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.darkCard : Colors.white;
+    final border = isDark ? AppColors.darkBorder : AppColors.lightBorder;
+    final accent = isDark ? AppColors.primaryLight : AppColors.primary;
+    final secondary = isDark
+        ? AppColors.darkTextSecondary
+        : AppColors.lightTextSecondary;
+
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? .45 : .14),
+              blurRadius: 26,
+              spreadRadius: -8,
+              offset: const Offset(0, -6),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(2),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 10, bottom: 14),
+                  decoration: BoxDecoration(
+                    color: secondary.withValues(alpha: .4),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.tune_rounded,
-                      color: AppColors.primary,
-                      size: 20,
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 21),
                     ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Select Video Quality',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: isDark
+                              ? Colors.white
+                              : AppColors.lightTextPrimary,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const Divider(),
-              ...qualities.map((q) {
-                final token = q.split(' ').first;
-                final isSelected =
-                    player.selectedQuality == token ||
-                    (token == 'Auto' && player.selectedQuality.isEmpty);
-                return ListTile(
-                  title: Text(
-                    q,
-                    style: TextStyle(
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(
-                          Icons.check_circle_rounded,
-                          color: AppColors.primary,
-                        )
-                      : null,
-                  onTap: () {
-                    player.setQuality(token);
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Switched quality to $q'),
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
+              const SizedBox(height: 12),
+              Divider(height: 1, color: border),
+              Flexible(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                  itemCount: options.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, index) {
+                    final option = options[index];
+                    final isSelected = option.value == selected;
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () async {
+                          final ok = await onSelect(option.value);
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? 'Switched to ${option.label}'
+                                    : (playerErrorMessage(context) ??
+                                          'Could not switch this stream.'),
+                              ),
+                              duration: const Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? accent.withValues(alpha: .10)
+                                : (isDark
+                                      ? Colors.white.withValues(alpha: .04)
+                                      : AppColors.lightBg),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? accent.withValues(alpha: .28)
+                                  : border,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      option.label,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w800
+                                            : FontWeight.w600,
+                                        color: isSelected
+                                            ? accent
+                                            : (isDark
+                                                  ? Colors.white
+                                                  : AppColors.lightTextPrimary),
+                                      ),
+                                    ),
+                                    if (option.subtitle != null) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        option.subtitle!,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: secondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              if (isSelected)
+                                Icon(
+                                  Icons.check_circle_rounded,
+                                  color: accent,
+                                  size: 21,
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     );
                   },
-                );
-              }),
+                ),
+              ),
             ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  String? playerErrorMessage(BuildContext context) {
+    final error = PlayerService.instance.switchingError;
+    // The error is cleared on the next attempt; read it before the sheet pops.
+    return error;
+  }
+
+  void _showQualityPicker(BuildContext context, PlayerService player) {
+    final discovered = player.availableQualities;
+    final options = discovered.isNotEmpty
+        ? discovered
+              .map(
+                (format) => (
+                  label: format.label,
+                  subtitle: format.videoOnly
+                      ? 'HD · needs audio merge'
+                      : 'Playable directly',
+                  value: format.label,
+                ),
+              )
+              .toList()
+        : [
+            (label: 'Auto', subtitle: 'Best available', value: 'Auto'),
+            (label: '1080p', subtitle: 'Full HD', value: '1080p'),
+            (label: '720p', subtitle: 'HD', value: '720p'),
+            (label: '480p', subtitle: 'SD', value: '480p'),
+            (label: '360p', subtitle: 'Data saver', value: '360p'),
+          ];
+    _showPlayerOptionSheet<String>(
+      context: context,
+      title: 'Select Video Quality',
+      icon: Icons.tune_rounded,
+      options: options,
+      selected: player.selectedQuality,
+      onSelect: player.setQuality,
+    );
+  }
+
+  void _showAudioTrackPicker(BuildContext context, PlayerService player) {
+    _showPlayerOptionSheet<String>(
+      context: context,
+      title: 'Audio Language',
+      icon: Icons.audiotrack_rounded,
+      options: [
+        for (final track in player.audioLanguages)
+          (
+            label: track.name,
+            subtitle: track.isDefault ? 'Original audio' : 'Dubbed track',
+            value: track.id,
+          ),
+      ],
+      selected: player.selectedAudioTrackId,
+      onSelect: player.setAudioTrack,
     );
   }
 
@@ -542,6 +683,25 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
           return _buildMiniPlayer(context, player, isDark);
         }
 
+        if (player.isAudioView) {
+          return Positioned.fill(
+            child: PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) {
+                if (!didPop) player.minimize();
+              },
+              child: AudioPlayerView(
+                player: player,
+                onMinimize: player.minimize,
+                onClose: player.close,
+                onVideo: player.canReturnToVideo
+                    ? player.toggleAudioOnly
+                    : null,
+              ),
+            ),
+          );
+        }
+
         if (_fullscreen) {
           return Positioned.fill(
             child: PopScope(
@@ -726,15 +886,17 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
-                                // 1. Download
-                                _buildActionButton(
-                                  icon: Icons.download_rounded,
-                                  label: 'Download',
-                                  isHighlight: true,
-                                  onTap: () =>
-                                      _handleDownload(context, player.filePath),
-                                ),
-                                const SizedBox(width: 8),
+                                if (player.downloadSourceUrl
+                                    case final url?) ...[
+                                  _buildActionButton(
+                                    icon: Icons.download_rounded,
+                                    label: 'Download',
+                                    isHighlight: true,
+                                    onTap: () =>
+                                        analyzeAndPickFormat(context, url: url),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
 
                                 // 6. Like Button
                                 _buildActionButton(
@@ -1235,15 +1397,8 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // 1. VIDEO SURFACE OR AUDIO ONLY CANVAS
-                if (player.isAudioOnly)
-                  _buildAudioOnlyCanvas(player)
-                else if (player.isEngineActive &&
-                    !player.isAudio &&
-                    player.engine != null)
+                if (player.isEngineActive && player.engine != null)
                   _buildVideoPlayerWithAspect(player)
-                else if (player.isAudio)
-                  _buildAudioOnlyCanvas(player)
                 else
                   SmartNetworkImage(
                     url: player.thumbnailUrl,
@@ -1774,19 +1929,39 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
                               SizedBox(
                                 width: 64,
                                 child: TextButton(
-                                  onPressed: () =>
-                                      _showQualityPicker(context, player),
+                                  onPressed: player.isSwitchingSource
+                                      ? null
+                                      : () =>
+                                            _showQualityPicker(context, player),
                                   style: TextButton.styleFrom(
                                     foregroundColor: Colors.white,
                                     padding: EdgeInsets.zero,
                                   ),
-                                  child: Text(
-                                    player.selectedQuality,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  child: player.isSwitchingSource
+                                      ? SizedBox.square(
+                                          dimension: 15,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            value: player.switchProgress > 0
+                                                ? player.switchProgress
+                                                : null,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          player.selectedQuality,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                 ),
                               ),
+                              if (player.hasMultipleAudioTracks)
+                                _controlIcon(
+                                  'Audio language',
+                                  Icons.audiotrack_rounded,
+                                  () => _showAudioTrackPicker(context, player),
+                                  active: player.selectedAudioTrackId != null,
+                                ),
                               _controlIcon(
                                 'Playback speed',
                                 Icons.speed_rounded,
@@ -1935,189 +2110,23 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer>
   }
 
   void _showSpeedPicker(BuildContext context, PlayerService player) {
-    showModalBottomSheet<void>(
+    _showPlayerOptionSheet<double>(
       context: context,
-      showDragHandle: true,
-      builder: (sheet) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Playback speed',
-                style: Theme.of(sheet).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
-                    ChoiceChip(
-                      label: Text('${speed}×'),
-                      selected: player.playbackSpeed == speed,
-                      side: BorderSide.none,
-                      onSelected: (_) {
-                        player.setSpeed(speed);
-                        Navigator.pop(sheet);
-                      },
-                    ),
-                ],
-              ),
-            ],
+      title: 'Playback Speed',
+      icon: Icons.speed_rounded,
+      options: [
+        for (final speed in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
+          (
+            label: '${speed}×',
+            subtitle: speed == 1.0 ? 'Normal speed' : null,
+            value: speed,
           ),
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Dedicated Audio-Only Canvas with Visualizer & Background Playback
-  // ---------------------------------------------------------------------------
-  Widget _buildAudioOnlyCanvas(PlayerService player) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0F172A), Color(0xFF020617)],
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Glowing Turntable / Album Art
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF1DB954).withValues(alpha: 0.35),
-                        blurRadius: 24,
-                        spreadRadius: 4,
-                      ),
-                    ],
-                  ),
-                ),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(40),
-                  child: SmartNetworkImage(
-                    url: player.thumbnailUrl,
-                    width: 74,
-                    height: 74,
-                    fit: BoxFit.cover,
-                    placeholderColor: Colors.black,
-                    placeholderIcon: Icons.music_note_rounded,
-                    accentColor: const Color(0xFF1DB954),
-                  ),
-                ),
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: const BoxDecoration(
-                    color: Colors.black87,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.headphones_rounded,
-                    color: Color(0xFF1DB954),
-                    size: 14,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Animated Audio Frequency Bars
-            AnimatedBuilder(
-              animation: _waveController,
-              builder: (context, _) {
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(12, (index) {
-                    final factor = math
-                        .sin((_waveController.value * math.pi) + (index * 0.4))
-                        .abs();
-                    final barHeight = player.isPlaying
-                        ? (6 + (factor * 16))
-                        : 4.0;
-                    return Container(
-                      width: 3.5,
-                      height: barHeight,
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1DB954)
-                            .withValues(alpha: 0.7 + (factor * 0.3)),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    );
-                  }),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-
-            // Title & Author
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                player.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '${player.author} • Pure Audio Stream (Background)',
-              style: const TextStyle(
-                color: Color(0xFF1DB954),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // Switch to Video Mode Button
-            OutlinedButton.icon(
-              icon: const Icon(
-                Icons.videocam_rounded,
-                size: 14,
-                color: Colors.white70,
-              ),
-              label: const Text(
-                'Switch to Video Mode',
-                style: TextStyle(fontSize: 10.5, color: Colors.white70),
-              ),
-              style: OutlinedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () => player.toggleAudioOnly(),
-            ),
-          ],
-        ),
-      ),
+      ],
+      selected: player.playbackSpeed,
+      onSelect: (speed) async {
+        player.setSpeed(speed);
+        return true;
+      },
     );
   }
 
