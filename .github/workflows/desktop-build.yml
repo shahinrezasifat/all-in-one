@@ -115,7 +115,7 @@ jobs:
           "$1/snaptube_pure" > desktop-smoke.log 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
-          if ! timeout 45s xdotool search --sync --onlyvisible --name '^All in One$' >/dev/null; then
+          if ! timeout 45s xdotool search --sync --onlyvisible --name '^(All in One|Tub Pure)$' >/dev/null; then
             xwininfo -root -tree
             cat desktop-smoke.log
             exit 1
