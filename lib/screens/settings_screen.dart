@@ -1,55 +1,34 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_update_service.dart';
 import '../services/download_manager.dart';
 import '../services/github_profile_service.dart';
 import '../services/image_cache_service.dart';
+import '../services/live_score_service.dart';
 import '../services/movie_repository_service.dart';
 import '../services/permission_service.dart';
 import '../services/settings_service.dart';
 import '../services/storage_service.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../widgets/folder_picker_sheet.dart';
 import '../widgets/permission_dialog.dart';
 import 'developer_screen.dart';
 import 'zangetsu_providers_hub_screen.dart';
 
-/// Settings is deliberately visual: every preference is shown as an icon tile
-/// plus a control the user can *see* (chips, bars, mini theme previews) so the
-/// screen stays scannable without paragraphs of explanation.
+/// Minimal, clean, modern Settings UI.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  static String _githubProfile = GithubProfileService.profileUrl;
-
-  Future<void> _openGithub(BuildContext context) async {
-    try {
-      if (await launchUrl(
-        Uri.parse(_githubProfile),
-        mode: LaunchMode.externalApplication,
-      )) {
-        return;
-      }
-    } on PlatformException {
-      // no handler installed
-    }
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Could not open GitHub.')));
-  }
 
   Future<void> _checkForUpdates(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(content: Text('Checking GitHub for updates…')),
+        const SnackBar(content: Text('Checking GitHub for updates…')),
       );
     final installed = await installedAndroidVersion;
     final update = await requestAppUpdate();
@@ -61,8 +40,7 @@ class SettingsScreen extends StatelessWidget {
           content: Text(
             installed == null
                 ? 'APK updates are available on Android.'
-                : 'No newer release found. Check your connection if you '
-                      'expected an update.',
+                : 'No newer release found. Check your connection if you expected an update.',
           ),
         ),
       );
@@ -89,243 +67,94 @@ class SettingsScreen extends StatelessWidget {
         if (!storage.isLoaded) unawaited(storage.ensureLoaded());
 
         return Scaffold(
-          body: Stack(
-            children: [
-              Positioned.fill(child: _ambientBackground(accent, isDark)),
-              SafeArea(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    12,
-                    16,
-                    28 + MediaQuery.paddingOf(context).bottom,
-                  ),
+          body: SafeArea(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                16,
+                18,
+                28 + MediaQuery.paddingOf(context).bottom,
+              ),
+              children: [
+                // Minimal Header
+                _buildHeader(context, isDark, accent),
+                const SizedBox(height: 20),
+
+                // 1. Storage & Files Group
+                _sectionHeader(context, 'Storage & Files', Icons.folder_special_rounded, accent),
+                const SizedBox(height: 8),
+                _groupCard(
+                  isDark: isDark,
+                  accent: accent,
                   children: [
-                    _buildHeader(isDark, accent),
-                    SizedBox(height: 14),
-
-                    _sectionTitle(
-                      'Storage',
-                      Icons.folder_special_rounded,
-                      accent,
-                    ),
-                    SizedBox(height: 10),
-                    _permissionCard(isDark, accent, secondaryText, downloadMgr),
-                    SizedBox(height: 10),
-                    _storageCard(context, isDark, accent, secondaryText),
-                    SizedBox(height: 10),
-                    _locationCard(
-                      context,
-                      isDark,
-                      accent,
-                      secondaryText,
-                      downloadMgr,
-                      storage,
-                    ),
-                    SizedBox(height: 10),
-                    _cacheCard(context, isDark, accent, secondaryText),
-                    SizedBox(height: 22),
-
-                    _sectionTitle(
-                      'Downloads',
-                      Icons.download_rounded,
-                      accent,
-                    ),
-                    SizedBox(height: 10),
-                    _parallelCard(settings, isDark, accent, secondaryText),
-                    SizedBox(height: 10),
-                    _qualityCard(settings, isDark, accent),
-                    SizedBox(height: 10),
-                    _audioCard(settings, isDark, accent),
-                    SizedBox(height: 22),
-
-                    _sectionTitle(
-                      'Movie & TV Sources',
-                      Icons.extension_rounded,
-                      accent,
-                    ),
-                    SizedBox(height: 10),
-                    _providerHubCard(context, isDark, accent, secondaryText),
-                    SizedBox(height: 22),
-
-                    _sectionTitle('Privacy & Content', Icons.shield_rounded, accent),
-                    SizedBox(height: 10),
-                    _adultCard(settings, isDark, accent, secondaryText),
-                    SizedBox(height: 22),
-
-                    _sectionTitle(
-                      'Appearance',
-                      Icons.palette_rounded,
-                      accent,
-                    ),
-                    SizedBox(height: 10),
-                    _themeCard(isDark, accent, settings),
-                    SizedBox(height: 22),
-
-                    _sectionTitle(
-                      'About & Updates',
-                      Icons.info_outline_rounded,
-                      accent,
-                    ),
-                    SizedBox(height: 10),
-                    _aboutCard(context, isDark, accent, secondaryText),
-                    const SizedBox(height: 10),
-                    _developerRow(context, accent, isDark),
+                    _permissionRow(context, isDark, accent, secondaryText, downloadMgr),
+                    _divider(isDark),
+                    _storageRow(context, isDark, accent, secondaryText, storage, downloadMgr),
+                    _divider(isDark),
+                    _locationRow(context, isDark, accent, secondaryText, downloadMgr, storage),
+                    _divider(isDark),
+                    _cacheRow(context, isDark, accent, secondaryText),
                   ],
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+                const SizedBox(height: 22),
 
-  // ---------------------------------------------------------------------------
-  // Header
-  // ---------------------------------------------------------------------------
-  Widget _buildHeader(bool isDark, Color accent) {
-    final p = AppPalette.current;
-    return Row(
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            gradient: p.primaryGradient,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: p.tint(p.primary, .28),
-                blurRadius: 16,
-                offset: Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.settings_suggest_rounded,
-            color: p.onPrimary,
-            size: 26,
-          ),
-        ),
-        SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Settings',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 23,
-                  letterSpacing: -.6,
-                  color: p.textPrimary,
+                // 2. Downloads Preference Group
+                _sectionHeader(context, 'Download Preferences', Icons.download_rounded, accent),
+                const SizedBox(height: 8),
+                _groupCard(
+                  isDark: isDark,
+                  accent: accent,
+                  children: [
+                    _parallelRow(context, settings, isDark, accent, secondaryText),
+                    _divider(isDark),
+                    _qualityRow(context, settings, isDark, accent, secondaryText),
+                    _divider(isDark),
+                    _audioRow(context, settings, isDark, accent, secondaryText),
+                  ],
                 ),
-              ),
-              SizedBox(height: 3),
-              Text(
-                'Manage downloads, privacy, and appearance',
-                style: TextStyle(color: p.textSecondary, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+                const SizedBox(height: 22),
 
-  // ---------------------------------------------------------------------------
-  // Developer (single slim row → GitHub)
-  // ---------------------------------------------------------------------------
-  Widget _developerRow(BuildContext context, Color accent, bool isDark) {
-    final secondary = context.palette.textSecondary;
+                // 3. Streaming & Content Group
+                _sectionHeader(context, 'Streaming & Content', Icons.movie_filter_rounded, accent),
+                const SizedBox(height: 8),
+                _groupCard(
+                  isDark: isDark,
+                  accent: accent,
+                  children: [
+                    _providerHubRow(context, isDark, accent, secondaryText),
+                    _divider(isDark),
+                    _adultRow(settings, isDark, accent, secondaryText),
+                  ],
+                ),
+                const SizedBox(height: 22),
 
-    return FutureBuilder<GithubProfile?>(
-      future: GithubProfileService.fetch(),
-      builder: (context, snapshot) {
-        final profile = snapshot.data;
-        final avatarUrl =
-            profile?.avatarUrl ??
-            Uri.parse(
-              'https://github.com/${GithubProfileService.username}.png',
-            );
-        final name = profile?.displayName ?? 'S. M. Shahin Reza Sifat';
+                // 4. Appearance Group
+                _sectionHeader(context, 'Appearance', Icons.palette_rounded, accent),
+                const SizedBox(height: 8),
+                _groupCard(
+                  isDark: isDark,
+                  accent: accent,
+                  children: [
+                    _themeRow(isDark, accent, settings),
+                  ],
+                ),
+                const SizedBox(height: 22),
 
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _openGithub(context),
-            borderRadius: BorderRadius.circular(20),
-            child: _glass(
-              isDark: isDark,
-              accent: accent,
-              padding: EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 10,
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: ClipOval(
-                      child: Image.network(
-                        avatarUrl.toString(),
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stack) => Container(
-                          color: accent.withValues(alpha: .16),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'SR',
-                            style: TextStyle(
-                              color: accent,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                            color: context.palette.textPrimary,
-                          ),
-                        ),
-                        SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Icon(Icons.code_rounded, size: 12, color: accent),
-                            SizedBox(width: 4),
-                            Text(
-                              'GitHub profile',
-                              style: TextStyle(
-                                color: accent,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: .8,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: secondary),
-                ],
-              ),
+                // 5. About & Developer Group
+                _sectionHeader(context, 'About & Updates', Icons.info_outline_rounded, accent),
+                const SizedBox(height: 8),
+                _groupCard(
+                  isDark: isDark,
+                  accent: accent,
+                  children: [
+                    _aboutRow(context, isDark, accent, secondaryText),
+                    _divider(isDark),
+                    _liveApiRow(context, isDark, accent, secondaryText),
+                    _divider(isDark),
+                    _developerTile(context, accent, isDark, secondaryText),
+                  ],
+                ),
+              ],
             ),
           ),
         );
@@ -334,9 +163,94 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
-  // Storage & permissions
+  // Header & Section Wrappers
   // ---------------------------------------------------------------------------
-  Widget _permissionCard(
+  Widget _buildHeader(BuildContext context, bool isDark, Color accent) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Settings',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 24,
+            letterSpacing: -0.6,
+            color: p.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          'Customize your downloads, sources, and theme',
+          style: TextStyle(
+            color: p.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String title, IconData icon, Color accent) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: accent),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: context.palette.textPrimary,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _groupCard({
+    required bool isDark,
+    required Color accent,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1B1E2B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0x22FFFFFF) : Colors.black12,
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _divider(bool isDark) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: isDark ? const Color(0x1AFFFFFF) : Colors.grey.shade200,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Storage & Permissions Rows
+  // ---------------------------------------------------------------------------
+  Widget _permissionRow(
+    BuildContext context,
     bool isDark,
     Color accent,
     Color secondaryText,
@@ -349,16 +263,12 @@ class SettingsScreen extends StatelessWidget {
       ]).then((results) => {'storage': results[0], 'notification': results[1]}),
       builder: (context, snapshot) {
         final storageOk = snapshot.data?['storage'] ?? false;
-        final notifOk = snapshot.data?['notification'] ?? false;
-        final isPublic = downloadMgr.isPublicStorage;
         final statusColor = storageOk
             ? context.palette.success
             : context.palette.info;
 
-        return _glass(
-          isDark: isDark,
-          accent: accent,
-          padding: const EdgeInsets.all(12),
+        return Padding(
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -370,86 +280,33 @@ class SettingsScreen extends StatelessWidget {
                         : Icons.gpp_maybe_rounded,
                     statusColor,
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'App Permissions',
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 14,
                           ),
                         ),
-                        SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: statusColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              storageOk ? 'All granted' : 'Action needed',
-                              style: TextStyle(
-                                color: secondaryText,
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 2),
+                        Text(
+                          storageOk ? 'All storage & alert permissions granted' : 'Action needed for downloads',
+                          style: TextStyle(
+                            color: secondaryText,
+                            fontSize: 11.5,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-              SizedBox(height: 12),
-              Row(
-                children: [
-                  _permBadge(
-                    'Storage',
-                    storageOk,
-                    Icons.folder_rounded,
-                    isDark,
-                  ),
-                  SizedBox(width: 8),
-                  _permBadge(
-                    'Alerts',
-                    notifOk,
-                    Icons.notifications_rounded,
-                    isDark,
-                  ),
-                  SizedBox(width: 8),
-                  _permBadge(
-                    isPublic ? 'Public' : 'App only',
-                    isPublic,
-                    Icons.sd_card_rounded,
-                    isDark,
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _gradientButton(
-                      icon: Icons.security_update_good_rounded,
-                      label: 'Grant',
-                      accent: accent,
-                      onTap: () => PermissionDialog.show(context),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  _squareButton(
-                    icon: Icons.settings_rounded,
-                    accent: accent,
-                    tooltip: 'System settings',
-                    onTap: () => PermissionService.instance.openSettings(),
+                  _textPillButton(
+                    label: 'Grant',
+                    color: accent,
+                    onTap: () => PermissionDialog.show(context),
                   ),
                 ],
               ),
@@ -460,53 +317,14 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _permBadge(String label, bool isOk, IconData icon, bool isDark) {
-    final color = isOk ? AppPalette.current.success : AppPalette.current.info;
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        decoration: BoxDecoration(
-          color: isDark
-              ? AppPalette.current.tint(AppPalette.current.card, .05)
-              : AppPalette.current.tint(AppPalette.current.card, .7),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: .18)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isOk ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-              color: color,
-              size: 14,
-            ),
-            SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? AppPalette.current.textSecondary : AppPalette.current.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _storageCard(
+  Widget _storageRow(
     BuildContext context,
     bool isDark,
     Color accent,
     Color secondaryText,
+    StorageService storage,
+    DownloadManager downloads,
   ) {
-    final storage = StorageService.instance;
-    final downloads = DownloadManager.instance;
     final currentId = storage.locations.isNotEmpty ? storage.current.id : '';
 
     Future<void> choose(StorageLocation location) async {
@@ -532,45 +350,33 @@ class SettingsScreen extends StatelessWidget {
       debugPrint('Download root changed: $previous → ${selected.appFolder}');
     }
 
-    return _glass(
-      isDark: isDark,
-      accent: accent,
-      padding: const EdgeInsets.all(12),
+    return Padding(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               _iconTile(Icons.sd_storage_rounded, accent),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Storage Device',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                 ),
               ),
               if (storage.isMigrating)
-                SizedBox.square(
+                const SizedBox.square(
                   dimension: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
             ],
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 10),
           if (!storage.isLoaded || storage.locations.isEmpty)
-            Row(
-              children: [
-                Icon(
-                  Icons.storage_rounded,
-                  size: 15,
-                  color: accent.withValues(alpha: .6),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Detecting…',
-                  style: TextStyle(color: secondaryText, fontSize: 12),
-                ),
-              ],
+            Text(
+              'Detecting storage devices…',
+              style: TextStyle(color: secondaryText, fontSize: 12),
             )
           else
             Wrap(
@@ -601,25 +407,28 @@ class SettingsScreen extends StatelessWidget {
     required Color secondaryText,
     required VoidCallback onTap,
   }) {
-    final soft = isDark
-        ? AppPalette.current.tint(AppPalette.current.card, .05)
-        : AppPalette.current.tint(AppPalette.current.card, .75);
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
-          duration: Duration(milliseconds: 180),
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: selected ? accent.withValues(alpha: .12) : soft,
-            borderRadius: BorderRadius.circular(14),
+            color: selected
+                ? accent.withValues(alpha: 0.14)
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.grey.shade100),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected
-                  ? accent.withValues(alpha: .55)
-                  : (AppPalette.current.border),
+                  ? accent
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06)),
+              width: selected ? 1.5 : 1,
             ),
           ),
           child: Row(
@@ -631,24 +440,22 @@ class SettingsScreen extends StatelessWidget {
                     : location.kind == StorageKind.external
                         ? Icons.sd_card_rounded
                         : Icons.folder_open_rounded,
-                size: 16,
+                size: 15,
                 color: selected ? accent : secondaryText,
               ),
-              SizedBox(width: 7),
+              const SizedBox(width: 6),
               Text(
                 location.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   color: selected
                       ? accent
-                      : (isDark ? AppPalette.current.textSecondary : AppPalette.current.textPrimary),
+                      : (isDark ? Colors.white : Colors.black87),
                 ),
               ),
               if (selected) ...[
-                SizedBox(width: 5),
+                const SizedBox(width: 5),
                 Icon(Icons.check_circle_rounded, size: 14, color: accent),
               ],
             ],
@@ -658,8 +465,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// Native SAF picker first (Android), with an always-available in-app
-  /// folder browser as fallback. Never fails silently.
   Future<void> _pickDownloadFolder(
     BuildContext context,
     DownloadManager downloadMgr,
@@ -693,7 +498,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _locationCard(
+  Widget _locationRow(
     BuildContext context,
     bool isDark,
     Color accent,
@@ -703,23 +508,42 @@ class SettingsScreen extends StatelessWidget {
   ) {
     void chooseFolder() => _pickDownloadFolder(context, downloadMgr, storage);
 
-    return _buildSettingCard(
-      isDark: isDark,
-      accent: accent,
-      secondaryText: secondaryText,
-      icon: Icons.folder_open_rounded,
-      iconColor: accent,
-      title: 'Download Location',
-      subtitle: downloadMgr.downloadDirectory,
-      onTap: chooseFolder,
-      trailing: TextButton(
-        onPressed: chooseFolder,
-        child: const Text('Choose folder'),
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          _iconTile(Icons.folder_open_rounded, accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Download Location',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  downloadMgr.downloadDirectory,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: secondaryText, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _textPillButton(
+            label: 'Choose folder',
+            color: accent,
+            onTap: chooseFolder,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _cacheCard(
+  Widget _cacheRow(
     BuildContext context,
     bool isDark,
     Color accent,
@@ -733,69 +557,44 @@ class SettingsScreen extends StatelessWidget {
       builder: (context, snap) {
         final used = snap.data ?? ImageCacheService.instance.diskBytesUsed;
         final mb = used / 1048576;
-        final pct = (used / ImageCacheService.maxDiskBytes * 100)
-            .clamp(0, 100)
-            .toDouble();
         final usedLabel = mb < 1
             ? '${(used / 1024).toStringAsFixed(0)} KB'
             : '${mb.toStringAsFixed(1)} MB';
 
-        return _glass(
-          isDark: isDark,
-          accent: accent,
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        return Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  _iconTile(Icons.bolt_rounded, context.palette.success),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Cached Images',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          'Temporary artwork · $usedLabel / 50 MB',
-                          style: TextStyle(
-                            color: secondaryText,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      ],
+              _iconTile(Icons.bolt_rounded, context.palette.success),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cached Artwork',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                     ),
-                  ),
-                  _textButton(
-                    label: 'Clear cache',
-                    color: context.palette.error,
-                    onTap: () async {
-                      await ImageCacheService.instance.clear();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Cache cleared')),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: pct / 100,
-                  minHeight: 6,
-                  color: context.palette.success,
-                  backgroundColor: context.palette.tint(context.palette.success, .14,),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Temporary cache · $usedLabel / 50 MB',
+                      style: TextStyle(color: secondaryText, fontSize: 11.5),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              _textPillButton(
+                label: 'Clear',
+                color: context.palette.error,
+                onTap: () async {
+                  await ImageCacheService.instance.clear();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cache cleared')),
+                    );
+                  }
+                },
               ),
             ],
           ),
@@ -805,349 +604,320 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
-  // Downloads: parallel bars + option chips (no dropdown sheets)
+  // Download Preference Dropdowns
   // ---------------------------------------------------------------------------
-  Widget _parallelCard(
+  Widget _parallelRow(
+    BuildContext context,
     SettingsService settings,
     bool isDark,
     Color accent,
     Color secondaryText,
   ) {
-    return _glass(
-      isDark: isDark,
-      accent: accent,
-      padding: const EdgeInsets.all(12),
+    return Padding(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _iconTile(Icons.speed_rounded, AppPalette.current.success),
-              SizedBox(width: 12),
+              _iconTile(Icons.speed_rounded, context.palette.success),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Simultaneous Downloads',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: accent.withValues(alpha: .22)),
-                ),
-                child: Text(
-                  '${settings.maxConcurrent}×',
-                  style: TextStyle(
-                    color: accent,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Text(
-            "Files downloading at once.",
-            style: TextStyle(color: AppPalette.current.textSecondary, fontSize: 12),
-          ),
-          SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: List.generate(5, (index) {
-              final count = index + 1;
-              final selected = count <= settings.maxConcurrent;
-              return Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => settings.setMaxConcurrent(count),
-                  child: Padding(
-                    padding: EdgeInsets.only(right: index == 4 ? 0 : 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedContainer(
-                          duration: Duration(milliseconds: 200),
-                          height: 18 + index * 8,
-                          decoration: BoxDecoration(
-                            gradient: selected
-                                ? LinearGradient(
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
-                                    colors: [
-                                      accent,
-                                      accent.withValues(alpha: .6),
-                                    ],
-                                  )
-                                : null,
-                            color: selected
-                                ? null
-                                : (isDark
-                                    ? AppPalette.current.tint(AppPalette.current.card, .07)
-                                    : AppPalette.current.shadowAt(.06)),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          '$count',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: selected ? accent : secondaryText,
-                          ),
-                        ),
-                      ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Simultaneous Downloads',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Files downloading at once',
+                      style: TextStyle(color: secondaryText, fontSize: 11.5),
+                    ),
+                  ],
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _dropdownTile(
+            context: context,
+            isDark: isDark,
+            accent: accent,
+            valueText: '⚡ ${settings.maxConcurrent} File${settings.maxConcurrent == 1 ? '' : 's'} downloading at once',
+            onTap: () {
+              _showDropdownPickerSheet<int>(
+                context: context,
+                title: 'Simultaneous Downloads',
+                subtitle: 'Choose how many files can download at the same time',
+                icon: Icons.speed_rounded,
+                currentValue: settings.maxConcurrent,
+                items: const [
+                  ('1 File at once', 'Conserves network bandwidth and memory', 1),
+                  ('2 Files at once', 'Balanced download speed', 2),
+                  ('3 Files at once', 'Recommended for high-speed connections', 3),
+                  ('4 Files at once', 'Fast multi-file downloads', 4),
+                  ('5 Files at once', 'Maximum parallel download capacity', 5),
+                ],
+                onSelect: (val) => settings.setMaxConcurrent(val),
               );
-            }),
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _qualityCard(SettingsService settings, bool isDark, Color accent) {
-    final options = <(String, String)>[
-      ('Ask', 'Ask Every Time'),
-      ('4K', '4K Ultra HD'),
-      ('1080p', '1080p Full HD'),
-      ('720p', '720p HD'),
-    ];
-
-    return _glass(
-      isDark: isDark,
-      accent: accent,
-      padding: const EdgeInsets.all(12),
+  Widget _qualityRow(
+    BuildContext context,
+    SettingsService settings,
+    bool isDark,
+    Color accent,
+    Color secondaryText,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _iconTile(Icons.high_quality_rounded, AppPalette.current.info),
-              SizedBox(width: 12),
+              _iconTile(Icons.high_quality_rounded, context.palette.info),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Default Video Quality',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Default Video Quality',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Used when selected quality is available',
+                      style: TextStyle(color: secondaryText, fontSize: 11.5),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 7),
-          Text(
-            "Used when the selected quality is available.",
-            style: TextStyle(color: AppPalette.current.textSecondary, fontSize: 12),
-          ),
-          SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final (label, value) in options)
-                _choiceChip(
-                  label: label,
-                  selected: settings.defaultVideoQuality == value,
-                  isDark: isDark,
-                  accent: accent,
-                  onTap: () => settings.setDefaultVideoQuality(value),
-                ),
-            ],
+          const SizedBox(height: 10),
+          _dropdownTile(
+            context: context,
+            isDark: isDark,
+            accent: accent,
+            valueText: '🎬 ${settings.defaultVideoQuality}',
+            onTap: () {
+              _showDropdownPickerSheet<String>(
+                context: context,
+                title: 'Default Video Quality',
+                subtitle: 'Preferred resolution for video downloads',
+                icon: Icons.high_quality_rounded,
+                currentValue: settings.defaultVideoQuality,
+                items: const [
+                  ('Ask Every Time', 'Prompt quality selection before downloading', 'Ask Every Time'),
+                  ('4K Ultra HD', 'Highest resolution (2160p / 4K)', '4K Ultra HD'),
+                  ('1080p Full HD', 'Best balance of clarity and size (1080p)', '1080p Full HD'),
+                  ('720p HD', 'Standard HD video quality (720p)', '720p HD'),
+                ],
+                onSelect: (val) => settings.setDefaultVideoQuality(val),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _audioCard(SettingsService settings, bool isDark, Color accent) {
-    final options = <(String, String)>[
-      ('MP3 · 320 kbps', '320 kbps MP3'),
-      ('MP3 · 256 kbps', '256 kbps MP3'),
-      ('MP3 · 128 kbps', '128 kbps MP3'),
-      ('M4A', 'M4A (AAC)'),
-    ];
-
-    return _glass(
-      isDark: isDark,
-      accent: accent,
-      padding: const EdgeInsets.all(12),
+  Widget _audioRow(
+    BuildContext context,
+    SettingsService settings,
+    bool isDark,
+    Color accent,
+    Color secondaryText,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _iconTile(Icons.audiotrack_rounded, AppPalette.current.primary),
-              SizedBox(width: 12),
+              _iconTile(Icons.audiotrack_rounded, context.palette.primary),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Default Audio Format',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Default Audio Format',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Used for audio downloads',
+                      style: TextStyle(color: secondaryText, fontSize: 11.5),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 7),
-          Text(
-            "Used for audio downloads.",
-            style: TextStyle(color: AppPalette.current.textSecondary, fontSize: 12),
-          ),
-          SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final (label, value) in options)
-                _choiceChip(
-                  label: label,
-                  selected: settings.defaultAudioFormat == value,
-                  isDark: isDark,
-                  accent: accent,
-                  onTap: () => settings.setDefaultAudioFormat(value),
-                ),
-            ],
+          const SizedBox(height: 10),
+          _dropdownTile(
+            context: context,
+            isDark: isDark,
+            accent: accent,
+            valueText: '🎵 ${settings.defaultAudioFormat}',
+            onTap: () {
+              _showDropdownPickerSheet<String>(
+                context: context,
+                title: 'Default Audio Format',
+                subtitle: 'Preferred bitrate and encoding for music downloads',
+                icon: Icons.audiotrack_rounded,
+                currentValue: settings.defaultAudioFormat,
+                items: const [
+                  ('320 kbps MP3', 'Highest audio quality (320 kbps MP3)', '320 kbps MP3'),
+                  ('256 kbps MP3', 'High quality audio (256 kbps MP3)', '256 kbps MP3'),
+                  ('128 kbps MP3', 'Standard audio quality (128 kbps MP3)', '128 kbps MP3'),
+                  ('M4A (AAC)', 'Native AAC container (M4A)', 'M4A (AAC)'),
+                ],
+                onSelect: (val) => settings.setDefaultAudioFormat(val),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _choiceChip({
-    required String label,
-    required bool selected,
-    required bool isDark,
-    required Color accent,
-    required VoidCallback onTap,
-  }) {
+  // ---------------------------------------------------------------------------
+  // Streaming & Privacy Rows
+  // ---------------------------------------------------------------------------
+  Widget _providerHubRow(
+    BuildContext context,
+    bool isDark,
+    Color accent,
+    Color secondaryText,
+  ) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: Duration(milliseconds: 180),
-          padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? accent.withValues(alpha: .14)
-                : (isDark
-                    ? AppPalette.current.tint(AppPalette.current.card, .06)
-                    : AppPalette.current.tint(AppPalette.current.card, .75)),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? accent
-                  : (AppPalette.current.border),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Semantics(
-            selected: selected,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                color: selected ? accent : AppPalette.current.textPrimary,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ZangetsuProvidersHubScreen()),
+          );
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              _iconTile(Icons.movie_filter_rounded, accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Manage Streaming Sources',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Provider Hub for movies, series, and live TV',
+                      style: TextStyle(color: secondaryText, fontSize: 11.5),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Icon(Icons.chevron_right_rounded, color: secondaryText, size: 20),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Content / privacy rows
-  // ---------------------------------------------------------------------------
-  Widget _providerHubCard(
-    BuildContext context,
-    bool isDark,
-    Color accent,
-    Color secondaryText,
-  ) {
-    return _buildSettingCard(
-      isDark: isDark,
-      accent: accent,
-      secondaryText: secondaryText,
-      icon: Icons.movie_filter_rounded,
-      iconColor: accent,
-      title: 'Manage Streaming Sources',
-      subtitle: 'Add or enable sources for movies, series, and live TV.',
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ZangetsuProvidersHubScreen()),
-        );
-      },
-      trailing: Icon(
-        Icons.chevron_right_rounded,
-        color: secondaryText,
-        size: 22,
-      ),
-    );
-  }
-
-  Widget _adultCard(
+  Widget _adultRow(
     SettingsService settings,
     bool isDark,
     Color accent,
     Color secondaryText,
   ) {
-    return _buildSettingCard(
-      isDark: isDark,
-      accent: accent,
-      secondaryText: secondaryText,
-      icon: Icons.visibility_outlined,
-      iconColor: AppPalette.current.error,
-      title: 'Show 18+ Sources',
-      subtitle: 'Show adult sources in the source list.',
-      trailing: Switch.adaptive(
-        value: settings.showAdultRepositories,
-        onChanged: settings.setShowAdultRepositories,
-        activeColor: accent,
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          _iconTile(Icons.visibility_outlined, Colors.redAccent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Show 18+ Sources',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Show adult catalog sources in source lists',
+                  style: TextStyle(color: secondaryText, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: settings.showAdultRepositories,
+            onChanged: settings.setShowAdultRepositories,
+            activeColor: accent,
+          ),
+        ],
       ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Theme: three mini previews instead of a description card
+  // Theme Choice Row
   // ---------------------------------------------------------------------------
-  Widget _themeCard(bool isDark, Color accent, SettingsService settings) {
-    return _glass(
-      isDark: isDark,
-      accent: accent,
-      padding: const EdgeInsets.all(12),
+  Widget _themeRow(bool isDark, Color accent, SettingsService settings) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _iconTile(Icons.palette_rounded, AppPalette.current.info),
-              SizedBox(width: 12),
+              _iconTile(Icons.palette_rounded, accent),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'App Theme',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'App Theme',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Light, dark, or match device theme',
+                      style: TextStyle(
+                        color: AppPalette.current.textSecondary,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 7),
-          Text(
-            "Light, dark, or match your device.",
-            style: TextStyle(color: AppPalette.current.textSecondary, fontSize: 12),
-          ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           Row(
             children: [
-              _themeTile(
+              _themeOption(
                 label: 'Dark',
                 icon: Icons.dark_mode_rounded,
                 mode: ThemeMode.dark,
@@ -1156,8 +926,8 @@ class SettingsScreen extends StatelessWidget {
                 accent: accent,
                 onTap: () => settings.setThemeMode(ThemeMode.dark),
               ),
-              SizedBox(width: 10),
-              _themeTile(
+              const SizedBox(width: 8),
+              _themeOption(
                 label: 'Light',
                 icon: Icons.light_mode_rounded,
                 mode: ThemeMode.light,
@@ -1166,8 +936,8 @@ class SettingsScreen extends StatelessWidget {
                 accent: accent,
                 onTap: () => settings.setThemeMode(ThemeMode.light),
               ),
-              SizedBox(width: 10),
-              _themeTile(
+              const SizedBox(width: 8),
+              _themeOption(
                 label: 'Auto',
                 icon: Icons.brightness_auto_rounded,
                 mode: ThemeMode.system,
@@ -1183,7 +953,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _themeTile({
+  Widget _themeOption({
     required String label,
     required IconData icon,
     required ThemeMode mode,
@@ -1193,53 +963,47 @@ class SettingsScreen extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     final selected = current == mode;
-    final labelColor = selected
-        ? accent
-        : (isDark ? AppPalette.current.textSecondary : AppPalette.current.textPrimary);
-
     return Expanded(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           child: AnimatedContainer(
-            duration: Duration(milliseconds: 200),
-            padding: EdgeInsets.all(8),
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
               color: selected
-                  ? accent.withValues(alpha: .12)
+                  ? accent.withValues(alpha: 0.14)
                   : (isDark
-                      ? AppPalette.current.tint(AppPalette.current.card, .05)
-                      : AppPalette.current.tint(AppPalette.current.card, .75)),
-              borderRadius: BorderRadius.circular(16),
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.grey.shade100),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: selected
                     ? accent
-                    : (AppPalette.current.border),
-                width: selected ? 1.6 : 1,
+                    : (isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.06)),
+                width: selected ? 1.5 : 1,
               ),
             ),
-            child: Column(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _themePreview(mode),
-                SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: 13, color: labelColor),
-                    SizedBox(width: 5),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: selected
-                            ? FontWeight.w800
-                            : FontWeight.w600,
-                        color: labelColor,
-                      ),
-                    ),
-                  ],
+                Icon(
+                  icon,
+                  size: 15,
+                  color: selected ? accent : AppPalette.current.textSecondary,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected ? accent : AppPalette.current.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -1249,183 +1013,242 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// Tiny wire-frame screen so the theme choice reads at a glance.
-  Widget _themePreview(ThemeMode mode) {
-    Widget face({required Color bg, required Color bar, Border? border}) {
-      return Container(
-        height: 46,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-          border: border,
-        ),
-        padding: EdgeInsets.all(6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 22,
-              height: 6,
-              decoration: BoxDecoration(
-                color: bar,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            SizedBox(height: 5),
-            Container(
-              width: double.infinity,
-              height: 5,
-              decoration: BoxDecoration(
-                color: bar,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            SizedBox(height: 4),
-            Container(
-              width: 26,
-              height: 5,
-              decoration: BoxDecoration(
-                color: bar,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final darkFace = AppPalette.current.background;
-    final dark = face(bg: darkFace, bar: AppPalette.current.tint(AppPalette.current.onScrim, 0.24));
-    final light = face(
-      bg: AppPalette.current.card,
-      bar: AppPalette.current.tint(AppPalette.current.border, 0.12),
-      border: Border.all(color: AppPalette.current.tint(AppPalette.current.border, 0.12)),
-    );
-
-    if (mode == ThemeMode.system) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Row(
-          children: [Expanded(child: dark), Expanded(child: light)],
-        ),
-      );
-    }
-    return mode == ThemeMode.dark ? dark : light;
-  }
-
   // ---------------------------------------------------------------------------
-  // About
+  // About & Developer Rows
   // ---------------------------------------------------------------------------
-  Widget _aboutCard(
+  Widget _aboutRow(
     BuildContext context,
     bool isDark,
     Color accent,
     Color secondaryText,
   ) {
-    return _glass(
-      isDark: isDark,
-      accent: accent,
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
         children: [
-          Row(
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.20),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset('assets/images/app_logo.png'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'All in One',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                FutureBuilder<String?>(
+                  future: installedAndroidVersion,
+                  builder: (context, snapshot) {
+                    final version = snapshot.data;
+                    return Text(
+                      version == null ? 'Media Downloader' : 'v$version',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          _textPillButton(
+            label: 'Check for updates',
+            color: accent,
+            onTap: () => _checkForUpdates(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _liveApiRow(
+    BuildContext context,
+    bool isDark,
+    Color accent,
+    Color secondaryText,
+  ) {
+    return FutureBuilder<String>(
+      future: LiveScoreService.instance.endpoint,
+      builder: (context, snapshot) {
+        return Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withValues(alpha: .25),
-                      blurRadius: 12,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Image.asset('assets/images/app_logo.png'),
-                ),
-              ),
-              SizedBox(width: 13),
+              _iconTile(Icons.sports_cricket_rounded, accent),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'All in One',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: context.palette.textPrimary,
-                      ),
+                    const Text(
+                      'Live Score API',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                     ),
-                    SizedBox(height: 3),
-                    FutureBuilder<String?>(
-                      future: installedAndroidVersion,
-                      builder: (context, snapshot) {
-                        final version = snapshot.data;
-                        if (version == null) {
-                          return Text(
-                            'Media Browser & Downloader',
-                            style: TextStyle(
-                              color: secondaryText,
-                              fontSize: 11,
-                            ),
-                          );
-                        }
-                        return Text(
-                          'v$version',
-                          style: TextStyle(
-                            color: context.palette.info,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        );
-                      },
+                    const SizedBox(height: 2),
+                    Text(
+                      snapshot.data ?? 'Free keyless endpoint',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: secondaryText, fontSize: 11.5),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              _textPillButton(
+                label: 'Edit',
+                color: accent,
+                onTap: () async {
+                  final ctrl = TextEditingController(
+                    text: await LiveScoreService.instance.endpoint,
+                  );
+                  final saved = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Live Score API URL'),
+                      content: TextField(
+                        controller: ctrl,
+                        autofocus: true,
+                        decoration: const InputDecoration(hintText: 'https://…'),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                          child: const Text('Save'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (saved != null && saved.isNotEmpty) {
+                    await LiveScoreService.instance.setEndpoint(saved);
+                  }
+                },
+              ),
             ],
           ),
-          SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _actionTile(
-                  icon: Icons.system_update_rounded,
-                  label: 'Check for updates',
-                  color: accent,
-                  onTap: () => _checkForUpdates(context),
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _actionTile(
-                  icon: Icons.person_outline_rounded,
-                  label: 'Developer',
-                  color: context.palette.primary,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => DeveloperScreen(),
+        );
+      },
+    );
+  }
+
+  Widget _developerTile(
+    BuildContext context,
+    Color accent,
+    bool isDark,
+    Color secondaryText,
+  ) {
+    return FutureBuilder<GithubProfile?>(
+      future: GithubProfileService.fetch(),
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        final avatarUrl = profile?.avatarUrl ??
+            Uri.parse('https://github.com/${GithubProfileService.username}.png');
+        final name = profile?.displayName ?? 'S. M. Shahin Reza Sifat';
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => DeveloperScreen()),
+            ),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: ClipOval(
+                      child: Image.network(
+                        avatarUrl.toString(),
+                        width: 38,
+                        height: 38,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: accent.withValues(alpha: 0.16),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'SR',
+                            style: TextStyle(
+                              color: accent,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                            color: context.palette.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Developer',
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: secondaryText, size: 20),
+                ],
               ),
-            ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _actionTile({
-    required IconData icon,
-    required String label,
-    required Color color,
+  // ---------------------------------------------------------------------------
+  // Helper Widgets
+  // ---------------------------------------------------------------------------
+  Widget _dropdownTile({
+    required BuildContext context,
+    required bool isDark,
+    required Color accent,
+    required String valueText,
     required VoidCallback onTap,
   }) {
     return Material(
@@ -1434,28 +1257,36 @@ class SettingsScreen extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: .10),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha: .22)),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+              width: 1,
+            ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 17, color: color),
-              SizedBox(width: 8),
-              Flexible(
+              Expanded(
                 child: Text(
-                  label,
-                  textAlign: TextAlign.center,
+                  valueText,
                   style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
                     fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
                   ),
                 ),
               ),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 20,
+                color: accent,
+              ),
             ],
           ),
         ),
@@ -1463,207 +1294,172 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Shared primitives
-  // ---------------------------------------------------------------------------
-  Widget _ambientBackground(Color accent, bool isDark) => IgnorePointer(
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [AppPalette.current.background, AppPalette.current.background, AppPalette.current.background]
-              : [AppPalette.current.background, AppPalette.current.tint(AppPalette.current.primary, 0.04), AppPalette.current.background],
-        ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned(
-            left: -120,
-            top: -80,
-            child: _orb(accent.withValues(alpha: .20), 320),
-          ),
-          Positioned(
-            right: -130,
-            bottom: -140,
-            child: _orb(AppPalette.current.tint(AppPalette.current.primary, .16), 360),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _orb(Color color, double size) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
-    ),
-  );
-
-  Widget _glass({
-    required bool isDark,
-    required Color accent,
-    required Widget child,
-    EdgeInsetsGeometry padding = EdgeInsets.zero,
-    BorderRadius borderRadius = const BorderRadius.all(Radius.circular(20)),
-    double blur = 14,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        boxShadow: [
-          BoxShadow(
-            color: AppPalette.current.shadowAt(isDark ? .28 : .07),
-            blurRadius: 20,
-            spreadRadius: -8,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: isDark ? AppPalette.current.tint(AppPalette.current.card, 0.086) : AppPalette.current.tint(AppPalette.current.card, 0.659),
-              borderRadius: borderRadius,
-              border: Border.all(
-                color: isDark
-                    ? AppPalette.current.tint(AppPalette.current.card, 0.133)
-                    : AppPalette.current.tint(AppPalette.current.card, 0.600),
-                width: 1,
-              ),
-            ),
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _iconTile(IconData icon, Color color) => Container(
-    width: 44,
-    height: 44,
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: .12),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: color.withValues(alpha: .20)),
-    ),
-    child: Icon(icon, color: color, size: 21),
-  );
-
-  Widget _sectionTitle(String title, IconData icon, Color accent) {
-    return Row(
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: .12),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: accent.withValues(alpha: .20)),
-          ),
-          child: Icon(icon, size: 15, color: accent),
-        ),
-        SizedBox(width: 10),
-        Flexible(
-          flex: 3,
-          child: Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w800,
-              color: AppPalette.current.textPrimary,
-            ),
-          ),
-        ),
-        SizedBox(width: 12),
-        Expanded(
-          child: Container(height: 1, color: AppPalette.current.border),
-        ),
-      ],
-    );
-  }
-
-  Widget _gradientButton({
+  void _showDropdownPickerSheet<T>({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
     required IconData icon,
-    required String label,
-    required Color accent,
-    required VoidCallback onTap,
+    required List<(String label, String note, T value)> items,
+    required T currentValue,
+    required ValueChanged<T> onSelect,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [accent, accent.withValues(alpha: .72)],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: accent.withValues(alpha: .25),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: AppPalette.current.textPrimary),
-              SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppPalette.current.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12.5,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = context.palette.primary;
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      backgroundColor: context.palette.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: accent, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: context.palette.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final (label, note, val) in items) ...[
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            onSelect(val);
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: val == currentValue
+                                  ? accent.withValues(alpha: isDark ? 0.16 : 0.10)
+                                  : (isDark
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : Colors.grey.shade100),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: val == currentValue
+                                    ? accent
+                                    : (isDark
+                                        ? Colors.white.withValues(alpha: 0.08)
+                                        : Colors.black.withValues(alpha: 0.06)),
+                                width: val == currentValue ? 1.8 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        label,
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: val == currentValue
+                                              ? accent
+                                              : (isDark
+                                                  ? Colors.white
+                                                  : Colors.black87),
+                                        ),
+                                      ),
+                                      if (note.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          note,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: context.palette.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                if (val == currentValue)
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    color: accent,
+                                    size: 20,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _squareButton({
-    required IconData icon,
-    required Color accent,
-    required VoidCallback onTap,
-    String? tooltip,
-  }) {
-    final child = Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+  Widget _iconTile(IconData icon, Color color) {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(11),
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: .10),
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: accent.withValues(alpha: .22)),
-          ),
-          child: Icon(icon, size: 18, color: accent),
-        ),
       ),
+      child: Icon(icon, color: color, size: 19),
     );
-    return tooltip == null ? child : Tooltip(message: tooltip, child: child);
   }
 
-  Widget _textButton({
+  Widget _textPillButton({
     required String label,
     required Color color,
     required VoidCallback onTap,
@@ -1672,84 +1468,24 @@ class SettingsScreen extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: .10),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withValues(alpha: .22)),
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
           ),
           child: Text(
             label,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w800,
-              fontSize: 12,
+              fontSize: 11.5,
             ),
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildSettingCard({
-    required bool isDark,
-    required Color accent,
-    required Color secondaryText,
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    String? subtitle,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    final card = _glass(
-      isDark: isDark,
-      accent: accent,
-      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          _iconTile(icon, iconColor),
-          SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                  ),
-                ),
-                if (subtitle != null && subtitle.isNotEmpty) ...[
-                  SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: secondaryText, fontSize: 12, height: 1.35),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          trailing ?? SizedBox.shrink(),
-        ],
-      ),
-    );
-
-    if (onTap != null) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: card,
-        ),
-      );
-    }
-    return card;
   }
 }

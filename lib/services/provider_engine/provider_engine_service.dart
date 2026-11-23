@@ -250,7 +250,9 @@ class ProviderEngineService {
           final ctx = await _contextFor(id);
           if (ctx == null) return <ProviderHomeRow>[];
           try {
-            return await ctx.getHome();
+            return await ctx
+                .getHome()
+                .timeout(const Duration(seconds: 4));
           } catch (_) {
             return <ProviderHomeRow>[];
           }
@@ -271,7 +273,9 @@ class ProviderEngineService {
             final ctx = await _contextFor(id);
             if (ctx == null) return <ProviderMeta>[];
             try {
-              return await ctx.search(term, page: page + 1);
+              return await ctx
+                  .search(term, page: page + 1)
+                  .timeout(const Duration(seconds: 4));
             } catch (_) {
               return <ProviderMeta>[];
             }
@@ -290,6 +294,20 @@ class ProviderEngineService {
   String? _categoryTerm(String category, int page) {
     final c = category.toLowerCase();
     const map = <String, List<String>>{
+      // "All" needs its own seed list: without it every page after the home
+      // row is empty, so "see all" can only ever show a handful of titles.
+      'all': [
+        'movie',
+        'series',
+        'anime',
+        'action',
+        'drama',
+        'hindi',
+        'english',
+        'comedy',
+        'thriller',
+        'web series',
+      ],
       'trending': ['action', 'adventure', 'comedy'],
       'movies': ['movie', 'action', 'thriller'],
       'series': ['web series', 'season'],
@@ -660,7 +678,8 @@ class ProviderEngineService {
               item.detailUrl.isEmpty ||
               id.toLowerCase() != item.providerId.toLowerCase(),
         )
-        .map((id) async {
+        .map(
+          (id) => () async {
           try {
             final ctx = await _contextFor(id);
             if (ctx == null) return <MovieSource>[];
@@ -700,7 +719,11 @@ class ProviderEngineService {
           } catch (_) {
             return <MovieSource>[];
           }
-        })
+          }().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => <MovieSource>[],
+          ),
+        )
         .toList();
     for (final list in await Future.wait(jobs)) {
       addAll(list);
@@ -717,9 +740,9 @@ class ProviderEngineService {
   Future<void> resolveStreamsProgressively(
     MovieItem item, {
     required Future<void> Function(List<MovieSource> sources) onBatch,
-    int concurrency = 10,
-    Duration perProviderTimeout = const Duration(seconds: 6),
-    Duration totalBudget = const Duration(seconds: 30),
+    int concurrency = 14,
+    Duration perProviderTimeout = const Duration(seconds: 4),
+    Duration totalBudget = const Duration(seconds: 10),
   }) async {
     await MovieRepositoryService.instance.ready;
     final title = cleanSearchTitle(item.title);

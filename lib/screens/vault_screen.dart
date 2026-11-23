@@ -11,7 +11,11 @@ import '../services/vault_service.dart';
 import '../theme/app_palette.dart';
 
 class VaultScreen extends StatefulWidget {
-  const VaultScreen({super.key});
+  /// `standalone` is true when pushed as a route from a download tile; in that
+  /// case system back pops the page instead of being swallowed by the shell.
+  const VaultScreen({super.key, this.standalone = false});
+
+  final bool standalone;
 
   @override
   State<VaultScreen> createState() => _VaultScreenState();
@@ -559,7 +563,7 @@ class _VaultScreenState extends State<VaultScreen> {
     // The main navigation shell owns the system back gesture. Only folder
     // navigation is consumed here; at root the shell unwinds its own history.
     return PopScope(
-      canPop: false,
+      canPop: widget.standalone && _folderPath.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _folderPath.isNotEmpty) _goUp();
       },

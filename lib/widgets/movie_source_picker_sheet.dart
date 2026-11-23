@@ -133,6 +133,7 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = context.palette.primary;
     final selected = _selected;
     final repoService = MovieRepositoryService.instance;
     final enabledRepos = repoService.enabledRepositories.length;
@@ -152,7 +153,7 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
       ),
       decoration: BoxDecoration(
         color: context.palette.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -160,28 +161,46 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
         children: [
           Center(
             child: Container(
-              margin: EdgeInsets.only(top: 12, bottom: 8),
-              width: 40,
+              margin: const EdgeInsets.only(top: 12, bottom: 6),
+              width: 38,
               height: 4,
               decoration: BoxDecoration(
-                color: isDark ? context.palette.border : context.palette.textSecondary,
-                borderRadius: BorderRadius.circular(10),
+                color: Colors.grey.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(20, 4, 16, 12),
+            padding: const EdgeInsets.fromLTRB(18, 6, 16, 12),
             child: Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.video_library_rounded,
+                    color: accent,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Choose a source',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                        'Choose a Source',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.3,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
                       ),
-                      SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         '${widget.movie.title} • ${widget.formatLabel}',
                         maxLines: 1,
@@ -191,76 +210,112 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                           color: context.palette.textSecondary,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
                         '$enabledRepos of $totalRepos repositories enabled',
                         style: TextStyle(
                           fontSize: 10.5,
-                          color: context.palette.textSecondary,
+                          color: accent,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: Icon(
-                    Icons.close_rounded,
-                    size: 20,
-                    color: context.palette.textSecondary,
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: context.palette.textSecondary,
+                      ),
+                    ),
                   ),
-                  onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
           ),
           if (_scanning)
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: context.palette.primary),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Scanning repositories… ${_sources.length} found',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: context.palette.onPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent.withValues(alpha: 0.20)),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: accent,
                       ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => setState(() => _cancelled = true),
-                    style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero),
-                    child: Text('Stop',
-                        style: TextStyle(fontSize: 11)),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Scanning repositories… ${_sources.length} found',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _cancelled = true),
+                      child: Text(
+                        'Stop',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: context.palette.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          Divider(height: 1),
+          const Divider(height: 1),
           Flexible(
             child: _sources.isEmpty && !_scanning
                 ? Padding(
-                    padding: EdgeInsets.all(40),
+                    padding: const EdgeInsets.all(40),
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          Icon(
+                            Icons.error_outline_rounded,
+                            size: 38,
+                            color: context.palette.textSecondary,
+                          ),
+                          const SizedBox(height: 12),
                           Text(
                             'No source has ${widget.formatLabel} for this movie.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                          SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           OutlinedButton.icon(
                             onPressed: () {
                               setState(() {
@@ -269,59 +324,83 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                               });
                               _startScan();
                             },
-                            icon: Icon(Icons.refresh_rounded, size: 16),
-                            label: Text('Retry'),
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.refresh_rounded, size: 16),
+                            label: const Text('Retry Search'),
                           ),
                         ],
                       ),
                     ),
                   )
                 : ListView.separated(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 10),
                     itemCount: _sources.length,
-                    separatorBuilder: (_, _) => SizedBox(height: 6),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, i) {
                       final s = _sources[i];
                       final isSelected =
                           selected != null && _urlOf(s) == _urlOf(selected);
+
                       return Material(
                         color: Colors.transparent,
                         child: InkWell(
                           onTap: () => setState(() => _selected = s),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(18),
                           child: AnimatedContainer(
-                            duration: Duration(milliseconds: 180),
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? context.palette.tint(context.palette.primary, isDark ? 0.14 : 0.08)
-                                  : (context.palette.card),
-                              borderRadius: BorderRadius.circular(14),
+                                  ? accent.withValues(alpha: isDark ? 0.16 : 0.10)
+                                  : (isDark
+                                      ? Colors.white.withValues(alpha: 0.05)
+                                      : Colors.grey.shade100),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: isSelected
+                                    ? accent
+                                    : (isDark
+                                        ? Colors.white.withValues(alpha: 0.08)
+                                        : Colors.black.withValues(alpha: 0.06)),
+                                width: isSelected ? 1.8 : 1.0,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: accent.withValues(alpha: 0.22),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : [],
                             ),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 34,
-                                  height: 34,
+                                  width: 38,
+                                  height: 38,
                                   decoration: BoxDecoration(
-                                    color: context.palette.primary
-                                        .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(10),
+                                    color: accent.withValues(alpha: 0.16),
+                                    borderRadius: BorderRadius.circular(11),
                                   ),
                                   child: Center(
                                     child: Text(
                                       _repoName(s).substring(0, 1).toUpperCase(),
                                       style: TextStyle(
-                                        color: context.palette.primary,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
+                                        color: accent,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
                                       ),
                                     ),
                                   ),
                                 ),
-                                SizedBox(width: 12),
+                                const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -332,33 +411,35 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700),
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: isSelected
+                                              ? accent
+                                              : (isDark ? Colors.white : Colors.black87),
+                                        ),
                                       ),
-                                      SizedBox(height: 3),
+                                      const SizedBox(height: 3),
                                       Text(
                                         '${s.resolution} • ${_size(s)} • ${s.format.toUpperCase()}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontSize: 10.5,
+                                          fontSize: 11,
                                           color: context.palette.textSecondary,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                                 Icon(
                                   isSelected
                                       ? Icons.check_circle_rounded
-                                      : Icons.circle_outlined,
-                                  size: 18,
+                                      : Icons.chevron_right_rounded,
+                                  size: isSelected ? 22 : 20,
                                   color: isSelected
-                                      ? context.palette.primary
-                                      : (isDark
-                                          ? context.palette.textSecondary
-                                          : context.palette.tint(context.palette.border, 0.26)),
+                                      ? accent
+                                      : context.palette.textSecondary.withValues(alpha: 0.6),
                                 ),
                               ],
                             ),
@@ -369,12 +450,14 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                   ),
           ),
           Container(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: context.palette.surface,
               border: Border(
                 top: BorderSide(
-                  color: context.palette.border,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06),
                 ),
               ),
             ),
@@ -384,32 +467,29 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('Cancel'),
+                    child: const Text('Cancel'),
                   ),
-                  SizedBox(width: 10),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
                       onPressed: selected == null
                           ? null
                           : () => Navigator.pop(context, selected),
-                      icon: Icon(Icons.download_rounded, size: 18),
+                      icon: const Icon(Icons.download_rounded, size: 18),
                       label: Text(
                         selected == null
                             ? 'Select a source'
                             : 'Download from ${_repoName(selected)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 13),
                       ),
                       style: FilledButton.styleFrom(
-                        backgroundColor: context.palette.primary,
-                        disabledBackgroundColor: isDark
-                            ? context.palette.tint(context.palette.onScrim, 0.12)
-                            : context.palette.textSecondary,
-                        padding: EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: accent,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                            borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
                   ),

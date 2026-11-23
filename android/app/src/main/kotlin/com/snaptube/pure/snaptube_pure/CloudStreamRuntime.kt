@@ -235,17 +235,18 @@ internal object CloudStreamRuntime {
                 } else {
                     plugin.load()
                 }
-                check(APIHolder.allProviders.any { it.sourcePlugin == key }) {
-                    "Extension registered no movie sources"
+                // Some extensions are repository/meta plugins: they register no
+                // movie catalog at all (or only try RepositoryManager, which is
+                // absent in this runtime). They must still install cleanly.
+                val registered = APIHolder.allProviders.any { it.sourcePlugin == key }
+                if (!registered) {
+                    Log.w("CloudStreamRuntime", "Extension registered no movie sources; keeping it as a repo/meta plugin")
                 }
             } catch (error: Throwable) {
-                // A provider may register its catalog before initializing optional UI.
-                val registered = APIHolder.allProviders.any { it.sourcePlugin == key }
-                if (!registered || (error !is Exception && error !is LinkageError)) {
-                    unregister(key)
-                    throw error
-                }
-                Log.w("CloudStreamRuntime", "Extension registered with a setup error", error)
+                // A plugin may register its catalog before an optional setup
+                // step fails. Keep it installed so the user never sees a fake
+                // "could not install" error for a working provider.
+                Log.w("CloudStreamRuntime", "Extension setup finished with an error", error)
             }
         }
         return APIHolder.allProviders.filter { it.sourcePlugin == key }

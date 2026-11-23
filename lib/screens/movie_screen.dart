@@ -11,7 +11,10 @@ import '../services/provider_engine/provider_engine_service.dart';
 import '../services/settings_service.dart';
 import '../services/watch_history_service.dart';
 import '../theme/app_palette.dart';
+import 'filter_screen.dart';
+import 'source_library_screen.dart';
 import '../widgets/home_banner.dart';
+import '../widgets/section_carousel.dart';
 import '../widgets/looping_control_content.dart';
 import '../widgets/movie_card.dart';
 import '../widgets/remote_image.dart';
@@ -393,6 +396,17 @@ class _MovieScreenState extends State<MovieScreen> {
 
   Future<List<MovieSource>> _resolveChannel(MovieItem channel) async {
     if (channel.sources.isNotEmpty) return channel.sources;
+    // Ask the installed IPTV extension / repository FIRST. A channel URL from
+    // a catalogue is usually a detail page, not a playable stream, so trying
+    // it directly produced "server error" instead of using the extension.
+    try {
+      final resolved = await _engine
+          .resolveStreams(channel, keepAllFormats: true)
+          .timeout(const Duration(seconds: 10));
+      if (resolved.isNotEmpty) return resolved;
+    } catch (_) {
+      // Fall through to a direct media URL below.
+    }
     final uri = Uri.tryParse(channel.detailUrl);
     final path = uri?.path.toLowerCase() ?? '';
     final extension = path.split('.').last;
@@ -625,139 +639,17 @@ class _MovieScreenState extends State<MovieScreen> {
   }
 
   Future<void> _pickSource() async {
-    final sources = _movieSources.toList();
     final selected = await showModalBottomSheet<_Source>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: _colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Choose a source',
-                        style: TextStyle(
-                          color: _colors.onSurface,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(Icons.close_rounded, color: _colors.onSurface),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Movies and the home banner follow the source you pick.',
-                  style: TextStyle(
-                    color: _colors.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
-                SizedBox(height: 12),
-                if (sources.isEmpty)
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'Install a source in Provider Hub.',
-                      style: TextStyle(color: _colors.onSurface),
-                    ),
-                  )
-                else
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.sizeOf(context).height * .52,
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: sources.length,
-                      separatorBuilder: (_, _) => SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final source = sources[index];
-                        final active =
-                            source.repo.id == _source?.repo.id &&
-                            source.provider.id == _source?.provider.id;
-                        return Material(
-                          color: active
-                              ? context.palette.tint(context.palette.primary, .18)
-                              : _colors.surfaceContainerHigh,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: ListTile(
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 5,
-                            ),
-                            leading: ProviderLogo(provider: source.provider),
-                            title: Text(
-                              source.provider.name,
-                              style: TextStyle(
-                                color: active
-                                    ? _colors.primary
-                                    : _colors.onSurface,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            subtitle: Text(
-                              _isAdult(source)
-                                  ? '18+ · ${source.repo.name}'
-                                  : source.repo.name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: _colors.onSurfaceVariant),
-                            ),
-                            trailing: active
-                                ? Icon(
-                                    Icons.check_circle_rounded,
-                                    color: _colors.primary,
-                                  )
-                                : Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: _colors.onSurfaceVariant,
-                                  ),
-                            onTap: () => Navigator.pop(context, source),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _openProviderHub();
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _colors.onSurface,
-                  ),
-                  icon: Icon(Icons.extension_outlined, size: 18),
-                  label: Text('Manage sources in Provider Hub'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (context) =>
+          ClipRect(child: _SourcePickerSheet(currentSource: _source)),
     );
     if (mounted && selected != null) {
       final source = _movieSources
@@ -770,7 +662,7 @@ class _MovieScreenState extends State<MovieScreen> {
       if (source != null) {
         _search.clear();
         await _repository.selectSource(source.repo.id, source.provider.id);
-        if (mounted && _query.isNotEmpty) _reset(source, '');
+        _reset(source, '');
       }
     }
   }
@@ -862,7 +754,8 @@ class _MovieScreenState extends State<MovieScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => _genreSheet(
+      builder: (context) => ClipRect(
+        child: _genreSheet(
         list,
         canDiscover:
             (_source?.provider.cloudStreamUrl.isNotEmpty ?? false) &&
@@ -872,6 +765,7 @@ class _MovieScreenState extends State<MovieScreen> {
                   movie.providerId == _source?.provider.id &&
                   !_genreLookups.contains(movie.detailUrl),
             ),
+        ),
       ),
     );
     if (!mounted || picked == null) return;
@@ -1219,6 +1113,85 @@ class _MovieScreenState extends State<MovieScreen> {
     _genre = null;
   });
 
+  /// Section-based catalog rows (like a modern streaming app): trending,
+  /// language buckets, series, personalised and coming-soon rows.
+  List<Widget> _catalogCarousels(List<WatchHistoryItem> history) {
+    // Only titles loaded from the CURRENTLY SELECTED source are allowed here.
+    // The previously used master catalog mixed unrelated demo titles into the
+    // rows, which then had no playable detailUrl.
+    final all = _items.where((movie) => !movie.isLiveTv).toList();
+    if (all.isEmpty) return const [];
+
+    final byRating = [...all]..sort((a, b) => b.rating.compareTo(a.rating));
+    final hindi = all
+        .where((m) => MovieCard.languageOf(m) == 'Hindi')
+        .toList();
+    final english = all
+        .where((m) => MovieCard.languageOf(m) == 'English')
+        .toList();
+    final series = all.where((m) => m.isSeries).toList();
+    final nextYear = DateTime.now().year + 1;
+    final soon = all.where((m) => m.year >= nextYear).toList();
+    final recommended = history.isEmpty
+        ? <MovieItem>[]
+        : _repository.getRecommendedForYou(all, limit: 12);
+    VoidCallback seeAll([String tab = 'All']) => _source == null
+        ? () => FilterScreen.show(context, initialGenre: _genre)
+        : () => SourceLibraryScreen.show(
+              context,
+              repoId: _source!.repo.id,
+              providerId: _source!.provider.id,
+              title: _source!.provider.name,
+              initialTab: tab,
+            );
+
+    return [
+      if (byRating.isNotEmpty)
+        SectionCarousel(
+          title: 'Trending now',
+          movies: byRating.take(14).toList(),
+          onOpen: _openMovie,
+          onSeeAll: seeAll(),
+        ),
+      if (hindi.isNotEmpty)
+        SectionCarousel(
+          title: 'Bollywood & Hindi',
+          movies: hindi.take(14).toList(),
+          onOpen: _openMovie,
+          onSeeAll: seeAll('Movies'),
+        ),
+      if (english.isNotEmpty)
+        SectionCarousel(
+          title: 'Hollywood',
+          movies: english.take(14).toList(),
+          onOpen: _openMovie,
+          onSeeAll: seeAll('Movies'),
+        ),
+      if (series.isNotEmpty)
+        SectionCarousel(
+          title: 'Top Series',
+          movies: series.take(14).toList(),
+          onOpen: _openMovie,
+          onSeeAll: seeAll('Series'),
+        ),
+      if (recommended.isNotEmpty)
+        SectionCarousel(
+          title: 'Because you watched',
+          movies: recommended,
+          onOpen: _openMovie,
+          onSeeAll: seeAll(),
+        ),
+      if (soon.isNotEmpty)
+        SectionCarousel(
+          title: 'Coming Soon',
+          movies: soon.take(14).toList(),
+          onOpen: _openMovie,
+          onSeeAll: seeAll(),
+          soonDates: {for (final m in soon) m.detailUrl: '${m.year}'},
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
@@ -1247,7 +1220,8 @@ class _MovieScreenState extends State<MovieScreen> {
               ),
             ),
           ),
-          CustomScrollView(
+          ClipRect(
+            child: CustomScrollView(
             controller: _scroll,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
@@ -1282,6 +1256,9 @@ class _MovieScreenState extends State<MovieScreen> {
                 SliverToBoxAdapter(child: _categoryTiles()),
                 if (history.isNotEmpty)
                   SliverToBoxAdapter(child: _continueWatching(history)),
+                if (_query.isEmpty && !filtered)
+                  ..._catalogCarousels(history)
+                      .map((widget) => SliverToBoxAdapter(child: widget)),
                 if (_source != null || visible.isNotEmpty)
                   SliverToBoxAdapter(
                     child: _sectionHeader(
@@ -1345,6 +1322,7 @@ class _MovieScreenState extends State<MovieScreen> {
               ),
             ],
           ),
+          ),
           if (_searchOpen) _searchOverlay(),
         ],
       ),
@@ -1373,9 +1351,9 @@ class _MovieScreenState extends State<MovieScreen> {
           ),
           IconButton(
             tooltip: 'Change movie source',
-            iconSize: 16,
+            iconSize: 18,
             color: context.palette.primary,
-            icon: Icon(Icons.layers_outlined),
+            icon: const Icon(Icons.layers_outlined),
             onPressed: _pickSource,
           ),
         ],
@@ -1785,4 +1763,488 @@ class _MovieScreenState extends State<MovieScreen> {
     label: Text('Retry'),
     onPressed: onPressed ?? _load,
   );
+}
+
+class _SourcePickerSheet extends StatefulWidget {
+  final _Source? currentSource;
+
+  const _SourcePickerSheet({required this.currentSource});
+
+  @override
+  State<_SourcePickerSheet> createState() => _SourcePickerSheetState();
+}
+
+class _SourcePickerSheetState extends State<_SourcePickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  late bool _showAdult;
+
+  @override
+  void initState() {
+    super.initState();
+    _showAdult = SettingsService.instance.showAdultRepositories;
+    MovieRepositoryService.instance.addListener(_onRepoChanged);
+  }
+
+  @override
+  void dispose() {
+    MovieRepositoryService.instance.removeListener(_onRepoChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onRepoChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _isAdult(_Source source) =>
+      source.repo.isAdult || source.provider.isAdult;
+
+  List<_Source> _getFilteredSources() {
+    final engine = ProviderEngineService.instance;
+    final supported = engine.catalogSources.where(
+      (source) => CloudStreamRuntime.canRun(source.provider),
+    );
+
+    var list = [
+      ...supported.where((source) => !_isAdult(source)),
+      if (_showAdult) ...supported.where(_isAdult),
+    ];
+
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      list = list.where((source) {
+        return source.provider.name.toLowerCase().contains(query) ||
+            source.repo.name.toLowerCase().contains(query);
+      }).toList();
+    }
+
+    return list;
+  }
+
+  Future<void> _deleteSource(_Source source) async {
+    await MovieRepositoryService.instance.deleteRepository(source.repo.id);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteAllSources(List<_Source> sourcesToDelete) async {
+    final repoIds = sourcesToDelete.map((s) => s.repo.id).toSet();
+    for (final id in repoIds) {
+      await MovieRepositoryService.instance.deleteRepository(id);
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = context.palette.primary;
+    final sources = _getFilteredSources();
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 18,
+          left: 18,
+          right: 18,
+          top: 0,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top Header Bar
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.video_library_rounded,
+                    color: accent,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Choose a Source',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.3,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+
+                // 18+ Toggle Button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _showAdult = !_showAdult;
+                        SettingsService.instance.setShowAdultRepositories(_showAdult);
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _showAdult
+                            ? Colors.redAccent.withValues(alpha: 0.18)
+                            : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _showAdult
+                              ? Colors.redAccent
+                              : (isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black12),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _showAdult ? Icons.explicit_rounded : Icons.explicit_outlined,
+                            size: 15,
+                            color: _showAdult ? Colors.redAccent : context.palette.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '18+',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: _showAdult ? Colors.redAccent : context.palette.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+
+                // Delete All Button
+                if (sources.isNotEmpty) ...[
+                  IconButton(
+                    tooltip: 'Delete All',
+                    icon: const Icon(
+                      Icons.delete_sweep_rounded,
+                      color: Colors.redAccent,
+                      size: 22,
+                    ),
+                    onPressed: () => _deleteAllSources(sources),
+                  ),
+                ],
+
+                // Close Sheet
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: context.palette.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Search Bar Field
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark ? Colors.white.withValues(alpha: 0.10) : Colors.black12,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    size: 18,
+                    color: context.palette.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (_) => setState(() {}),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Search sources or repos…',
+                        hintStyle: TextStyle(
+                          fontSize: 12.5,
+                          color: context.palette.textSecondary,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                  if (_searchController.text.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                      child: Icon(
+                        Icons.clear_rounded,
+                        size: 16,
+                        color: context.palette.textSecondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Sources List
+            if (sources.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.extension_off_rounded,
+                      size: 38,
+                      color: context.palette.textSecondary.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No sources found',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * .48,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: sources.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final source = sources[index];
+                    final active =
+                        source.repo.id == widget.currentSource?.repo.id &&
+                        source.provider.id == widget.currentSource?.provider.id;
+
+                    return Material(
+                      color: Colors.transparent,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: active
+                              ? accent.withValues(alpha: isDark ? 0.16 : 0.10)
+                              : (isDark
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: active
+                                ? accent
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.06)),
+                            width: active ? 1.8 : 1.0,
+                          ),
+                        ),
+                        child: InkWell(
+                          onTap: () => Navigator.pop(context, source),
+                          borderRadius: BorderRadius.circular(18),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? accent.withValues(alpha: 0.20)
+                                        : (isDark
+                                            ? Colors.white.withValues(alpha: 0.08)
+                                            : Colors.white),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: ProviderLogo(provider: source.provider),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        source.provider.name,
+                                        style: TextStyle(
+                                          color: active
+                                              ? accent
+                                              : (isDark ? Colors.white : Colors.black87),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          if (_isAdult(source)) ...[
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 5,
+                                                vertical: 1.5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.redAccent.withValues(alpha: 0.20),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                '18+',
+                                                style: TextStyle(
+                                                  color: Colors.redAccent,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                          ],
+                                          Expanded(
+                                            child: Text(
+                                              source.repo.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: context.palette.textSecondary,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                if (active)
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    color: accent,
+                                    size: 20,
+                                  ),
+
+                                // Instant Delete Button (No confirmation, stays in sheet)
+                                IconButton(
+                                  tooltip: 'Delete source',
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 19,
+                                    color: Colors.redAccent,
+                                  ),
+                                  onPressed: () => _deleteSource(source),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 12),
+
+            // Provider Hub Link
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ZangetsuProvidersHubScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: accent.withValues(alpha: 0.22),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.extension_rounded,
+                        size: 17,
+                        color: accent,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                        'Manage sources in Provider Hub',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

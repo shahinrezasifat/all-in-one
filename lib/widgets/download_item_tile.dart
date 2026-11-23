@@ -109,24 +109,35 @@ class DownloadItemTile extends StatelessWidget {
   Future<void> _handleLockTap(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    final dark = isDarkSafe(context);
     final vault = VaultService.instance;
     await vault.ready;
 
-    if (!vault.isUnlocked) {
-      await navigator.push(
-        MaterialPageRoute(builder: (_) => VaultScreen()),
-      );
-    }
-
-    if (!vault.isUnlocked) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Vault stayed locked — nothing was moved.'),
-          backgroundColor: context.palette.card,
-          behavior: SnackBarBehavior.floating,
+    if (!vault.hasPin) {
+      // No PIN yet — offer setup, but keep the back button fully functional.
+      final setup = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Set up the Secret Vault'),
+          content: const Text(
+            'Create a PIN first, then this download can be locked with one tap.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Set up PIN'),
+            ),
+          ],
         ),
       );
+      if (setup == true && context.mounted) {
+        await navigator.push(
+          MaterialPageRoute(builder: (_) => const VaultScreen(standalone: true)),
+        );
+      }
       return;
     }
 
@@ -143,7 +154,7 @@ class DownloadItemTile extends StatelessWidget {
     }
 
     try {
-      await vault.moveToVault(task);
+      await vault.lockTaskDirectly(task);
     } catch (_) {
       messenger.showSnackBar(
         SnackBar(content: Text("Could not move the file to Vault")),
@@ -171,7 +182,7 @@ class DownloadItemTile extends StatelessWidget {
               child: Text(
                 "\"${task.title}\" is now locked in the Secret Vault — it no longer appears in Downloads.",
                 style: TextStyle(
-                  color: context.palette.textPrimary,
+                  color: context.palette.onPrimary,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1069,16 +1080,16 @@ class DownloadItemTile extends StatelessWidget {
                         if (isDownloading &&
                             task.speedFormatted.isNotEmpty) ...[
                           Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2.5,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: context.palette.selectedBg,
-                              borderRadius: BorderRadius.circular(6),
+                              color: context.palette.primary.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: context.palette.trackBg,
-                                width: 0.8,
+                                color: context.palette.primary.withValues(alpha: 0.35),
+                                width: 1,
                               ),
                             ),
                             child: Row(
@@ -1086,32 +1097,32 @@ class DownloadItemTile extends StatelessWidget {
                               children: [
                                 Icon(
                                   Icons.arrow_downward_rounded,
-                                  size: 11,
-                                  color: context.palette.textPrimary,
+                                  size: 12,
+                                  color: context.palette.primary,
                                 ),
-                                SizedBox(width: 2),
+                                const SizedBox(width: 3),
                                 Text(
                                   '+',
                                   style: TextStyle(
-                                    color: context.palette.textPrimary,
-                                    fontSize: 11,
+                                    color: context.palette.primary,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.2,
                                   ),
                                 ),
-                                SizedBox(width: 2),
                                 Text(
                                   task.speedFormatted,
                                   style: TextStyle(
                                     color: context.palette.textPrimary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w900,
                                     letterSpacing: 0.2,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          SizedBox(width: 6),
+                          const SizedBox(width: 6),
                         ],
 
                         // ETA / Status
@@ -1328,38 +1339,20 @@ class DownloadItemTile extends StatelessWidget {
 
                       Spacer(),
 
-                      // Cohesive 32px Pause / Resume / Retry Pill
+                      // Cohesive Pause / Resume / Retry Pill
                       _actionPillButton(
                         isDark: isDark,
-                        color: isFailed
-                            ? (isDark
-                                ? context.palette.onPrimary
-                                : context.palette.error)
+                        color: Colors.white,
+                        bgColor: isFailed
+                            ? context.palette.error
                             : (isPaused
                                 ? context.palette.success
-                                : (isDark
-                                    ? context.palette.onSecondary
-                                    : context.palette.info)),
-                        bgColor: isFailed
-                            ? (isDark
-                                ? context.palette.error
-                                : context.palette.tint(context.palette.error, 0.06))
-                            : (isPaused
-                                ? (isDark
-                                    ? context.palette.tint(context.palette.success, 0.10)
-                                    : context.palette.tint(context.palette.success, 0.08))
-                                : (isDark
-                                    ? context.palette.secondary
-                                    : context.palette.card)),
+                                : context.palette.primary),
                         borderColor: isFailed
-                            ? (isDark
-                                ? context.palette.tint(context.palette.error, 0.30)
-                                : context.palette.error)
+                            ? context.palette.error
                             : (isPaused
-                                ? (context.palette.success)
-                                : (isDark
-                                    ? context.palette.secondary
-                                    : context.palette.tint(context.palette.info, 0.18))),
+                                ? context.palette.success
+                                : context.palette.primary),
                         icon: isFailed
                             ? Icons.refresh_rounded
                             : (isPaused
@@ -1371,11 +1364,8 @@ class DownloadItemTile extends StatelessWidget {
                         onTap: isFailed
                             ? () => DownloadManager.instance.resumeTask(task)
                             : (isDownloading || isQueued
-                                ? () =>
-                                    DownloadManager.instance.pauseTask(task)
-                                : () => DownloadManager.instance.resumeTask(
-                                      task,
-                                    )),
+                                ? () => DownloadManager.instance.pauseTask(task)
+                                : () => DownloadManager.instance.resumeTask(task)),
                       ),
                       SizedBox(width: 8),
 
@@ -1443,6 +1433,10 @@ class _SmoothDownloadProgressSliderState
   /// Sweeping highlight across the filled part while a transfer is running.
   late final AnimationController _shimmerController;
 
+  /// Holds the currently rendered fraction and eases to each new target —
+  /// unlike a restarting TweenAnimationBuilder, this never jumps back to 0.
+  late final AnimationController _progressController;
+
   bool get _isDownloading =>
       widget.isDownloading &&
       !widget.isPaused &&
@@ -1461,6 +1455,10 @@ class _SmoothDownloadProgressSliderState
       vsync: this,
       duration: Duration(milliseconds: 1400),
     );
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    )..value = (widget.progress ?? 0).clamp(0.0, 1.0);
     if (widget.isPreparing || widget.progress == null) {
       _animController.repeat();
     }
@@ -1483,12 +1481,26 @@ class _SmoothDownloadProgressSliderState
     } else if (!_isDownloading && _shimmerController.isAnimating) {
       _shimmerController.stop();
     }
+
+    final target = (widget.progress ?? 0).clamp(0.0, 1.0);
+    final previous = (oldWidget.progress ?? 0).clamp(0.0, 1.0);
+    if (target != previous) {
+      if (widget.isPaused || widget.isFailed) {
+        _progressController.value = target;
+      } else {
+        _progressController.animateTo(
+          target,
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _animController.dispose();
     _shimmerController.dispose();
+    _progressController.dispose();
     super.dispose();
   }
 
@@ -1584,14 +1596,11 @@ class _SmoothDownloadProgressSliderState
                 );
               }
 
-              return TweenAnimationBuilder<double>(
-                tween: Tween<double>(
-                  begin: 0.0,
-                  end: targetProgress,
-                ),
-                duration: Duration(milliseconds: 620),
-                curve: Curves.easeOutCubic,
-                builder: (context, animatedValue, child) {
+              return AnimatedBuilder(
+                animation: _progressController,
+                builder: (context, child) {
+                  final animatedValue =
+                      _progressController.value.clamp(0.0, 1.0);
                   final filledWidth = totalWidth * animatedValue;
                   return Stack(
                     alignment: Alignment.centerLeft,

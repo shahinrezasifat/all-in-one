@@ -270,14 +270,9 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog>
     final bodyText = context.palette.textSecondary;
     final total = _total;
     final progress = total == null ? null : (_received / total).clamp(0.0, 1.0);
-    final noteLines = widget.update.notes
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty && !line.startsWith('#'));
+    final sections = _releaseSections(widget.update.notes);
     final summary =
-        noteLines.firstOrNull?.replaceFirst(RegExp(r'^[-*]\s+'), '') ??
-        widget.update.notes;
-
+        sections.expand((section) => section.lines).firstOrNull ?? '';
     // The main app is unmounted while the mandatory update is visible.
     return PopScope(
       canPop: false,
@@ -465,22 +460,86 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog>
                                             ],
                                           ),
                                           SizedBox(height: 8),
-                                          Text(
-                                            _showFullNotes
-                                                ? widget.update.notes
-                                                : summary,
-                                            maxLines: _showFullNotes ? null : 1,
-                                            overflow: _showFullNotes
-                                                ? TextOverflow.visible
-                                                : TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              height: 1.45,
-                                              color: bodyText,
+                                          if (sections.any(
+                                                (section) =>
+                                                    section.title.isNotEmpty,
+                                              ) ||
+                                              _showFullNotes)
+                                            ConstrainedBox(
+                                              constraints: const BoxConstraints(
+                                                maxHeight: 205,
+                                              ),
+                                              child: SingleChildScrollView(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .stretch,
+                                                  children: [
+                                                    for (final section
+                                                        in sections) ...[
+                                                      if (section
+                                                          .title
+                                                          .isNotEmpty)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets.only(
+                                                                top: 8,
+                                                                bottom: 5,
+                                                              ),
+                                                          child: Text(
+                                                            section.title,
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                              color: context
+                                                                  .palette
+                                                                  .textPrimary,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      for (final line
+                                                          in section.lines)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets.only(
+                                                                bottom: 5,
+                                                              ),
+                                                          child: Text(
+                                                            section
+                                                                    .title
+                                                                    .isEmpty
+                                                                ? line
+                                                                : '•  $line',
+                                                            style: TextStyle(
+                                                              fontSize: 12.5,
+                                                              height: 1.4,
+                                                              color: bodyText,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                            )
+                                          else
+                                            Text(
+                                              summary,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                height: 1.45,
+                                                color: bodyText,
+                                              ),
                                             ),
-                                          ),
-                                          if (summary != widget.update.notes ||
-                                              summary.length > 45)
+                                          if (!sections.any(
+                                                (section) =>
+                                                    section.title.isNotEmpty,
+                                              ) &&
+                                              (summary != widget.update.notes ||
+                                                  summary.length > 45))
                                             TextButton(
                                               onPressed: () => setState(
                                                 () => _showFullNotes =
@@ -727,4 +786,25 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog>
       ),
     );
   }
+}
+
+List<({String title, List<String> lines})> _releaseSections(String notes) {
+  final sections = <({String title, List<String> lines})>[];
+  var title = '';
+  var lines = <String>[];
+  final heading = RegExp(r'^#{1,6}\s+');
+  final bullet = RegExp(r'^(?:[-*+]\s+|\d+[.)]\s+)');
+  for (final raw in notes.split('\n')) {
+    final line = raw.trim();
+    if (line.isEmpty) continue;
+    if (heading.hasMatch(line)) {
+      if (lines.isNotEmpty) sections.add((title: title, lines: lines));
+      title = line.replaceFirst(heading, '');
+      lines = [];
+    } else {
+      lines.add(line.replaceFirst(bullet, ''));
+    }
+  }
+  if (lines.isNotEmpty) sections.add((title: title, lines: lines));
+  return sections;
 }

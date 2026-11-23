@@ -24,7 +24,10 @@ class CloudStreamRuntime {
 
   static bool canRun(MovieProvider provider) =>
       provider.scriptUrl.isNotEmpty ||
-      (supported && provider.cloudStreamUrl.isNotEmpty);
+      (supported && provider.cloudStreamUrl.isNotEmpty) ||
+      // The built-in AllMovieLand provider is usable through the bundled
+      // catalog even when its runtime manifest URL is temporarily unavailable.
+      provider.id == 'AllMovieLandProvider';
 
   static Future<void> install(String repoId, MovieProvider provider) =>
       _channel.invokeMethod<void>('install', {
@@ -200,6 +203,9 @@ class CloudStreamRuntime {
           if (episodeData != null) 'episodeData': episodeData,
           if (requestId != null) 'requestId': requestId,
         },
+      ).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => const <Map<Object?, Object?>>[],
       );
       return [
         for (final row in rows ?? const [])

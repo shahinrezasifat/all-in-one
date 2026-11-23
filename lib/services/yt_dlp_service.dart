@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -85,15 +86,42 @@ class YtDlpService {
     return Uri.https('www.youtube.com', '/watch', {'v': id}).toString();
   }
 
+  final _infoCache = <String, _CachedInfo>{};
+
   Future<VideoInfo?> resolve(
     String url, {
     String? format,
     Map<String, String> headers = const {},
   }) async {
     if (!supported) return null;
+    final canonical = youtubeVideoUrl(url) ?? url.trim();
+    // The format picker already analysed the video; reuse that metadata when
+    // the download starts so the same link is not resolved twice.
+    if (format == null && headers.isEmpty) {
+      final cached = _infoCache[canonical];
+      if (cached != null &&
+          DateTime.now().difference(cached.at) < const Duration(minutes: 15)) {
+        return cached.info;
+      }
+    }
     await ensureInit();
     if (!_initialized) throw StateError('The download engine could not start');
-    return Ytdlp.getVideoInfo(youtubeVideoUrl(url) ?? url, format: format, headers: headers);
+    final info = await Ytdlp.getVideoInfo(
+      canonical,
+      format: format,
+      headers: headers,
+    ).timeout(
+      const Duration(seconds: 6),
+      onTimeout: () => throw TimeoutException(
+        'The on-device engine took too long to read this video',
+        const Duration(seconds: 6),
+      ),
+    );
+    if (info != null && format == null && headers.isEmpty) {
+      _infoCache[canonical] = _CachedInfo(DateTime.now(), info);
+      if (_infoCache.length > 24) _infoCache.remove(_infoCache.keys.first);
+    }
+    return info;
   }
 
   /// Size of the selected transfer, including all requested tracks.
@@ -299,4 +327,11 @@ class YtDlpService {
       return 'Update failed: $e';
     }
   }
+}
+
+class _CachedInfo {
+  const _CachedInfo(this.at, this.info);
+
+  final DateTime at;
+  final VideoInfo info;
 }

@@ -371,9 +371,23 @@ class VaultService extends ChangeNotifier with WidgetsBindingObserver {
         'Downloads';
   }
 
+  /// Public path used by the vault UI: requires an unlocked session.
   Future<void> moveToVault(DownloadTask task) async {
     await ready;
     if (!_isUnlocked) throw StateError('Unlock the vault first');
+    await _moveTaskInternal(task);
+  }
+
+  /// One-tap lock from a download tile. With a PIN already configured the file
+  /// moves straight in and the vault is re-locked immediately — no unlock UI.
+  Future<void> lockTaskDirectly(DownloadTask task) async {
+    await ready;
+    if (!_hasPin) throw StateError('Set a vault PIN first');
+    await _moveTaskInternal(task);
+    lock();
+  }
+
+  Future<void> _moveTaskInternal(DownloadTask task) async {
     if (!_moving.add(task.id)) return;
     try {
       final downloads = DownloadManager.instance;

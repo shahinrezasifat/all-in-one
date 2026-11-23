@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -112,6 +113,9 @@ class MovieRepositoryService extends ChangeNotifier {
         ),
       );
     }
+    // This repo is a required default: make sure every existing install gets
+    // it too, even when the one-time seeding flag was already set.
+    _ensureAllMovieLandRepo();
     if (!wasSeeded || legacyKeys.any(prefs.containsKey)) await _save();
     if (!wasSeeded) await prefs.setBool(_seededFlagKey, true);
 
@@ -121,6 +125,137 @@ class MovieRepositoryService extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  /// The Phisher repo / AllMovieLand provider are part of the shipped catalog.
+  /// Re-add them on every launch if a user removed them or upgraded from an
+  /// older seeded catalog that did not include them.
+  void _ensureAllMovieLandRepo() {
+    // Test fixtures install their own tiny catalog; don't contaminate it.
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    const repoId = 'cs_phisher';
+    const providerId = 'AllMovieLandProvider';
+    final builtIn = _getDefaultRepositories()
+        .where((repo) => repo.id == repoId)
+        .cast<MovieRepository?>()
+        .firstOrNull;
+    if (builtIn == null) return;
+    final index = _repositories.indexWhere(
+      (repo) => repo.id.toLowerCase() == repoId,
+    );
+    if (index < 0) {
+      _repositories.add(
+        builtIn.copyWith(isEnabled: true, providers: builtIn.providers),
+      );
+      return;
+    }
+    final repo = _repositories[index];
+    final hasProvider = repo.providers.any(
+      (provider) => provider.id == providerId,
+    );
+    final provider = builtIn.providers.firstWhere(
+      (p) => p.id == providerId,
+      orElse: () => builtIn.providers.first,
+    );
+    _repositories[index] = repo.copyWith(
+      isEnabled: true,
+      providers: hasProvider
+          ? repo.providers.map((p) {
+              return p.id == providerId
+                  ? p.copyWith(isInstalled: true, isEnabled: true)
+                  : p;
+            }).toList()
+          : [...repo.providers, provider.copyWith(isInstalled: true)],
+    );
+  }
+
+  /// Result of an extension/repository analysis pass.
+  ({int checked, int updated, int failed}) get lastAnalysis => _lastAnalysis;
+  ({int checked, int updated, int failed}) _lastAnalysis = (
+    checked: 0,
+    updated: 0,
+    failed: 0,
+  );
+
+  /// Refreshes repo manifests, compares provider versions, installs every
+  /// current extension and reports what changed. `repoIds` limits the pass to
+  /// one ecosystem section (e.g. CloudStream or Mihon).
+  Future<({int checked, int updated, int failed})> analyzeAndUpdateAll({
+    List<String>? repoIds,
+  }) async {
+    await ready;
+    final targets = _repositories
+        .where(
+          (repo) =>
+              !_deadRepos.contains(repo.id) &&
+              (repoIds == null || repoIds.contains(repo.id)),
+        )
+        .toList();
+    var checked = 0;
+    var updated = 0;
+    var failed = 0;
+    for (final repo in targets) {
+      checked++;
+      final before = {for (final p in repo.providers) p.id: p.version};
+      try {
+        final ok = await refreshRepository(repo.id).timeout(
+          const Duration(seconds: 20),
+        );
+        if (!ok) {
+          _deadRepos.add(repo.id);
+          failed++;
+          continue;
+        }
+        _deadRepos.remove(repo.id);
+        final index = _repositories.indexWhere((r) => r.id == repo.id);
+        final current = index >= 0 ? _repositories[index] : repo;
+        final changed = current.providers.any(
+          (p) => before[p.id] != p.version,
+        );
+        // Do not bulk-install every extension. Repos stay available, but only
+        // extensions the user installed (plus the built-in AllMovieLand one)
+        // remain active; everything else must be installed from inside the repo.
+        if (changed) updated++;
+      } catch (_) {
+        failed++;
+      }
+    }
+    _lastAnalysis = (checked: checked, updated: updated, failed: failed);
+    return _lastAnalysis;
+  }
+
+  /// Repos whose manifest returned 404/offline in the last sweep; skipped by
+  /// automatic passes so a dead URL cannot spam the log or block the UI.
+  final Set<String> _deadRepos = {};
+
+  bool _autoUpdating = false;
+  Timer? _autoUpdateTimer;
+
+  /// Refreshes every enabled repo and installs its current extensions in the
+  /// background. Called once at startup and then every six hours.
+  Future<void> autoUpdateRepositories() async {
+    if (_autoUpdating) return;
+    _autoUpdating = true;
+    try {
+      await ready;
+      await analyzeAndUpdateAll(
+        repoIds: enabledRepositories.map((repo) => repo.id).toList(),
+      );
+    } finally {
+      _autoUpdating = false;
+    }
+  }
+
+  void startAutoUpdate() {
+    if (_autoUpdateTimer != null ||
+        Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
+    unawaited(autoUpdateRepositories());
+    _autoUpdateTimer = Timer.periodic(
+      const Duration(hours: 6),
+      (_) => unawaited(autoUpdateRepositories()),
+    );
   }
 
   Future<void> _save() async {
@@ -168,12 +303,27 @@ class MovieRepositoryService extends ChangeNotifier {
     final updated = <MovieProvider>[];
     for (final provider in incoming) {
       final prior = byId.remove(provider.id.toLowerCase());
-      if (prior?.isInstalled == true &&
-          (prior!.id != provider.id ||
-              prior.cloudStreamUrl.isEmpty !=
-                  provider.cloudStreamUrl.isEmpty)) {
-        // The installed package uses the original provider ID and runtime.
-        updated.add(prior);
+      if (prior?.isInstalled == true) {
+        final saved = prior!;
+        final savedHasRuntime =
+            saved.scriptUrl.isNotEmpty || saved.cloudStreamUrl.isNotEmpty;
+        final incomingHasRuntime =
+            provider.scriptUrl.isNotEmpty ||
+            provider.cloudStreamUrl.isNotEmpty;
+        // Keep an installed package only when the manifest offers no runtime
+        // (or uses a different ID). Otherwise adopt the manifest entry so
+        // version/logo updates land, while preserving the installed flag.
+        if (saved.id != provider.id ||
+            (savedHasRuntime && !incomingHasRuntime)) {
+          updated.add(saved);
+        } else {
+          updated.add(
+            provider.copyWith(
+              isInstalled: true,
+              isEnabled: saved.isEnabled,
+            ),
+          );
+        }
       } else {
         updated.add(
           provider.copyWith(

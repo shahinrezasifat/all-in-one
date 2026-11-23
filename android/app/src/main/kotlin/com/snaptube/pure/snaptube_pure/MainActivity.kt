@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageInstaller
+import android.speech.RecognizerIntent
 import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -62,12 +63,27 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val REQUEST_PICK_DOWNLOAD_FOLDER = 7319
         private const val REQUEST_INSTALL_UPDATE = 7321
+        private const val REQUEST_SPEECH = 7322
     }
 
     private var pendingInstallResult: MethodChannel.Result? = null
     private var installReceiver: BroadcastReceiver? = null
+    private var pendingSpeechResult: MethodChannel.Result? = null
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_SPEECH) {
+            val result = pendingSpeechResult
+            pendingSpeechResult = null
+            if (resultCode == RESULT_OK && data != null) {
+                val matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                val spoken = matches?.firstOrNull()?.trim()
+                if (spoken.isNullOrEmpty()) result?.success(null)
+                else result?.success(spoken)
+            } else {
+                result?.success(null)
+            }
+            return
+        }
         if (requestCode == REQUEST_PICK_DOWNLOAD_FOLDER) {
             val result = pendingFolderResult
             pendingFolderResult = null
@@ -285,6 +301,35 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 else -> result.notImplemented()
+            }
+        }
+
+        // Free voice input: Android's built-in speech recognizer, no API key.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "snaptube_pure/speech"
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "recognize") {
+                if (pendingSpeechResult != null) {
+                    result.success(null)
+                    return@setMethodCallHandler
+                }
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(
+                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                    )
+                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Say what you want to search")
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                }
+                if (intent.resolveActivity(packageManager) == null) {
+                    result.success(null)
+                    return@setMethodCallHandler
+                }
+                pendingSpeechResult = result
+                startActivityForResult(intent, REQUEST_SPEECH)
+            } else {
+                result.notImplemented()
             }
         }
 

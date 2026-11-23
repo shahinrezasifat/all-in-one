@@ -80,6 +80,33 @@ enum _Section {
   }
 }
 
+/// Runs a full analysis/update pass for every repository ecosystem and shows
+/// the outcome. Safe to tap repeatedly — the service de-duplicates runs.
+Future<void> _runAnalysis(BuildContext context) async {
+  final nav = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const AlertDialog(
+      content: SizedBox(
+        height: 90,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    ),
+  );
+  final result = await MovieRepositoryService.instance.analyzeAndUpdateAll();
+  if (nav.canPop()) nav.pop();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        'Analyzed ${result.checked} repositories · '
+        '${result.updated} updated · ${result.failed} offline',
+      ),
+    ),
+  );
+}
+
 class ZangetsuProvidersHubScreen extends StatelessWidget {
   ZangetsuProvidersHubScreen({super.key});
 
@@ -92,6 +119,13 @@ class ZangetsuProvidersHubScreen extends StatelessWidget {
           'Provider Hub',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Analyze & update all repositories',
+            icon: const Icon(Icons.analytics_outlined),
+            onPressed: () => _runAnalysis(context),
+          ),
+        ],
       ),
       body: FutureBuilder(
         future: service.ready,
@@ -307,6 +341,28 @@ class _RepositoryListState extends State<_RepositoryList> {
             onPressed: () => _add(context),
             tooltip: 'Add repository',
             icon: Icon(Icons.add_rounded),
+          ),
+          IconButton(
+            tooltip: 'Analyze & update this section',
+            icon: const Icon(Icons.analytics_outlined),
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final result =
+                  await MovieRepositoryService.instance.analyzeAndUpdateAll(
+                repoIds: MovieRepositoryService.instance.repositories
+                    .where(section.includes)
+                    .map((repo) => repo.id)
+                    .toList(),
+              );
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '${section.label}: ${result.updated} updated · '
+                    '${result.failed} offline',
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -742,8 +798,31 @@ class ProviderLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
+    final url = provider.iconUrl.trim();
+    // Android's image decoder cannot handle .ico favicons — skip them and show
+    // the clean branded initial instead of a broken/torn tile.
+    if (url.isEmpty || url.toLowerCase().endsWith('.ico')) {
+      return Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Text(
+            SmartNetworkImage.initialsFor(provider.name),
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      );
+    }
     return SmartNetworkImage(
-      url: provider.iconUrl,
+      url: url,
       width: 40,
       height: 40,
       fit: BoxFit.contain,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +11,10 @@ import '../services/download_manager.dart';
 import '../services/permission_service.dart';
 import '../services/preference_service.dart';
 import '../services/search_service.dart';
+import '../services/speech_service.dart';
+import '../services/live_score_service.dart';
 import '../services/trending_engine_service.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../widgets/analyze_download_flow.dart';
 import '../widgets/bookmark_editor_sheet.dart';
@@ -42,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isExtracting = false;
   bool _isSearching = false;
+  List<LiveMatch> _liveMatches = [];
 
   int _searchRequest = 0;
   List<VideoItem> _searchResults = [];
@@ -68,6 +73,17 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     _loadFeedPage();
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      // No free-floating timers in widget tests (fake_async reports them).
+      _cacheLiveScoresSilently();
+    } else {
+      unawaited(
+        Future<void>.delayed(
+          const Duration(seconds: 3),
+          _loadLiveScores,
+        ),
+      );
+    }
 
     if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
       _executeSearch(widget.initialQuery!);
@@ -254,6 +270,322 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _cacheLiveScoresSilently() =>
+      LiveScoreService.instance.fetch();
+
+  Future<void> _loadLiveScores() async {
+    final matches = await LiveScoreService.instance.fetch();
+    if (mounted && matches.isNotEmpty) setState(() => _liveMatches = matches);
+  }
+
+  Color _teamColor(String teamName) {
+    final t = teamName.toUpperCase().trim();
+    if (t.contains('SRH') || t.contains('SUNRISERS')) return const Color(0xFFF26522);
+    if (t.contains('RCB') || t.contains('ROYAL')) return const Color(0xFFEC1C24);
+    if (t.contains('KKR') || t.contains('KNIGHT')) return const Color(0xFF805AD5);
+    if (t.contains('MI') || t.contains('MUMBAI')) return const Color(0xFF005AFF);
+    if (t.contains('CSK') || t.contains('CHENNAI')) return const Color(0xFFF59E0B);
+    if (t.contains('RR') || t.contains('RAJASTHAN')) return const Color(0xFFEC4899);
+    if (t.contains('DC') || t.contains('DELHI')) return const Color(0xFF3B82F6);
+    if (t.contains('PBKS') || t.contains('PUNJAB')) return const Color(0xFFEF4444);
+    if (t.contains('GT') || t.contains('GUJARAT')) return const Color(0xFF10B981);
+    if (t.contains('LSG') || t.contains('LUCKNOW')) return const Color(0xFF06B6D4);
+
+    final hash = teamName.codeUnits.fold(0, (prev, elem) => prev + elem);
+    final hues = [
+      Colors.indigo,
+      Colors.teal,
+      Colors.deepOrange,
+      Colors.purple,
+      Colors.blue,
+      Colors.amber.shade800,
+    ];
+    return hues[hash % hues.length];
+  }
+
+  Widget _teamAvatar(String teamName) {
+    final color = _teamColor(teamName);
+    final initial = teamName.trim().isNotEmpty
+        ? (teamName.trim().length >= 3
+            ? teamName.trim().substring(0, 3).toUpperCase()
+            : teamName.trim().toUpperCase())
+        : 'T';
+
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 1),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: color,
+            fontSize: initial.length >= 3 ? 8 : 9.5,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveSection() {
+    final p = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_liveMatches.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Live Scores',
+                style: TextStyle(
+                  color: p.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const Spacer(),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    final fresh = await LiveScoreService.instance.fetch(force: true);
+                    if (mounted) setState(() => _liveMatches = fresh);
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: p.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: p.primary.withValues(alpha: 0.22)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh_rounded, size: 14, color: p.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Refresh',
+                          style: TextStyle(
+                            color: p.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 122,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _liveMatches.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final m = _liveMatches[index];
+              final isLive = m.status.toLowerCase().contains('live') ||
+                  m.status.toLowerCase().contains('progress') ||
+                  m.status.toLowerCase().contains('inning');
+
+              return Container(
+                width: 250,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [const Color(0xFF1E2230), const Color(0xFF141722)]
+                        : [Colors.white, const Color(0xFFF6F8FA)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isLive
+                        ? Colors.redAccent.withValues(alpha: 0.45)
+                        : (isDark ? const Color(0x22FFFFFF) : Colors.grey.shade300),
+                    width: isLive ? 1.5 : 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.06),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Card Top Row: Title & Status Badge
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.sports_cricket_rounded,
+                          size: 13,
+                          color: p.textSecondary,
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            m.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: p.textSecondary,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: isLive
+                                ? Colors.redAccent.withValues(alpha: 0.18)
+                                : p.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isLive) ...[
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.redAccent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                isLive ? 'LIVE' : m.status.toUpperCase(),
+                                style: TextStyle(
+                                  color: isLive ? Colors.redAccent : p.primary,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    // Team A Score Row
+                    Row(
+                      children: [
+                        _teamAvatar(m.teamA),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            m.teamA,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: p.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          m.scoreA,
+                          style: TextStyle(
+                            color: p.textPrimary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // Team B Score Row
+                    Row(
+                      children: [
+                        _teamAvatar(m.teamB),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            m.teamB,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: p.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          m.scoreB,
+                          style: TextStyle(
+                            color: p.textPrimary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Free Android voice input; silent cancel leaves the field untouched.
+  Future<void> _voiceSearch() async {
+    final spoken = await SpeechService.instance.recognize();
+    if (spoken == null || spoken.isEmpty || !mounted) return;
+    _searchController.text = spoken;
+    _refreshSearchField();
+    await _submitSearchOrLink(spoken);
+  }
+
   void _refreshSearchField() {
     if (mounted) setState(() {});
   }
@@ -364,6 +696,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     tooltip: 'Paste link',
                     onPressed: _isExtracting ? null : _pasteSearchLink,
                     icon: Icon(Icons.link_rounded, size: 19, color: accent),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: 'Voice search',
+                    onPressed: _isExtracting ? null : _voiceSearch,
+                    icon: Icon(Icons.mic_rounded, size: 19, color: accent),
                     visualDensity: VisualDensity.compact,
                   ),
                   SizedBox(width: 2),
@@ -821,14 +1159,17 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-          SizedBox(height: 10),
-          Divider(
-            height: 1,
-            color: dark ? context.palette.border : context.palette.border,
-          ),
         ],
       ),
     );
+  }
+
+  Widget _buildCategoryChips() {
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildPromoCards() {
+    return const SizedBox.shrink();
   }
 
   Widget _buildFeedHeader({
@@ -836,60 +1177,162 @@ class _HomeScreenState extends State<HomeScreen> {
     required Color accent,
   }) {
     final theme = Theme.of(context);
-    final actionStyle = TextButton.styleFrom(
-      foregroundColor: theme.colorScheme.onSurfaceVariant,
-      padding: EdgeInsets.symmetric(horizontal: 9),
-      textStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-    );
+    final p = context.palette;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 2, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (!showingResults)
-                  Text('Discover', style: theme.textTheme.labelMedium),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.whatshot_rounded,
+                        size: 13,
+                        color: accent,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'DISCOVER',
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 2),
                 Text(
                   showingResults
                       ? 'Results for "$_activeSearchQuery"'
                       : 'Trending now',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge?.copyWith(
+                  style: TextStyle(
+                    color: p.textPrimary,
                     fontSize: 21,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.4,
                   ),
                 ),
               ],
             ),
           ),
-          if (!showingResults)
-            IconButton.filledTonal(
-              tooltip: 'Refresh',
-              onPressed: _loadingMoreFeed ? null : _refreshFeed,
-              icon: const Icon(Icons.refresh_rounded, size: 20),
+          const SizedBox(width: 8),
+          if (!showingResults) ...[
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _loadingMoreFeed ? null : _refreshFeed,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: accent.withValues(alpha: 0.25),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.refresh_rounded,
+                    size: 18,
+                    color: accent,
+                  ),
+                ),
+              ),
             ),
-          const SizedBox(width: 6),
-          IconButton.filledTonal(
-            tooltip: _isMultiSelect ? 'Finish selection' : 'Batch download',
-            color: _isMultiSelect ? accent : theme.colorScheme.onSurfaceVariant,
-            onPressed: () {
-              setState(() {
-                _isMultiSelect = !_isMultiSelect;
-                if (!_isMultiSelect) _selectedVideos.clear();
-              });
-            },
-            icon: Icon(_isMultiSelect ? Icons.check_rounded : Icons.playlist_add_check_rounded, size: 20),
+            const SizedBox(width: 8),
+          ],
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _isMultiSelect = !_isMultiSelect;
+                  if (!_isMultiSelect) _selectedVideos.clear();
+                });
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 38,
+                padding: EdgeInsets.symmetric(
+                  horizontal: _isMultiSelect ? 12 : 0,
+                ),
+                constraints: const BoxConstraints(minWidth: 38),
+                decoration: BoxDecoration(
+                  color: _isMultiSelect
+                      ? accent
+                      : accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: accent.withValues(alpha: 0.35),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _isMultiSelect
+                          ? Icons.check_rounded
+                          : Icons.playlist_add_check_rounded,
+                      size: 18,
+                      color: _isMultiSelect ? Colors.white : accent,
+                    ),
+                    if (_isMultiSelect) ...[
+                      const SizedBox(width: 5),
+                      const Text(
+                        'Done',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ),
-          if (showingResults)
-            TextButton(
-              onPressed: _clearSearch,
-              style: actionStyle,
-              child: Text('Clear'),
+          if (showingResults) ...[
+            const SizedBox(width: 8),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _clearSearch,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: p.card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: p.border),
+                  ),
+                  child: Text(
+                    'Clear',
+                    style: TextStyle(
+                      color: p.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
             ),
+          ],
         ],
       ),
     );
@@ -932,6 +1375,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     SliverToBoxAdapter(child: _buildQuickAccess(accent))
                   else
                     SliverToBoxAdapter(child: SizedBox(height: 14)),
+                  if (!showingResults) ...[
+                    SliverToBoxAdapter(child: _buildPromoCards()),
+                    if (_liveMatches.isNotEmpty)
+                      SliverToBoxAdapter(child: _buildLiveSection()),
+                  ],
                   SliverToBoxAdapter(
                     child: _buildFeedHeader(
                       showingResults: showingResults,

@@ -14,6 +14,7 @@ import '../services/permission_service.dart';
 import '../services/playback_controls.dart';
 import '../services/player_service.dart';
 import '../services/preference_service.dart';
+import '../services/provider_engine/provider_engine_service.dart';
 import '../services/provider_engine/provider_models.dart';
 import '../services/stream_fallback_service.dart';
 import '../services/watch_history_service.dart';
@@ -67,6 +68,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   late String _currentQuality;
 
   bool _isPlaying = true;
+  bool _mini = false;
   double _currentSeconds = 0.0;
   double _totalSeconds = 7200.0; // 2h default
   double _playbackSpeed = 1.0;
@@ -142,19 +144,14 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       });
     }
 
-    // Movies force landscape for cinema view. Live IPTV stays in portrait (the
-    // user clearly chose portrait) and simply follows the device rotation.
+    // Every stream — movie or live channel — opens in this same cinema player
+    // and starts in landscape. The fullscreen toggle can re-enable portrait.
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      if (widget.isLiveTv) {
-        // IPTV channels are watched in portrait — do NOT rotate to landscape.
-        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-      } else {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-      }
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
     }
 
     if (widget.trailerOnly) {
@@ -274,7 +271,20 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     _analysisInFlight = true;
     if (resetFailures) _failedSourceKeys.clear();
 
+    // A live channel may expose its real URL only through the IPTV extension.
+    // Ask the extension again here so playback is retried from a source-provided
+    // link even when the catalogue URL was just a detail page.
+    var extensionSources = <MovieSource>[];
+    if (widget.isLiveTv) {
+      try {
+        extensionSources = await ProviderEngineService.instance
+            .resolveStreams(widget.movie, keepAllFormats: true)
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {}
+    }
+
     final candidates = <MovieSource>[
+      ...extensionSources,
       widget.initialSource,
       ...widget.liveSources,
     ];
@@ -1002,7 +1012,16 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
+    if (_mini) return _buildMiniPlayer();
+
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        // First system back minimises into a draggable popup; a second back
+        // (or the close button) actually leaves the player.
+        if (!didPop && mounted) setState(() => _mini = true);
+      },
+      child: Scaffold(
       backgroundColor: context.palette.background,
       body: Stack(
         children: [
@@ -1147,6 +1166,113 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                 ),
               ),
             ),
+        ],
+      ),
+      ),
+    );
+  }
+
+  /// Compact popup shown after the first system back. The controller stays
+  /// alive, so playback continues; drag sideways to dismiss or tap to restore.
+  Widget _buildMiniPlayer() {
+    final p = context.palette;
+    final bottom = MediaQuery.paddingOf(context).bottom + 84.0;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: bottom,
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _mini = false);
+                _resetControlsTimer();
+              },
+              onHorizontalDragEnd: (details) {
+                final velocity = details.primaryVelocity ?? 0;
+                if (velocity.abs() > 350) Navigator.of(context).pop();
+              },
+              child: Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: p.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: p.shadowAt(0.32),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(9),
+                      child: SmartNetworkImage(
+                        url: widget.movie.posterUrl.isNotEmpty
+                            ? widget.movie.posterUrl
+                            : widget.movie.backdropUrl,
+                        width: 52,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        placeholderColor: p.background,
+                        placeholderIcon: Icons.movie_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.movie.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: p.textPrimary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${_formatTime(_currentSeconds)} / ${_formatTime(_totalSeconds)}',
+                            style: TextStyle(
+                              color: p.textSecondary,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: _isPlaying ? 'Pause' : 'Play',
+                      icon: Icon(
+                        _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        color: p.primary,
+                      ),
+                      onPressed: _togglePlay,
+                    ),
+                    IconButton(
+                      tooltip: 'Full screen',
+                      icon: Icon(Icons.open_in_full_rounded, color: p.primary),
+                      onPressed: () => setState(() => _mini = false),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      icon: Icon(Icons.close_rounded, color: p.textSecondary),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1371,78 +1497,82 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           ),
           if (_videoErrorMessage != null)
             Center(
-              child: Container(
-                margin: EdgeInsets.symmetric(horizontal: 24),
-                padding: EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: context.palette.shadowAt(0.90),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.error_outline_rounded,
-                      color: context.palette.error,
-                      size: 36,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      _videoErrorMessage!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: context.palette.onScrim, fontSize: 12),
-                    ),
-                    SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () => widget.isLiveTv
-                              ? _connectLiveTv(resetFailures: true)
-                              : widget.trailerOnly
-                              ? _playTrailer()
-                              : _initVideoPlayer(),
-                          icon: Icon(Icons.refresh_rounded, size: 16),
-                          label: Text(
-                            widget.isLiveTv
-                                ? 'Retry Channel'
-                                : 'Retry selected source',
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.palette.shadowAt(0.90),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: context.palette.error,
+                        size: 36,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _videoErrorMessage!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: context.palette.onScrim, fontSize: 12),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () => widget.isLiveTv
+                                ? _connectLiveTv(resetFailures: true)
+                                : widget.trailerOnly
+                                ? _playTrailer()
+                                : _initVideoPlayer(),
+                            icon: const Icon(Icons.refresh_rounded, size: 16),
+                            label: Text(
+                              widget.isLiveTv
+                                  ? 'Retry Channel'
+                                  : 'Retry selected source',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: context.palette.primary,
+                            ),
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: context.palette.primary,
+                          if (!widget.isLiveTv)
+                            OutlinedButton.icon(
+                              onPressed: _launchSystemPlayer,
+                              icon: const Icon(
+                                Icons.play_circle_fill_rounded,
+                                size: 16,
+                              ),
+                              label: const Text('Open in VLC / MPV'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: context.palette.onScrim,
+                              ),
+                            ),
+                          TextButton.icon(
+                            onPressed: _showServerPicker,
+                            icon: Icon(
+                              Icons.dns_rounded,
+                              size: 16,
+                              color: context.palette.textSecondary,
+                            ),
+                            label: Text(
+                              'Choose Server',
+                              style: TextStyle(color: context.palette.textSecondary),
+                            ),
                           ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _launchSystemPlayer,
-                          icon: Icon(
-                            Icons.play_circle_fill_rounded,
-                            size: 16,
-                          ),
-                          label: Text('Open in VLC / MPV'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: context.palette.card,
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _showServerPicker,
-                          icon: Icon(
-                            Icons.dns_rounded,
-                            size: 16,
-                            color: context.palette.textSecondary,
-                          ),
-                          label: Text(
-                            'Choose Server',
-                            style: TextStyle(color: context.palette.textSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             )
@@ -1614,15 +1744,16 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                         onTap: _showSeasonEpisodeDrawer,
                       ),
 
-                    // External System Player Launch
-                    IconButton(
-                      tooltip: 'Play in External Player (VLC / MPV / MX)',
-                      onPressed: _launchSystemPlayer,
-                      icon: Icon(
-                        Icons.open_in_new_rounded,
-                        color: context.palette.onScrim,
+                    // External System Player Launch (live channels stay in-app)
+                    if (!widget.isLiveTv)
+                      IconButton(
+                        tooltip: 'Play in External Player (VLC / MPV / MX)',
+                        onPressed: _launchSystemPlayer,
+                        icon: Icon(
+                          Icons.open_in_new_rounded,
+                          color: context.palette.onScrim,
+                        ),
                       ),
-                    ),
 
                     // Lock Screen Button
                     IconButton(

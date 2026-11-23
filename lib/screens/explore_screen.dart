@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/video_item.dart';
 import '../services/search_service.dart';
+import '../services/preference_service.dart';
+import '../services/speech_service.dart';
+import '../services/movie_repository_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/video_card.dart';
 
@@ -110,6 +113,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Voice search',
+            icon: Icon(Icons.mic_rounded, color: context.palette.primary),
+            onPressed: () async {
+              final spoken = await SpeechService.instance.recognize();
+              if (spoken == null || spoken.isEmpty || !mounted) return;
+              _searchCtrl.text = spoken;
+              _performSearch(spoken);
+            },
+          ),
           TextButton(
             onPressed: () => _performSearch(_searchCtrl.text),
             child: Text('Search', style: TextStyle(color: context.palette.primary, fontWeight: FontWeight.bold)),
@@ -163,6 +176,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ListView(
               padding: EdgeInsets.all(16),
               children: [
+                _buildRecentSearches(),
+                SizedBox(height: 20),
+                _buildEveryoneSearching(),
+                SizedBox(height: 20),
+                _buildHotMovies(isDark),
+                SizedBox(height: 24),
                 Text(
                   'Popular Searches',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -251,6 +270,161 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRecentSearches() {
+    final recent = PreferenceService.instance.recentVideoSearches.take(6).toList();
+    if (recent.isEmpty) return const SizedBox.shrink();
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('Recent', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            TextButton(
+              onPressed: () => setState(
+                () => PreferenceService.instance.clearRecentSearches(),
+              ),
+              child: Text('Clear', style: TextStyle(color: p.textSecondary, fontSize: 12)),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final term in recent)
+              ActionChip(
+                label: Text(term, style: TextStyle(fontSize: 11)),
+                backgroundColor: p.card,
+                onPressed: () {
+                  _searchCtrl.text = term;
+                  _performSearch(term);
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEveryoneSearching() {
+    final terms = [
+      'The Wheel of Time',
+      'Bridgerton',
+      'Naruto: Shippuden',
+      'Shadow and Bone',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '🔥 Everyone is searching',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final term in terms)
+              ActionChip(
+                label: Text(term, style: TextStyle(fontSize: 11)),
+                backgroundColor: context.palette.card,
+                onPressed: () {
+                  _searchCtrl.text = term;
+                  _performSearch(term);
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHotMovies(bool isDark) {
+    final movies = MovieRepositoryService.instance.getAllMovies()
+      ..sort((a, b) => b.rating.compareTo(a.rating));
+    final top = movies.take(5).toList();
+    if (top.isEmpty) return const SizedBox.shrink();
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('📈 Hot Movies', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        SizedBox(height: 10),
+        SizedBox(
+          height: 76,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: top.length,
+            separatorBuilder: (_, __) => SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final movie = top[index];
+              return Container(
+                width: 220,
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: p.card,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: index == 0 ? p.primary : p.selectedBg,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            color: index == 0 ? p.onPrimary : p.primary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            movie.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: p.textPrimary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            '⭐ ${movie.rating} · ${movie.year} · ${movie.genres.take(2).join(', ')}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: p.textSecondary, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

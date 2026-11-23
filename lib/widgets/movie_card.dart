@@ -6,6 +6,19 @@ import 'movie_detail_sheet.dart';
 import 'remote_image.dart';
 
 class MovieCard extends StatelessWidget {
+  /// Short language label inferred from title/genres — mirrors the small
+  /// corner badge used by catalog apps.
+  static String languageOf(MovieItem movie) {
+    final text = '${movie.title} ${movie.genres.join(' ')}'.toLowerCase();
+    if (text.contains('bengali') || text.contains('bangla')) return 'Bengali';
+    if (text.contains('hindi')) return 'Hindi';
+    if (text.contains('tamil')) return 'Tamil';
+    if (text.contains('telugu')) return 'Telugu';
+    if (text.contains('english')) return 'English';
+    if (text.contains('anime')) return 'Anime';
+    return 'Movie';
+  }
+
   static final catalogGrid = SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: 150,
     childAspectRatio: .62,
@@ -70,6 +83,65 @@ class MovieCard extends StatelessWidget {
                             ? context.palette.info
                             : context.palette.primary,
                       ),
+
+                      if (compact) ...[
+                        Positioned(
+                          top: 5,
+                          left: 5,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.palette.scrimAt(0.78),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              languageOf(movie),
+                              style: TextStyle(
+                                color: context.palette.onScrim,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (movie.rating > 0)
+                          Positioned(
+                            bottom: 5,
+                            right: 5,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.palette.scrimAt(0.86),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.star_rounded,
+                                    color: context.palette.info,
+                                    size: 10,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    movie.rating.toStringAsFixed(1),
+                                    style: TextStyle(
+                                      color: context.palette.onScrim,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
 
                       if (!compact) ...[
                         // Gradient scrim at bottom of poster

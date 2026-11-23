@@ -467,6 +467,25 @@ void main() {
     },
   );
 
+  test('theme mode and audio preference persist across reads', () async {
+    SharedPreferences.setMockInitialValues({
+      'theme_mode': 'light',
+      'default_audio_format': 'M4A Lossless',
+    });
+
+    await SettingsService.instance.ready;
+    expect(SettingsService.instance.themeMode, ThemeMode.light);
+    // Legacy "M4A Lossless" preference is migrated to the honest M4A/AAC label.
+    expect(SettingsService.instance.defaultAudioFormat, 'M4A (AAC)');
+
+    await SettingsService.instance.setThemeMode(ThemeMode.dark);
+    await SettingsService.instance.setDefaultAudioFormat('256 kbps MP3');
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('theme_mode'), 'dark');
+    expect(prefs.getString('default_audio_format'), '256 kbps MP3');
+  });
+
   test('a full season queues every episode in its own season folder', () async {
     final temp = await Directory.systemTemp.createTemp('season_download_test');
     addTearDown(() => temp.delete(recursive: true));
@@ -623,25 +642,6 @@ void main() {
       'Alpha Source',
       'Beta Source',
     ]);
-  });
-
-  test('theme mode and audio preference persist across reads', () async {
-    SharedPreferences.setMockInitialValues({
-      'theme_mode': 'light',
-      'default_audio_format': 'M4A Lossless',
-    });
-
-    await SettingsService.instance.ready;
-    expect(SettingsService.instance.themeMode, ThemeMode.light);
-    // Legacy "M4A Lossless" preference is migrated to the honest M4A/AAC label.
-    expect(SettingsService.instance.defaultAudioFormat, 'M4A (AAC)');
-
-    await SettingsService.instance.setThemeMode(ThemeMode.dark);
-    await SettingsService.instance.setDefaultAudioFormat('256 kbps MP3');
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('theme_mode'), 'dark');
-    expect(prefs.getString('default_audio_format'), '256 kbps MP3');
   });
 
   test('vault PIN is stored, verified and survives a reload', () async {

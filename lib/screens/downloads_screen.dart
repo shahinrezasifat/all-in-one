@@ -1583,7 +1583,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     List<DownloadTask> activeList,
     bool isDark,
   ) {
-    if (activeList.isEmpty) return SizedBox.shrink();
+    if (activeList.isEmpty) return const SizedBox.shrink();
 
     double totalSpeedBytes = 0;
     for (final t in activeList) {
@@ -1591,7 +1591,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         totalSpeedBytes += t.speedBytesPerSec;
       }
     }
-    final preparingCount = activeList.where((task) => task.isPreparing).length;
     final speedKb = totalSpeedBytes / 1024;
     String totalSpeedText;
     if (speedKb >= 1024) {
@@ -1603,132 +1602,117 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final isAnyDownloading = activeList.any(
       (t) => t.status == DownloadStatus.downloading,
     );
+    final accent = context.palette.primary;
 
     return Container(
-      margin: EdgeInsets.fromLTRB(16, 0, 16, 10),
-      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(16),
+        color: isDark ? const Color(0x1AFFFFFF) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark ? context.palette.border : context.palette.card,
-          width: 1,
+          color: isDark ? const Color(0x22FFFFFF) : Colors.black12,
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark
-                ? context.palette.shadowAt(0.25)
-                : context.palette.textSecondary.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(7),
+            padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: context.palette.tint(context.palette.primary, 0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: accent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               Icons.speed_rounded,
-              color: context.palette.primary,
+              color: accent,
               size: 20,
             ),
           ),
-          SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
-                    Text(
-                      '${activeList.length} Active Download${activeList.length > 1 ? "s" : ""}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                    Flexible(
+                      child: Text(
+                        '${activeList.length} Active Download${activeList.length == 1 ? '' : 's'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Container(
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
-                        color: isAnyDownloading
-                            ? context.palette.success
-                            : context.palette.info,
+                        color: isAnyDownloading ? Colors.greenAccent : Colors.amberAccent,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: (isAnyDownloading
-                                    ? context.palette.success
-                                    : context.palette.info)
-                                .withValues(alpha: 0.8),
-                            blurRadius: 3,
+                            color: (isAnyDownloading ? Colors.greenAccent : Colors.amberAccent)
+                                .withValues(alpha: 0.6),
+                            blurRadius: 6,
                           ),
                         ],
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
-                  totalSpeedBytes <= 0 && preparingCount > 0
-                      ? '$preparingCount preparing to start'
-                      : 'Combined speed · $totalSpeedText',
+                  'Combined speed · $totalSpeedText',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11,
                     color: context.palette.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(20),
               onTap: () {
-                final mgr = DownloadManager.instance;
                 if (isAnyDownloading) {
                   for (final t in activeList) {
-                    if (t.status == DownloadStatus.downloading ||
-                        t.status == DownloadStatus.queued) {
-                      mgr.pauseTask(t);
-                    }
+                    DownloadManager.instance.pauseTask(t);
                   }
                 } else {
                   for (final t in activeList) {
-                    if (t.status == DownloadStatus.paused ||
-                        t.status == DownloadStatus.failed) {
-                      mgr.resumeTask(t);
-                    }
+                    DownloadManager.instance.resumeTask(t);
                   }
                 }
               },
-              child: Container(
-                height: 32,
-                padding: EdgeInsets.symmetric(horizontal: 12),
+              borderRadius: BorderRadius.circular(16),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: isAnyDownloading
-                      ? (isDark
-                          ? context.palette.secondary
-                          : context.palette.card)
-                      : (isDark
-                          ? context.palette.tint(context.palette.success, 0.10)
-                          : context.palette.tint(context.palette.success, 0.08)),
-                  borderRadius: BorderRadius.circular(20),
+                      ? accent
+                      : accent.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isAnyDownloading
-                        ? (isDark
-                            ? context.palette.secondary
-                            : context.palette.tint(context.palette.info, 0.18))
-                        : (context.palette.success),
-                    width: 1,
+                    color: accent.withValues(alpha: 0.35),
                   ),
                 ),
                 child: Row(
@@ -1738,24 +1722,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       isAnyDownloading
                           ? Icons.pause_rounded
                           : Icons.play_arrow_rounded,
-                      size: 14,
-                      color: isAnyDownloading
-                          ? (isDark
-                              ? context.palette.onSecondary
-                              : context.palette.info)
-                          : context.palette.success,
+                      size: 15,
+                      color: isAnyDownloading ? Colors.white : accent,
                     ),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
                       isAnyDownloading ? 'Pause All' : 'Resume All',
                       style: TextStyle(
+                        color: isAnyDownloading ? Colors.white : accent,
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: isAnyDownloading
-                            ? (isDark
-                                ? context.palette.onSecondary
-                                : context.palette.info)
-                            : context.palette.success,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
@@ -1775,7 +1751,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1784,12 +1760,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               size: 72,
               color: context.palette.tint(context.palette.primary, 0.5),
             ),
-            SizedBox(height: 18),
+            const SizedBox(height: 18),
             Text(
               title,
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               subtitle,
               textAlign: TextAlign.center,

@@ -19,6 +19,7 @@ import 'gallery_media_service.dart';
 import 'image_cache_service.dart';
 import 'inner_tube_service.dart';
 import 'media_mux_service.dart';
+import 'settings_service.dart';
 import 'provider_engine/provider_engine_service.dart';
 import 'provider_engine/provider_models.dart';
 import 'virtual_folder_service.dart';
@@ -47,7 +48,6 @@ class DownloadManager extends ChangeNotifier {
   // Track active HTTP clients for immediate abort on pause or cancel
   final Map<String, List<http.Client>> _activeClients = {};
   final Map<String, Future<void>> _runningDownloads = {};
-  static const _queuedDownloadConcurrency = 3;
   static const _background = MethodChannel('snaptube_pure/background');
   Future<void> _foregroundUpdate = Future.value();
 
@@ -583,6 +583,7 @@ class DownloadManager extends ChangeNotifier {
     required List<({ProviderEpisode episode, MovieSource source})> episodes,
   }) async {
     await ready;
+    await SettingsService.instance.ready;
     if (episodes.isEmpty) return;
     ImageCacheService.instance.prefetch([series.posterUrl]);
     final seriesName = _safeDownloadName(series.title, fallback: 'Series');
@@ -944,7 +945,8 @@ class DownloadManager extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   void _startQueuedDownloads() {
-    final available = _queuedDownloadConcurrency - _runningDownloads.length;
+    final available = SettingsService.instance.maxConcurrent.clamp(1, 5) -
+        _runningDownloads.length;
     if (available > 0) {
       final next = _tasks.reversed
           .where((task) => task.status == DownloadStatus.queued)
@@ -1830,7 +1832,10 @@ class DownloadManager extends ChangeNotifier {
                 ) ??
                 0
           : 0;
-      bool supportsRanges = false;
+      // GoogleVideo dislikes throwaway probe requests, but its signed links do
+      // accept Range. Skip the probe and try parallel ranges directly; the
+      // range worker falls back to one stream if a host refuses.
+      bool supportsRanges = googleVideo && totalLength > 0;
       String? validator;
 
       if (!googleVideo) {
@@ -1959,9 +1964,8 @@ class DownloadManager extends ChangeNotifier {
       task.statusNote = 'Starting download…';
       notifyListeners();
 
-      if (task.category == 'movie' &&
-          supportsRanges &&
-          totalLength >= 16 * 1024 * 1024 &&
+      if (supportsRanges &&
+          totalLength >= (googleVideo ? 50 : 16) * 1024 * 1024 &&
           await _downloadMovieRanges(
             task,
             streamUrl,
@@ -3060,7 +3064,7 @@ class DownloadManager extends ChangeNotifier {
     List<http.Client> activeClients,
   ) async {
     const blockSize = 4 * 1024 * 1024;
-    const connections = 6;
+    const connections = 10;
     final file = File(task.savePath!);
     var offset = await file.exists() ? await file.length() : 0;
     if (offset > total) return false;

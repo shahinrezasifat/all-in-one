@@ -201,6 +201,27 @@ void main() {
     }
   });
 
+  testWidgets('GitHub release headings are shown as sections', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartupUpdateGate(
+          checkForUpdate: () async => AppUpdate(
+            version: '1.0.10',
+            notes: 'A faster way to find videos.\n\n## Home\n- Voice search\n\n## Downloads\n- Better controls',
+            releaseUrl: Uri.parse(_release),
+          ),
+          child: const Text('Home screen'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.text('•  Voice search'), findsOneWidget);
+    expect(find.text('•  Better controls'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('The startup check holds the home screen until it completes', (
     tester,
   ) async {

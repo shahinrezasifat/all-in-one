@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Encrypted traffic only for the whole app. Cleartext is permitted
-         solely for local debugging endpoints. -->
-    <base-config cleartextTrafficPermitted="false" />
+    <!-- IPTV/HLS catalogues often serve their media segments over plain HTTP
+         even when the master playlist is HTTPS. Allowing cleartext is required
+         for those channels to play at all. -->
+    <base-config cleartextTrafficPermitted="true" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>

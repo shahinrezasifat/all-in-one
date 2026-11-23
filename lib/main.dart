@@ -89,6 +89,14 @@ void main() {
   // Warm the on-device yt-dlp engine early. Idempotent + non-blocking; the
   // first call may extract/download binaries, so never await it on the UI path.
   YtDlpService.instance.ensureInit();
+  // Keep repos/extensions (including the built-in AllMovieLand provider)
+  // fresh without blocking the UI.
+  // Defer manifest refresh/plugin loading until the first frame is painted so
+  // startup stays smooth (the repo sweep can be network-heavy).
+  Future<void>.delayed(
+    const Duration(seconds: 4),
+    () => MovieRepositoryService.instance.startAutoUpdate(),
+  );
   runApp(TubPureApp());
 }
 
@@ -592,7 +600,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   clipBehavior: Clip.none,
                   children: [
                     TweenAnimationBuilder<double>(
-                      key: ValueKey<int>(_navTapTicks[index]),
+                      key: ValueKey<String>('nav_tap_${index}_${_navTapTicks[index]}'),
                       tween: Tween<double>(begin: 0.72, end: 1.0),
                       duration: const Duration(milliseconds: 460),
                       curve: Curves.easeOutBack,
@@ -610,7 +618,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     ),
                     if (index == 3 && _downloadPulseTick > 0)
                       TweenAnimationBuilder<double>(
-                        key: ValueKey<int>(_downloadPulseTick),
+                        key: ValueKey<String>('nav_pulse_${_downloadPulseTick}'),
                         tween: Tween<double>(begin: 0, end: 1),
                         duration: const Duration(milliseconds: 850),
                         builder: (context, t, _) {

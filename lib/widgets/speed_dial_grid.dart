@@ -11,7 +11,7 @@ class SpeedDialGrid extends StatelessWidget {
   final Function(SiteModel)? onEditBookmark;
   final Function(SiteModel)? onDeleteBookmark;
 
-  SpeedDialGrid({
+  const SpeedDialGrid({
     super.key,
     required this.sites,
     required this.onSiteTap,
@@ -22,20 +22,20 @@ class SpeedDialGrid extends StatelessWidget {
   void _showSiteOptions(BuildContext context, SiteModel site) {
     showModalBottomSheet(
       context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return SafeArea(
           child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 40,
+                  width: 38,
                   height: 4,
-                  margin: EdgeInsets.only(bottom: 12),
+                  margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
                     color: context.palette.tint(context.palette.textSecondary, 0.4),
                     borderRadius: BorderRadius.circular(2),
@@ -53,7 +53,7 @@ class SpeedDialGrid extends StatelessWidget {
                   ),
                   title: Text(
                     site.title,
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
                     site.url,
@@ -61,13 +61,13 @@ class SpeedDialGrid extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Divider(),
+                const Divider(),
                 ListTile(
                   leading: Icon(
                     Icons.open_in_browser_rounded,
                     color: context.palette.primary,
                   ),
-                  title: Text('Open in In-App Browser'),
+                  title: const Text('Open in In-App Browser'),
                   onTap: () {
                     Navigator.pop(ctx);
                     onSiteTap(site);
@@ -78,22 +78,22 @@ class SpeedDialGrid extends StatelessWidget {
                     Icons.edit_outlined,
                     color: context.palette.onPrimary,
                   ),
-                  title: Text('Edit Bookmark'),
+                  title: const Text('Edit Bookmark'),
                   onTap: () {
                     Navigator.pop(ctx);
                     onEditBookmark?.call(site);
                   },
                 ),
                 ListTile(
-                  leading: Icon(Icons.copy_rounded),
-                  title: Text('Copy URL'),
+                  leading: const Icon(Icons.copy_rounded),
+                  title: const Text('Copy URL'),
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: site.url));
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Copied ${site.url}'),
-                        duration: Duration(seconds: 1),
+                        duration: const Duration(seconds: 1),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -126,25 +126,25 @@ class SpeedDialGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final labelHeight = MediaQuery.textScalerOf(context).scale(12);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 680
             ? 6
-            : constraints.maxWidth >= 272 && labelHeight <= 16
-            ? 4
-            : 3;
+            : constraints.maxWidth >= 272
+                ? 4
+                : 3;
+
         return GridView.builder(
-          physics: NeverScrollableScrollPhysics(),
+          physics: const NeverScrollableScrollPhysics(),
           shrinkWrap: true,
           padding: EdgeInsets.zero,
           itemCount: sites.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            mainAxisSpacing: 6,
-            crossAxisSpacing: 4,
-            mainAxisExtent: 59 + labelHeight * 2.4,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 8,
+            mainAxisExtent: 84,
           ),
           itemBuilder: (context, index) {
             final site = sites[index];
@@ -152,52 +152,71 @@ class SpeedDialGrid extends StatelessWidget {
             final glow = brand.computeLuminance() < .02
                 ? context.palette.textSecondary
                 : brand;
+
             return Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 onTap: () => onSiteTap(site),
                 onLongPress: () => _showSiteOptions(context, site),
                 child: Tooltip(
                   message: site.title,
                   triggerMode: TooltipTriggerMode.manual,
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 56,
-                          height: 56,
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 52,
+                          height: 52,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
+                            color: isDark
+                                ? glow.withValues(alpha: 0.15)
+                                : Colors.white,
                             gradient: RadialGradient(
                               colors: [
                                 glow.withValues(alpha: isDark ? .28 : .21),
                                 glow.withValues(alpha: isDark ? .10 : .07),
                                 glow.withValues(alpha: 0),
                               ],
-                              stops: [0, .64, 1],
+                              stops: const [0, .64, 1],
                             ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: glow.withValues(alpha: isDark ? 0.32 : 0.20),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: glow.withValues(alpha: isDark ? 0.22 : 0.12),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
                           child: SmartNetworkImage(
                             url: site.icon,
-                            width: 32,
-                            height: 32,
+                            width: 28,
+                            height: 28,
                             fit: BoxFit.contain,
                             placeholderIcon: Icons.public_rounded,
                             accentColor: isDark ? glow : brand,
                           ),
                         ),
+                        const SizedBox(height: 6),
                         Flexible(
                           child: Text(
                             site.title,
-                            maxLines: 2,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: theme.textTheme.labelMedium?.copyWith(
-                              fontSize: 12,
-                              height: 1.15,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white70 : Colors.black87,
                             ),
                           ),
                         ),
