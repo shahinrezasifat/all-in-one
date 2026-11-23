@@ -5,7 +5,7 @@ import '../models/extract_result.dart';
 import '../services/download_manager.dart';
 import '../services/permission_service.dart';
 import '../services/virtual_folder_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'remote_image.dart';
 
 /// iOS-inspired download format picker.
@@ -18,7 +18,7 @@ import 'remote_image.dart';
 class FormatPickerSheet extends StatefulWidget {
   final ExtractResult result;
 
-  const FormatPickerSheet({super.key, required this.result});
+  FormatPickerSheet({super.key, required this.result});
 
   static Future<void> show(BuildContext context, ExtractResult result) {
     return showModalBottomSheet(
@@ -34,7 +34,7 @@ class FormatPickerSheet extends StatefulWidget {
 }
 
 class _FormatPickerSheetState extends State<FormatPickerSheet> {
-  static const Color _iosBlue = AppColors.primary;
+  static Color _iosBlue = AppPalette.current.primary;
 
   /// Every format the user ticked — several resolutions can be downloaded in
   /// ONE go (4K AND 1080p AND MP3), each becomes its own queue task.
@@ -186,19 +186,19 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.darkCard,
+          backgroundColor: context.palette.card,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           content: Row(
             children: [
-              const Icon(Icons.download_done_rounded, color: AppColors.primary),
-              const SizedBox(width: 12),
+              Icon(Icons.download_done_rounded, color: context.palette.primary),
+              SizedBox(width: 12),
               Expanded(
                 child: Text(
                   picks.length == 1
                       ? 'Downloading "${widget.result.title}" to Folder "$_targetFolderName"'
                       : '${picks.length} downloads queued for "${widget.result.title}" → "$_targetFolderName"',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: TextStyle(color: context.palette.textPrimary, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -238,9 +238,9 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.darkCard,
+        backgroundColor: context.palette.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: Text(message, style: const TextStyle(color: Colors.white)),
+        content: Text(message, style: TextStyle(color: context.palette.textPrimary)),
       ),
     );
   }
@@ -269,7 +269,7 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+        title: Text(
           'New Folder',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
@@ -284,14 +284,14 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.palette.primary),
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text(
+            child: Text(
               'Create',
-              style: TextStyle(color: Colors.white),
+              style: TextStyle(color: context.palette.onPrimary),
             ),
           ),
         ],
@@ -328,8 +328,8 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
             : 0,
       ),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        color: isDark ? context.palette.surface : context.palette.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -338,16 +338,16 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
           _header(),
           Flexible(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
               children: [
                 _locationCard(isDark),
                 if (widget.result.thumbnailUrl.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   _sectionLabel('THUMBNAIL'),
                   _card(isDark, children: [_thumbnailRow(isDark)]),
                 ],
                 if (widget.result.videoFormats.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   _sectionLabel(
                     'VIDEO • ${widget.result.videoFormats.length} option${widget.result.videoFormats.length == 1 ? '' : 's'}',
                   ),
@@ -365,14 +365,14 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                   ),
                 ],
                 if (widget.result.audioLanguages.length > 1) ...[
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   _sectionLabel(
                     'AUDIO LANGUAGE • ${widget.result.audioLanguages.length} tracks',
                   ),
                   _card(isDark, children: [_languageChips(isDark)]),
                 ],
                 if (widget.result.audioFormats.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   _sectionLabel(
                     'AUDIO ONLY • ${widget.result.audioFormats.length} option${widget.result.audioFormats.length == 1 ? '' : 's'}',
                   ),
@@ -401,11 +401,11 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
   Widget _dragHandle(bool isDark) {
     return Center(
       child: Container(
-        margin: const EdgeInsets.only(top: 12, bottom: 10),
+        margin: EdgeInsets.only(top: 12, bottom: 10),
         width: 40,
         height: 4.5,
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkBorder : Colors.black26,
+          color: isDark ? context.palette.border : context.palette.tint(context.palette.border, 0.26),
           borderRadius: BorderRadius.circular(10),
         ),
       ),
@@ -419,12 +419,12 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
       if (result.duration.isNotEmpty) result.duration,
     ].join(' • ');
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 14),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(14),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.primaryDeep, AppColors.primary],
+          gradient: LinearGradient(
+            colors: [context.palette.primary, context.palette.primary],
           ),
           borderRadius: BorderRadius.circular(20),
         ),
@@ -437,12 +437,12 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                 width: 82,
                 height: 58,
                 fit: BoxFit.cover,
-                placeholderColor: AppColors.darkCard,
+                placeholderColor: context.palette.card,
                 placeholderIcon: Icons.movie_creation_rounded,
-                accentColor: Colors.white,
+                accentColor: context.palette.card,
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -450,15 +450,15 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                   Text(result.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16,
+                    style: TextStyle(
+                      color: context.palette.textPrimary, fontWeight: FontWeight.w800, fontSize: 16,
                     ),
                   ),
                   if (details.isNotEmpty)
                     Text(details,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xFFFCE1E6), fontSize: 12),
+                      style: TextStyle(color: context.palette.tint(context.palette.error, 0.06), fontSize: 12),
                     ),
                 ],
               ),
@@ -471,7 +471,7 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
 
   Widget _sectionLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(left: 6, bottom: 7),
+      padding: EdgeInsets.only(left: 6, bottom: 7),
       child: Text(
         text,
         style: TextStyle(
@@ -479,8 +479,8 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
           fontWeight: FontWeight.w800,
           letterSpacing: 0.8,
           color: Theme.of(context).brightness == Brightness.dark
-              ? AppColors.darkTextSecondary
-              : Colors.grey.shade600,
+              ? context.palette.textSecondary
+              : context.palette.textSecondary,
         ),
       ),
     );
@@ -490,13 +490,13 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+            color: context.palette.shadowAt(isDark ? 0.25 : 0.05),
             blurRadius: 10,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
@@ -515,41 +515,39 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
         InkWell(
           onTap: _openFolderPicker,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
                 Container(
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: AppColors.accentGold.withValues(alpha: 0.15),
+                    color: context.palette.tint(context.palette.info, 0.15),
                     borderRadius: BorderRadius.circular(9),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     CupertinoIcons.folder_fill,
-                    color: AppColors.accentGold,
+                    color: context.palette.info,
                     size: 20,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Save to folder',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         _targetFolderName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark
-                              ? AppColors.darkTextSecondary
-                              : Colors.grey.shade600,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                     ],
@@ -559,19 +557,19 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                   _targetFolderName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: _iosBlue,
                   ),
                 ),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4),
                 ),
                 Icon(
                   CupertinoIcons.right_chevron,
                   size: 15,
-                  color: isDark ? AppColors.darkTextTertiary : Colors.grey.shade400,
+                  color: context.palette.textSecondary,
                 ),
               ],
             ),
@@ -597,7 +595,7 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
       height: 60,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         children: [
           _langChip(
             text: '${original.name} • Original',
@@ -624,22 +622,22 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     required VoidCallback onTap,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: EdgeInsets.only(right: 8),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: on
                 ? _iosBlue.withValues(alpha: 0.16)
-                : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+                : (isDark ? context.palette.tint(context.palette.onScrim, 0.10) : context.palette.shadowAt(0.05)),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
             children: [
               if (on)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(right: 6),
                   child: Icon(Icons.check_rounded, size: 15, color: _iosBlue),
                 ),
@@ -650,7 +648,7 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                   fontWeight: on ? FontWeight.w800 : FontWeight.w600,
                   color: on
                       ? _iosBlue
-                      : (isDark ? Colors.white70 : Colors.black87),
+                      : (isDark ? context.palette.textSecondary : context.palette.textPrimary),
                 ),
               ),
             ],
@@ -668,24 +666,24 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     return InkWell(
       onTap: _downloadThumbnail,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(
           children: [
             Container(
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: AppColors.accentGreen.withValues(alpha: 0.14),
+                color: context.palette.tint(context.palette.success, 0.14),
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: const Icon(
+              child: Icon(
                 CupertinoIcons.photo_camera_solid,
-                color: AppColors.accentGreen,
+                color: context.palette.success,
                 size: 19,
               ),
             ),
-            const SizedBox(width: 12),
-            const Expanded(
+            SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -696,7 +694,7 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                   SizedBox(height: 2),
                   Text(
                     'Save the cover picture with one tap',
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                    style: TextStyle(fontSize: 11.5, color: context.palette.textSecondary),
                   ),
                 ],
               ),
@@ -710,15 +708,15 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
 
   Widget _thumbnailButton() {
     if (_thumbnailDone) {
-      return const Row(
+      return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_rounded, color: AppColors.accentGreen, size: 20),
+          Icon(Icons.check_circle_rounded, color: context.palette.success, size: 20),
           SizedBox(width: 4),
           Text(
             'Queued',
             style: TextStyle(
-              color: AppColors.accentGreen,
+              color: context.palette.success,
               fontWeight: FontWeight.w700,
               fontSize: 12.5,
             ),
@@ -727,18 +725,18 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
       );
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: _iosBlue.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: _thumbnailSaving
-          ? const SizedBox(
+          ? SizedBox(
               width: 15,
               height: 15,
               child: CupertinoActivityIndicator(radius: 7),
             )
-          : const Row(
+          : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.download_rounded, size: 15, color: FormatPickerSheetStyle.accent),
@@ -775,7 +773,7 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     final Color kindColor;
     if (isAudio) {
       kind = 'Audio only';
-      kindColor = AppColors.accentGold;
+      kindColor = context.palette.info;
     } else if (format.needsAudioMerge) {
       kind = 'Video + Audio';
       kindColor = _iosBlue;
@@ -789,14 +787,14 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
       child: Container(
         color: selected
             ? (isDark
-                  ? Colors.white.withValues(alpha: 0.05)
+                  ? context.palette.tint(context.palette.card, 0.05)
                   : _iosBlue.withValues(alpha: 0.06))
             : null,
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        padding: EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Row(
           children: [
             _SelectionRing(selected: selected),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -808,37 +806,35 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                           parts.headline,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 15.5,
                             fontWeight: FontWeight.w700,
                             height: 1.2,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 7),
+                      SizedBox(width: 7),
                       _containerChip(format.ext, isDark),
                       if (format.badge != null) ...[
-                        const SizedBox(width: 5),
+                        SizedBox(width: 5),
                         _badgeChip(format.badge!, isDark),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 3),
+                  SizedBox(height: 3),
                   Text(
                     '${parts.sub}  •  $kind',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11.5,
-                      color: isDark
-                          ? AppColors.darkTextSecondary
-                          : Colors.grey.shade600,
+                      color: context.palette.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -850,10 +846,10 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
                     height: 1.2,
                     color: selected
                         ? _iosBlue
-                        : (isDark ? Colors.white : Colors.black87),
+                        : (isDark ? context.palette.card : context.palette.textPrimary),
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   isAudio ? 'audio' : 'video',
                   style: TextStyle(
@@ -874,12 +870,12 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     final upper = ext.toUpperCase();
     final color = switch (upper) {
       'MP4' || 'M4V' => _iosBlue,
-      'MP3' => AppColors.accentGreen,
-      'M4A' || 'AAC' => AppColors.accentGold,
-      _ => AppColors.accentBlue,
+      'MP3' => context.palette.success,
+      'M4A' || 'AAC' => context.palette.info,
+      _ => context.palette.info,
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.13),
         borderRadius: BorderRadius.circular(5),
@@ -901,26 +897,26 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
     switch (badge.toUpperCase()) {
       case '8K':
       case '4K':
-        color = const Color(0xFFFF2D55); // Red/pink 4K
+        color = context.palette.primary; // Red/pink 4K
         break;
       case '2K':
       case 'FHD':
-        color = const Color(0xFF5856D6); // Indigo FHD/2K
+        color = context.palette.primary; // Indigo FHD/2K
         break;
       case 'HD':
-        color = const Color(0xFF007AFF); // Blue HD
+        color = context.palette.info; // Blue HD
         break;
       case 'HQ':
-        color = const Color(0xFFFF9500); // Orange HQ
+        color = context.palette.info; // Orange HQ
         break;
       case 'FAST':
-        color = const Color(0xFF34C759); // Green FAST
+        color = context.palette.success; // Green FAST
         break;
       default:
-        color = const Color(0xFF007AFF);
+        color = context.palette.info;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(5),
@@ -957,12 +953,12 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
       label = 'Download $count formats${_totalSizeText()}';
     }
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightBg,
+        color: isDark ? context.palette.surface : context.palette.background,
         border: Border(
           top: BorderSide(
-            color: isDark ? AppColors.darkBorder : Colors.black12,
+            color: isDark ? context.palette.border : context.palette.tint(context.palette.border, 0.12),
           ),
         ),
       ),
@@ -972,23 +968,23 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
           height: 50,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              gradient: hasPick ? AppColors.primaryGradient : null,
-              color: hasPick ? null : Colors.grey.shade700,
+              gradient: hasPick ? context.palette.primaryGradient : null,
+              color: hasPick ? null : context.palette.textSecondary,
               borderRadius: BorderRadius.circular(15),
               boxShadow: hasPick
                   ? [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.35),
+                        color: context.palette.tint(context.palette.primary, 0.35),
                         blurRadius: 14,
-                        offset: const Offset(0, 5),
+                        offset: Offset(0, 5),
                       ),
                     ]
-                  : const [],
+                  : [],
             ),
             child: ElevatedButton(
               onPressed: hasPick && !_downloadStarting ? _onDownloadPressed : null,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(horizontal: 20),
                 shadowColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
@@ -1000,17 +996,17 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.download_rounded, color: Colors.white, size: 22),
-                  const SizedBox(width: 8),
+                  Icon(Icons.download_rounded, color: context.palette.textPrimary, size: 22),
+                  SizedBox(width: 8),
                   Flexible(
                     child: Text(
                       _downloadStarting ? 'Starting…' : label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: context.palette.textPrimary,
                       ),
                     ),
                   ),
@@ -1027,12 +1023,12 @@ class _FormatPickerSheetState extends State<FormatPickerSheet> {
 /// iOS radio-style selection indicator.
 class _SelectionRing extends StatelessWidget {
   final bool selected;
-  const _SelectionRing({required this.selected});
+  _SelectionRing({required this.selected});
 
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
+      duration: Duration(milliseconds: 160),
       width: 22,
       height: 22,
       decoration: BoxDecoration(
@@ -1042,10 +1038,10 @@ class _SelectionRing extends StatelessWidget {
             : FormatPickerSheetStyle.accent.withValues(alpha: .10),
       ),
       child: selected
-          ? const Icon(
+          ? Icon(
               CupertinoIcons.checkmark_alt,
               size: 14,
-              color: Colors.white,
+              color: context.palette.textPrimary,
             )
           : null,
     );
@@ -1055,7 +1051,7 @@ class _SelectionRing extends StatelessWidget {
 /// Tiny helper so [_SelectionRing] can reach the accent color without a
 /// BuildContext at paint time.
 class FormatPickerSheetStyle {
-  static const Color accent = AppColors.primary;
+  static Color accent = AppPalette.current.primary;
 }
 
 // -----------------------------------------------------------------------------
@@ -1065,7 +1061,7 @@ class FormatPickerSheetStyle {
 class _FolderPickerSheet extends StatelessWidget {
   final String selectedName;
   final VoidCallback onCreateFolder;
-  const _FolderPickerSheet({
+  _FolderPickerSheet({
     required this.selectedName,
     required this.onCreateFolder,
   });
@@ -1077,38 +1073,38 @@ class _FolderPickerSheet extends StatelessWidget {
     final names = ['Default', ...folders.map((f) => f.name)];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
       child: Container(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.55,
         ),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : Colors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Text(
               'Save to folder',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white : Colors.black87,
+                color: isDark ? context.palette.card : context.palette.textPrimary,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: EdgeInsets.symmetric(horizontal: 8),
                 itemCount: names.length,
                 separatorBuilder:
                     (_, _) => Divider(
                       height: 1,
                       indent: 16,
-                      color: isDark ? Colors.white12 : Colors.black12,
+                      color: isDark ? context.palette.tint(context.palette.onScrim, 0.12) : context.palette.tint(context.palette.border, 0.12),
                     ),
                 itemBuilder: (context, index) {
                   final name = names[index];
@@ -1123,8 +1119,8 @@ class _FolderPickerSheet extends StatelessWidget {
                           : CupertinoIcons.folder_fill,
                       color:
                           name == 'Default'
-                              ? Colors.grey
-                              : AppColors.accentGold,
+                              ? context.palette.textSecondary
+                              : context.palette.info,
                     ),
                     title: Text(
                       name,
@@ -1135,7 +1131,7 @@ class _FolderPickerSheet extends StatelessWidget {
                     ),
                     trailing:
                         isSelected
-                            ? const Icon(
+                            ? Icon(
                                 CupertinoIcons.checkmark_alt,
                                 color: FormatPickerSheetStyle.accent,
                               )
@@ -1149,17 +1145,17 @@ class _FolderPickerSheet extends StatelessWidget {
               height: 1,
               indent: 16,
               endIndent: 16,
-              color: isDark ? Colors.white12 : Colors.black12,
+              color: isDark ? context.palette.tint(context.palette.onScrim, 0.12) : context.palette.tint(context.palette.border, 0.12),
             ),
             ListTile(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              leading: const Icon(
+              leading: Icon(
                 CupertinoIcons.add_circled_solid,
                 color: FormatPickerSheetStyle.accent,
               ),
-              title: const Text(
+              title: Text(
                 'New Folder',
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
@@ -1168,7 +1164,7 @@ class _FolderPickerSheet extends StatelessWidget {
               ),
               onTap: onCreateFolder,
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
           ],
         ),
       ),

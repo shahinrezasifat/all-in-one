@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:snaptube_pure/models/download_task.dart';
 import 'package:snaptube_pure/theme/app_colors.dart';
+import 'package:snaptube_pure/theme/app_palette.dart';
 import 'package:snaptube_pure/widgets/download_item_tile.dart';
 
 void main() {
@@ -48,6 +49,12 @@ void main() {
     expect(active.color, AppColors.primary);
     expect(find.text('25%'), findsOneWidget);
     expect(find.text('4 KB/s'), findsOneWidget);
+    for (final label in ['Video', '4 KB/s']) {
+      expect(
+        tester.widget<Text>(find.text(label)).style?.color,
+        AppPalette.light.textPrimary,
+      );
+    }
 
     task.totalBytesIsEstimate = true;
     await render();
@@ -57,16 +64,21 @@ void main() {
     await render();
     expect(find.textContaining('Total unknown'), findsOneWidget);
     expect(
-      tester.widget<LinearProgressIndicator>(
-        find.byType(LinearProgressIndicator),
-      ).value,
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
       isNull,
     );
 
-    task.downloadedBytes = 0;
+    task.downloadedBytes = 1024;
+    task.totalBytes = 4096;
+    task.totalBytesIsEstimate = false;
     task.status = DownloadStatus.paused;
     await render();
     expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('1 KB of 4 KB'), findsOneWidget);
+    expect(find.textContaining('left'), findsNothing);
+    await tester.pumpAndSettle();
     expect(find.text('Analyzing video…'), findsNothing);
 
     task.status = DownloadStatus.failed;

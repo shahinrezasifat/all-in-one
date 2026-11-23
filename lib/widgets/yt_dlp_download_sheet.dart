@@ -4,7 +4,7 @@ import 'package:ytdlp_flutter/ytdlp_flutter.dart';
 import '../services/download_manager.dart';
 import '../services/gallery_media_service.dart';
 import '../services/yt_dlp_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'remote_image.dart';
 
 /// Clean quality picker + download progress for the on-device yt-dlp engine.
@@ -13,7 +13,7 @@ class YtDlpDownloadSheet extends StatefulWidget {
   final VideoInfo info;
   final List<YtDlpQuality> qualities;
 
-  const YtDlpDownloadSheet({
+  YtDlpDownloadSheet({
     super.key,
     required this.url,
     required this.info,
@@ -117,8 +117,8 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
             : 0,
       ),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: context.palette.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -126,17 +126,17 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
         children: [
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              margin: EdgeInsets.only(top: 12, bottom: 8),
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkBorder : Colors.grey.shade300,
+                color: isDark ? context.palette.border : context.palette.textSecondary,
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
+            padding: EdgeInsets.fromLTRB(20, 4, 16, 12),
             child: Row(
               children: [
                 SmartNetworkImage(
@@ -145,26 +145,24 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
                   height: 52,
                   placeholderIcon: Icons.video_file_rounded,
                   fallbackInitials: SmartNetworkImage.initialsFor(widget.info.title),
-                  accentColor: AppColors.primary,
+                  accentColor: context.palette.primary,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Download video',
+                      Text('Download video',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 3),
+                      SizedBox(height: 3),
                       Text(
                         widget.info.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                     ],
@@ -173,21 +171,21 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
               ],
             ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1),
           Flexible(
             child: _downloading
                 ? _buildProgress(isDark)
                 : (widget.qualities.isEmpty
-                    ? const Padding(
+                    ? Padding(
                         padding: EdgeInsets.all(40),
                         child: Text('No formats reported by yt-dlp.',
                             textAlign: TextAlign.center),
                       )
                     : ListView.separated(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         itemCount: widget.qualities.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 6),
+                        separatorBuilder: (_, _) => SizedBox(height: 6),
                         itemBuilder: (context, i) {
                           final item = widget.qualities[i];
                           final selected = i == _selected;
@@ -197,16 +195,13 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
                               onTap: () => setState(() => _selected = i),
                               borderRadius: BorderRadius.circular(14),
                               child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                padding: const EdgeInsets.symmetric(
+                                duration: Duration(milliseconds: 180),
+                                padding: EdgeInsets.symmetric(
                                     horizontal: 14, vertical: 11),
                                 decoration: BoxDecoration(
                                   color: selected
-                                      ? AppColors.primary.withValues(
-                                          alpha: isDark ? 0.14 : 0.08)
-                                      : (isDark
-                                          ? AppColors.darkCard
-                                          : Colors.white),
+                                      ? context.palette.tint(context.palette.primary, isDark ? 0.14 : 0.08)
+                                      : (context.palette.card),
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Row(
@@ -222,20 +217,18 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
                                               fontSize: 14,
                                               fontWeight: FontWeight.w800,
                                               color: selected
-                                                  ? AppColors.primary
+                                                  ? context.palette.primary
                                                   : null,
                                             ),
                                           ),
-                                          const SizedBox(height: 3),
+                                          SizedBox(height: 3),
                                           Text(
                                             item.subtitle,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 10.5,
-                                              color: isDark
-                                                  ? AppColors.darkTextTertiary
-                                                  : AppColors.lightTextTertiary,
+                                              color: context.palette.textSecondary,
                                             ),
                                           ),
                                         ],
@@ -247,10 +240,10 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
                                           : Icons.circle_outlined,
                                       size: 18,
                                       color: selected
-                                          ? AppColors.primary
+                                          ? context.palette.primary
                                           : (isDark
-                                              ? Colors.white30
-                                              : Colors.black26),
+                                              ? context.palette.textSecondary
+                                              : context.palette.tint(context.palette.border, 0.26)),
                                     ),
                                   ],
                                 ),
@@ -262,12 +255,12 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
           ),
           if (!_downloading)
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                color: context.palette.surface,
                 border: Border(
                   top: BorderSide(
-                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    color: context.palette.border,
                   ),
                 ),
               ),
@@ -275,17 +268,17 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
                 top: false,
                 child: FilledButton.icon(
                   onPressed: q == null ? null : _start,
-                  icon: const Icon(Icons.download_rounded, size: 19),
+                  icon: Icon(Icons.download_rounded, size: 19),
                   label: Text(
                     q == null ? 'No format' : 'Download ${q.label}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: context.palette.primary,
                     disabledBackgroundColor:
-                        isDark ? Colors.white12 : Colors.grey.shade300,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                        isDark ? context.palette.tint(context.palette.onScrim, 0.12) : context.palette.textSecondary,
+                    padding: EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
@@ -302,41 +295,41 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
         ? '…'
         : '${(_fraction! * 100).toStringAsFixed(0)}%';
     return Padding(
-      padding: const EdgeInsets.all(28),
+      padding: EdgeInsets.all(28),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_done)
-            const Icon(Icons.download_done_rounded,
-                size: 52, color: AppColors.primary)
+            Icon(Icons.download_done_rounded,
+                size: 52, color: context.palette.primary)
           else if (_error != null)
             Icon(Icons.error_outline_rounded,
-                size: 52, color: AppColors.accentRed)
+                size: 52, color: context.palette.error)
           else
-            const SizedBox(
+            SizedBox(
               width: 46,
               height: 46,
               child: CircularProgressIndicator(
-                  strokeWidth: 3, color: AppColors.primary),
+                  strokeWidth: 3, color: context.palette.primary),
             ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18),
           Text(
             _done
                 ? 'Download complete'
                 : (_error != null ? 'Download failed' : 'Downloading with yt-dlp'),
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           if (_error == null && !_done)
             Text(pct,
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.primary)),
+                    color: context.palette.primary)),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: EdgeInsets.only(top: 8),
               child: Text(
                 _error!,
                 textAlign: TextAlign.center,
@@ -344,26 +337,26 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     fontSize: 11.5,
-                    color: isDark ? Colors.white60 : Colors.black54),
+                    color: context.palette.onPrimary),
               ),
             ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (_downloading)
                 OutlinedButton.icon(
                   onPressed: _cancel,
-                  icon: const Icon(Icons.close_rounded, size: 16),
-                  label: const Text('Cancel'),
+                  icon: Icon(Icons.close_rounded, size: 16),
+                  label: Text('Cancel'),
                 ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               FilledButton(
                 onPressed: () => Navigator.pop(context, _done),
                 style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: context.palette.primary,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                        EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12))),
                 child: Text(_done ? 'Done' : 'Close'),

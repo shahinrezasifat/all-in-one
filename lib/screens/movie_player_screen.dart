@@ -17,7 +17,7 @@ import '../services/preference_service.dart';
 import '../services/provider_engine/provider_models.dart';
 import '../services/stream_fallback_service.dart';
 import '../services/watch_history_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/remote_image.dart';
 import 'audio_player_screen.dart';
 
@@ -41,7 +41,7 @@ class MoviePlayerScreen extends StatefulWidget {
   final bool isLiveTv;
   final List<MovieSource> liveSources;
 
-  const MoviePlayerScreen({
+  MoviePlayerScreen({
     super.key,
     required this.movie,
     required this.initialSource,
@@ -87,7 +87,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   bool _usingAutomaticSource = false;
   int _sourceRequest = 0;
   final Set<String> _failedSourceKeys = {};
-  List<ProviderStreamReport> _lastProviderReports = const [];
+  List<ProviderStreamReport> _lastProviderReports = [];
 
   // Gesture Controls (MX Player Style)
   double _brightness = 0.75;
@@ -199,7 +199,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         httpHeaders: StreamFallbackService.streamHeadersFor(liveUrl),
       );
       _videoController = controller;
-      await controller.initialize().timeout(const Duration(seconds: 15));
+      await controller.initialize().timeout(Duration(seconds: 15));
       if (!mounted) return;
       if (controller.value.isInitialized && !controller.value.hasError) {
         await controller.setVolume(_volume);
@@ -307,7 +307,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         final uri = Uri.tryParse(url);
         if (uri == null ||
             uri.host.isEmpty ||
-            !const ['http', 'https'].contains(uri.scheme)) {
+            !['http', 'https'].contains(uri.scheme)) {
           _failedSourceKeys.add(key);
           continue;
         }
@@ -336,7 +336,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         _videoController = controller;
         var kept = false;
         try {
-          await controller.initialize().timeout(const Duration(seconds: 18));
+          await controller.initialize().timeout(Duration(seconds: 18));
           if (!mounted) return;
           if (!controller.value.isInitialized || controller.value.hasError) {
             throw Exception('stream not playable');
@@ -437,7 +437,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           forceRescan: resetFailures,
         );
       } catch (_) {
-        reports = const [];
+        reports = [];
       }
       if (!mounted || request != _sourceRequest) return;
       _lastProviderReports = reports;
@@ -502,8 +502,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           // hubcloud, AniKoto) still need time to spin up, so give them a fair
           // window before falling forward to the next server.
           final initTimeout = report.validStream
-              ? const Duration(seconds: 20)
-              : const Duration(seconds: 16);
+              ? Duration(seconds: 20)
+              : Duration(seconds: 16);
           await controller.initialize().timeout(initTimeout);
           if (!mounted || request != _sourceRequest) return;
 
@@ -542,25 +542,25 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                 SnackBar(
                   content: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.check_circle_rounded,
-                        color: Colors.greenAccent,
+                        color: context.palette.success,
                         size: 20,
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Playing via ${candidate.serverName}'
                           '${candidate.providerName.isNotEmpty ? ' (${candidate.providerName})' : ''}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(fontWeight: FontWeight.bold),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                  duration: const Duration(seconds: 3),
-                  backgroundColor: const Color(0xFF1E2235),
+                  duration: Duration(seconds: 3),
+                  backgroundColor: context.palette.surface,
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -640,10 +640,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
             )
           : VideoPlayerController.file(File(streamUrl));
       _videoController = controller;
-      await controller.initialize().timeout(const Duration(seconds: 15));
+      await controller.initialize().timeout(Duration(seconds: 15));
       if (!mounted || request != _sourceRequest) return;
       if (controller.value.hasError) throw StateError('Source rejected');
-      if (const {'m3u8', 'hls', 'mpd', 'dash'}.contains(format) &&
+      if ({'m3u8', 'hls', 'mpd', 'dash'}.contains(format) &&
           controller.isVideoTrackSupportAvailable()) {
         final resolution = providerResolution(source.resolution);
         final height =
@@ -800,13 +800,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       (s) => s.seasonNumber == _currentSeasonNumber,
       orElse: () => widget.movie.seasons.isNotEmpty
           ? widget.movie.seasons.first
-          : const MovieSeason(seasonNumber: 1, title: '', episodes: []),
+          : MovieSeason(seasonNumber: 1, title: '', episodes: []),
     );
     final ep = season.episodes.firstWhere(
       (e) => e.episodeNumber == _currentEpisodeNumber,
       orElse: () => season.episodes.isNotEmpty
           ? season.episodes.first
-          : const MovieEpisode(episodeNumber: 1, title: ''),
+          : MovieEpisode(episodeNumber: 1, title: ''),
     );
     return ep.title;
   }
@@ -871,7 +871,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   void _resetControlsTimer() {
     _controlsDismissTimer?.cancel();
     if (_showControls && !_isLocked) {
-      _controlsDismissTimer = Timer(const Duration(seconds: 4), () {
+      _controlsDismissTimer = Timer(Duration(seconds: 4), () {
         if (mounted && _isPlaying) {
           setState(() {
             _showControls = false;
@@ -896,7 +896,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     setState(() {
       _showLeftDoubleTap = true;
     });
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(Duration(milliseconds: 600), () {
       if (mounted) setState(() => _showLeftDoubleTap = false);
     });
   }
@@ -906,7 +906,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     setState(() {
       _showRightDoubleTap = true;
     });
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(Duration(milliseconds: 600), () {
       if (mounted) setState(() => _showRightDoubleTap = false);
     });
   }
@@ -947,7 +947,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     }
 
     _hudDismissTimer?.cancel();
-    _hudDismissTimer = Timer(const Duration(milliseconds: 1200), () {
+    _hudDismissTimer = Timer(Duration(milliseconds: 1200), () {
       if (mounted) {
         setState(() {
           _showBrightnessHud = false;
@@ -978,7 +978,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     _seekDeltaSeconds = 0.0;
 
     _hudDismissTimer?.cancel();
-    _hudDismissTimer = Timer(const Duration(milliseconds: 1000), () {
+    _hudDismissTimer = Timer(Duration(milliseconds: 1000), () {
       if (mounted) {
         setState(() {
           _showSeekHud = false;
@@ -1003,7 +1003,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.palette.background,
       body: Stack(
         children: [
           // 1. Real Video Player Canvas
@@ -1032,7 +1032,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     ),
                   ),
                   // Center dead-zone
-                  const SizedBox(width: 60),
+                  SizedBox(width: 60),
                   // Right Double-Tap zone (Fast-Forward 10s)
                   Expanded(
                     child: GestureDetector(
@@ -1084,12 +1084,12 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           if (_showSeekHud)
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 14,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.8),
+                  color: context.palette.shadowAt(0.8),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -1099,14 +1099,14 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                       _seekDeltaSeconds >= 0
                           ? Icons.fast_forward_rounded
                           : Icons.fast_rewind_rounded,
-                      color: AppColors.primary,
+                      color: context.palette.onScrim,
                       size: 28,
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Text(
                       '${_seekDeltaSeconds >= 0 ? '+' : ''}${_seekDeltaSeconds.toInt()}s (${_formatTime(_currentSeconds + _seekDeltaSeconds)})',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.palette.onPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -1140,9 +1140,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   setState(() => _isLocked = false);
                   _resetControlsTimer();
                 },
-                icon: const Icon(
+                icon: Icon(
                   Icons.lock_rounded,
-                  color: AppColors.accentGold,
+                  color: context.palette.onScrim,
                   size: 30,
                 ),
               ),
@@ -1191,13 +1191,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           if (_isBuffering)
             Center(
               child: Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.7),
+                  color: context.palette.shadowAt(0.7),
                   shape: BoxShape.circle,
                 ),
-                child: const CircularProgressIndicator(
-                  color: AppColors.primary,
+                child: CircularProgressIndicator(
+                  color: context.palette.primary,
                   strokeWidth: 3.5,
                 ),
               ),
@@ -1217,28 +1217,28 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   ? widget.movie.backdropUrl
                   : widget.movie.posterUrl,
               fit: BoxFit.cover,
-              placeholderColor: const Color(0xFF0F172A),
+              placeholderColor: context.palette.background,
               placeholderIcon: Icons.movie_rounded,
-              accentColor: Colors.white24,
+              accentColor: context.palette.tint(context.palette.onScrim, 0.24),
             ),
-            Container(color: Colors.black.withValues(alpha: 0.82)),
+            Container(color: context.palette.shadowAt(0.82)),
             Center(
               child: SingleChildScrollView(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(
+                  margin: EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 12,
                   ),
-                  padding: const EdgeInsets.symmetric(
+                  padding: EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF131622).withValues(alpha: 0.95),
+                    color: context.palette.surface.withValues(alpha: 0.95),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF4D57).withValues(alpha: 0.2),
+                        color: context.palette.error.withValues(alpha: 0.2),
                         blurRadius: 24,
                         spreadRadius: 2,
                       ),
@@ -1251,41 +1251,41 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFF4D57)
+                          color: context.palette.error
                               .withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Center(
+                        child: Center(
                           child: SizedBox(
                             width: 22,
                             height: 22,
                             child: CircularProgressIndicator(
-                              color: Color(0xFFFF4D57),
+                              color: context.palette.error,
                               strokeWidth: 3,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      const Text(
+                      SizedBox(height: 10),
+                      Text(
                         'Auto Server Analyzer',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: context.palette.onScrim,
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         'Analyzing and testing servers for optimal playback...',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.grey.shade400,
+                          color: context.palette.textSecondary,
                           fontSize: 11,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      SizedBox(height: 10),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
@@ -1296,25 +1296,25 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                                           _totalCandidateServers)
                                       .clamp(0.0, 1.0)
                                 : null,
-                            backgroundColor: Colors.white12,
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              Color(0xFFFF4D57),
+                            backgroundColor: context.palette.tint(context.palette.onScrim, 0.12),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              context.palette.error,
                             ),
                             minHeight: 5,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         _analyzingStatus,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Color(0xFFFF4D57),
+                        style: TextStyle(
+                          color: context.palette.error,
                           fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       TextButton.icon(
                         onPressed: () {
                           setState(() {
@@ -1322,14 +1322,14 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                           });
                           _showServerPicker();
                         },
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.tune_rounded,
                           size: 15,
-                          color: Colors.grey,
+                          color: context.palette.textSecondary,
                         ),
-                        label: const Text(
+                        label: Text(
                           'Select Server Manually',
-                          style: TextStyle(color: Colors.grey, fontSize: 11),
+                          style: TextStyle(color: context.palette.textSecondary, fontSize: 11),
                         ),
                       ),
                     ],
@@ -1352,17 +1352,17 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                 ? widget.movie.backdropUrl
                 : widget.movie.posterUrl,
             fit: BoxFit.cover,
-            placeholderColor: const Color(0xFF0F172A),
+            placeholderColor: context.palette.background,
             placeholderIcon: Icons.movie_rounded,
-            accentColor: Colors.white24,
+            accentColor: context.palette.tint(context.palette.onScrim, 0.24),
           ),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.black.withValues(alpha: 0.3),
+                  context.palette.shadowAt(0.3),
                   Colors.transparent,
-                  Colors.black.withValues(alpha: 0.5),
+                  context.palette.shadowAt(0.5),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -1372,30 +1372,30 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           if (_videoErrorMessage != null)
             Center(
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                padding: const EdgeInsets.symmetric(
+                margin: EdgeInsets.symmetric(horizontal: 24),
+                padding: EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 16,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.90),
+                  color: context.palette.shadowAt(0.90),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline_rounded,
-                      color: Colors.redAccent,
+                      color: context.palette.error,
                       size: 36,
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
                       _videoErrorMessage!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: TextStyle(color: context.palette.onScrim, fontSize: 12),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -1407,37 +1407,37 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                               : widget.trailerOnly
                               ? _playTrailer()
                               : _initVideoPlayer(),
-                          icon: const Icon(Icons.refresh_rounded, size: 16),
+                          icon: Icon(Icons.refresh_rounded, size: 16),
                           label: Text(
                             widget.isLiveTv
                                 ? 'Retry Channel'
                                 : 'Retry selected source',
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: context.palette.primary,
                           ),
                         ),
                         OutlinedButton.icon(
                           onPressed: _launchSystemPlayer,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.play_circle_fill_rounded,
                             size: 16,
                           ),
-                          label: const Text('Open in VLC / MPV'),
+                          label: Text('Open in VLC / MPV'),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
+                            foregroundColor: context.palette.card,
                           ),
                         ),
                         TextButton.icon(
                           onPressed: _showServerPicker,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.dns_rounded,
                             size: 16,
-                            color: Colors.white70,
+                            color: context.palette.textSecondary,
                           ),
-                          label: const Text(
+                          label: Text(
                             'Choose Server',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: context.palette.textSecondary),
                           ),
                         ),
                       ],
@@ -1449,26 +1449,26 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           else if (_isBuffering)
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 16,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.8),
+                  color: context.palette.shadowAt(0.8),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Column(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(
-                      color: AppColors.primary,
+                      color: context.palette.primary,
                       strokeWidth: 3,
                     ),
                     SizedBox(height: 12),
                     Text(
                       'Connecting to Stream...',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: context.palette.onPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
@@ -1480,14 +1480,14 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           else if (!_isPlaying)
             Center(
               child: Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
+                  color: context.palette.shadowAt(0.6),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.pause_rounded,
-                  color: Colors.white,
+                  color: context.palette.onScrim,
                   size: 48,
                 ),
               ),
@@ -1518,10 +1518,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
   Widget _buildTopBar(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.black.withValues(alpha: 0.85), Colors.transparent],
+          colors: [context.palette.shadowAt(0.85), Colors.transparent],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -1532,13 +1532,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           children: [
             IconButton(
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(
+              icon: Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.white,
+                color: context.palette.onScrim,
                 size: 26,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1548,8 +1548,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     widget.movie.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.palette.onScrim,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -1558,7 +1558,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     Text(
                       'Season $_currentSeasonNumber • Episode $_currentEpisodeNumber: ${_getCurrentEpisodeTitle()}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
+                        color: context.palette.tint(context.palette.onScrim, 0.7),
                         fontSize: 12,
                       ),
                     ),
@@ -1578,7 +1578,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                         icon: Icons.dns_rounded,
                         label:
                             'Servers (${_lastProviderReports.isNotEmpty ? _lastProviderReports.length : widget.movie.sources.length})',
-                        color: AppColors.accentGreen,
+                        color: context.palette.onScrim,
                         onTap: _showServerPicker,
                       ),
 
@@ -1586,7 +1586,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     _buildHeaderAction(
                       icon: Icons.hd_rounded,
                       label: _currentQuality,
-                      color: AppColors.accentGold,
+                      color: context.palette.onScrim,
                       onTap: _showQualityPicker,
                     ),
 
@@ -1594,14 +1594,14 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     _buildHeaderAction(
                       icon: Icons.audiotrack_rounded,
                       label: 'Audio/Subs',
-                      color: AppColors.accentPurple,
+                      color: context.palette.onScrim,
                       onTap: _showAudioAndSubtitlesPicker,
                     ),
 
                     _buildHeaderAction(
                       icon: Icons.headphones_rounded,
                       label: 'Audio only',
-                      color: AppColors.accentPurple,
+                      color: context.palette.onScrim,
                       onTap: _openAudioPlayer,
                     ),
 
@@ -1610,7 +1610,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                       _buildHeaderAction(
                         icon: Icons.video_library_rounded,
                         label: 'Episodes',
-                        color: const Color(0xFF00ADB5),
+                        color: context.palette.onScrim,
                         onTap: _showSeasonEpisodeDrawer,
                       ),
 
@@ -1618,9 +1618,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     IconButton(
                       tooltip: 'Play in External Player (VLC / MPV / MX)',
                       onPressed: _launchSystemPlayer,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.open_in_new_rounded,
-                        color: Colors.white70,
+                        color: context.palette.onScrim,
                       ),
                     ),
 
@@ -1633,9 +1633,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                           _showControls = false;
                         });
                       },
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.lock_open_rounded,
-                        color: Colors.white70,
+                        color: context.palette.onScrim,
                       ),
                     ),
                   ],
@@ -1655,12 +1655,12 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     required VoidCallback onTap,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(20),
@@ -1668,12 +1668,12 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: 6),
+              Icon(icon, color: context.palette.onScrim, size: 16),
+              SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: color,
+                  color: context.palette.onScrim,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -1687,10 +1687,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
   Widget _buildBottomBar(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.9)],
+          colors: [Colors.transparent, context.palette.shadowAt(0.9)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -1705,19 +1705,19 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
               children: [
                 Text(
                   _formatTime(_currentSeconds),
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  style: TextStyle(color: context.palette.onScrim, fontSize: 12),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 3.5,
-                      thumbShape: const RoundSliderThumbShape(
+                      thumbShape: RoundSliderThumbShape(
                         enabledThumbRadius: 6,
                       ),
-                      activeTrackColor: AppColors.primary,
-                      inactiveTrackColor: Colors.white24,
-                      thumbColor: AppColors.primary,
+                      activeTrackColor: context.palette.primary,
+                      inactiveTrackColor: context.palette.tint(context.palette.onScrim, 0.24),
+                      thumbColor: context.palette.primary,
                     ),
                     child: Slider(
                       value: _currentSeconds.clamp(0.0, _totalSeconds),
@@ -1729,10 +1729,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   _formatTime(_totalSeconds),
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  style: TextStyle(color: context.palette.onScrim, fontSize: 12),
                 ),
               ],
             ),
@@ -1758,38 +1758,38 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                         }
                       });
                     },
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.aspect_ratio_rounded,
-                      color: Colors.white70,
+                      color: context.palette.onScrim,
                       size: 18,
                     ),
                     label: Text(
                       _aspectRatioMode,
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: context.palette.onScrim,
                         fontSize: 12,
                       ),
                     ),
                   ),
 
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
 
                   // Center Playback Controls
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.replay_10_rounded,
-                          color: Colors.white,
+                          color: context.palette.onScrim,
                           size: 28,
                         ),
                         onPressed: () => _skip(-10),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Container(
-                        decoration: const BoxDecoration(
-                          gradient: AppColors.primaryGradient,
+                        decoration: BoxDecoration(
+                          gradient: context.palette.primaryGradient,
                           shape: BoxShape.circle,
                         ),
                         child: Tooltip(
@@ -1799,18 +1799,18 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                               _isPlaying
                                   ? Icons.pause_rounded
                                   : Icons.play_arrow_rounded,
-                              color: Colors.white,
+                              color: context.palette.onPrimary,
                               size: 32,
                             ),
                             onPressed: _togglePlay,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.forward_10_rounded,
-                          color: Colors.white,
+                          color: context.palette.onScrim,
                           size: 28,
                         ),
                         onPressed: () => _skip(10),
@@ -1818,7 +1818,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     ],
                   ),
 
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
 
                   // Speed Selector & Download Trigger & Fullscreen Toggle
                   Row(
@@ -1843,17 +1843,17 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                         },
                         child: Text(
                           '${_playbackSpeed}x',
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: context.palette.onScrim,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                       IconButton(
                         tooltip: 'Download Episode / Movie',
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.download_rounded,
-                          color: AppColors.primary,
+                          color: context.palette.onScrim,
                         ),
                         onPressed: () async {
                           final customTitle = widget.movie.isSeries
@@ -1868,7 +1868,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                             if (!granted) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
                                       'Storage permission required to download.',
                                     ),
@@ -1891,24 +1891,24 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                backgroundColor: AppColors.darkCard,
+                                backgroundColor: context.palette.card,
                                 behavior: SnackBarBehavior.floating,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 content: Row(
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.download_done_rounded,
-                                      color: AppColors.primary,
+                                      color: context.palette.primary,
                                       size: 24,
                                     ),
-                                    const SizedBox(width: 10),
+                                    SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
                                         'Downloading "$customTitle" (${activeSource.resolution})',
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: context.palette.textPrimary,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -1928,7 +1928,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                           _isFullScreen
                               ? Icons.fullscreen_exit_rounded
                               : Icons.fullscreen_rounded,
-                          color: Colors.white,
+                          color: context.palette.onScrim,
                           size: 26,
                         ),
                         onPressed: _toggleFullScreen,
@@ -1946,19 +1946,19 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
   Widget _buildDoubleTapIndicator(IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.7),
+        color: context.palette.shadowAt(0.7),
         shape: BoxShape.circle,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: AppColors.primary, size: 32),
+          Icon(icon, color: context.palette.onScrim, size: 32),
           Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.palette.onScrim,
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -1980,37 +1980,37 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           width: 170,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.75),
+            color: context.palette.shadowAt(0.75),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: Colors.white, size: 34),
-              const SizedBox(height: 10),
+              Icon(icon, color: context.palette.onScrim, size: 34),
+              SizedBox(height: 10),
               Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white70,
+                style: TextStyle(
+                  color: context.palette.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               LinearProgressIndicator(
                 value: value,
-                backgroundColor: Colors.white12,
-                valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                backgroundColor: context.palette.tint(context.palette.onScrim, 0.12),
+                valueColor: AlwaysStoppedAnimation(context.palette.primary),
                 minHeight: 5,
                 borderRadius: BorderRadius.circular(4),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text(
                 percentage,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.palette.onScrim,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -2050,12 +2050,12 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           ),
           child: ListView(
             shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
             children: [
-              const ListTile(title: Text('Available quality')),
+              ListTile(title: Text('Available quality')),
               for (final source in sources)
                 ListTile(
-                  leading: const Icon(Icons.hd_outlined),
+                  leading: Icon(Icons.hd_outlined),
                   title: Text(source.resolution),
                   subtitle: Text(
                     '${source.serverName} · ${source.format.toUpperCase()}',
@@ -2064,7 +2064,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                       (source.resolution == _currentSource.resolution &&
                           source.streamUrl == _currentSource.streamUrl &&
                           source.downloadUrl == _currentSource.downloadUrl)
-                      ? const Icon(Icons.check_rounded)
+                      ? Icon(Icons.check_rounded)
                       : null,
                   onTap: () {
                     Navigator.pop(ctx);
@@ -2086,43 +2086,43 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   void _showAudioAndSubtitlesPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.palette.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(20),
           child: ListView(
             shrinkWrap: true,
             children: [
-              const Row(
+              Row(
                 children: [
                   Icon(
                     Icons.record_voice_over_rounded,
-                    color: AppColors.accentPurple,
+                    color: context.palette.primary,
                   ),
                   SizedBox(width: 8),
                   Text(
                     'Audio Tracks & Subtitles',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: context.palette.onPrimary,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              const Text(
+              SizedBox(height: 14),
+              Text(
                 'Audio Language',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: context.palette.textSecondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               ...widget.movie.audioTracks.map((track) {
                 final isSelected = _currentAudioTrack == track;
                 return ListTile(
@@ -2130,13 +2130,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   title: Text(
                     track,
                     style: TextStyle(
-                      color: isSelected ? AppColors.accentPurple : Colors.white,
+                      color: isSelected ? context.palette.primary : context.palette.card,
                     ),
                   ),
                   trailing: isSelected
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_circle_rounded,
-                          color: AppColors.accentPurple,
+                          color: context.palette.primary,
                         )
                       : null,
                   onTap: () {
@@ -2145,16 +2145,16 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   },
                 );
               }),
-              const Divider(color: Colors.white12),
-              const Text(
+              Divider(color: context.palette.tint(context.palette.onScrim, 0.12)),
+              Text(
                 'Subtitles / Closed Captions',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: context.palette.textSecondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               ...widget.movie.subtitles.map((sub) {
                 final isSelected = _currentSubtitle == sub;
                 return ListTile(
@@ -2162,13 +2162,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   title: Text(
                     sub,
                     style: TextStyle(
-                      color: isSelected ? AppColors.accentGreen : Colors.white,
+                      color: isSelected ? context.palette.success : context.palette.card,
                     ),
                   ),
                   trailing: isSelected
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_circle_rounded,
-                          color: AppColors.accentGreen,
+                          color: context.palette.success,
                         )
                       : null,
                   onTap: () {
@@ -2188,8 +2188,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.palette.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
@@ -2199,7 +2199,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
               (s) => s.seasonNumber == _currentSeasonNumber,
               orElse: () => widget.movie.seasons.isNotEmpty
                   ? widget.movie.seasons.first
-                  : const MovieSeason(
+                  : MovieSeason(
                       seasonNumber: 1,
                       title: 'Season 1',
                       episodes: [],
@@ -2208,7 +2208,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.8,
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2217,22 +2217,22 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                     children: [
                       Text(
                         '${widget.movie.title} • Episodes',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.palette.onScrim,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.close_rounded,
-                          color: Colors.white,
+                          color: context.palette.onScrim,
                         ),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
 
                   // Season Selection Chips
                   SingleChildScrollView(
@@ -2241,11 +2241,11 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                       children: widget.movie.seasons.map((s) {
                         final isSel = s.seasonNumber == _currentSeasonNumber;
                         return Padding(
-                          padding: const EdgeInsets.only(right: 8),
+                          padding: EdgeInsets.only(right: 8),
                           child: ChoiceChip(
                             label: Text(s.title),
                             selected: isSel,
-                            selectedColor: const Color(0xFF00ADB5),
+                            selectedColor: context.palette.secondary,
                             onSelected: (val) {
                               setDrawerState(() {
                                 _currentSeasonNumber = s.seasonNumber;
@@ -2257,7 +2257,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                       }).toList(),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
 
                   // Episode List
                   Expanded(
@@ -2269,11 +2269,11 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                             ep.episodeNumber == _currentEpisodeNumber;
 
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
+                          margin: EdgeInsets.only(bottom: 10),
                           child: Material(
                             color: isSelected
-                                ? const Color(0xFF00ADB5).withValues(alpha: 0.2)
-                                : Colors.black26,
+                                ? context.palette.secondary.withValues(alpha: 0.2)
+                                : context.palette.tint(context.palette.border, 0.26),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -2289,13 +2289,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                                           fit: BoxFit.cover,
                                         )
                                       : null,
-                                  color: Colors.black38,
+                                  color: context.palette.textSecondary,
                                 ),
                                 child: isSelected
-                                    ? const Center(
+                                    ? Center(
                                         child: Icon(
                                           Icons.play_arrow_rounded,
-                                          color: Colors.white,
+                                          color: context.palette.onScrim,
                                         ),
                                       )
                                     : null,
@@ -2304,8 +2304,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                                 'E${ep.episodeNumber}: ${ep.title}',
                                 style: TextStyle(
                                   color: isSelected
-                                      ? const Color(0xFF00ADB5)
-                                      : Colors.white,
+                                      ? context.palette.secondary
+                                      : context.palette.card,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
@@ -2314,9 +2314,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                                 '${ep.duration} • ${ep.synopsis}',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 11,
-                                  color: Colors.white70,
+                                  color: context.palette.textSecondary,
                                 ),
                               ),
                               onTap: () {
@@ -2373,26 +2373,26 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: context.palette.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.hub_rounded, color: AppColors.accentGreen),
-                  const SizedBox(width: 8),
+                  Icon(Icons.hub_rounded, color: context.palette.success),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Providers / Servers (${reports.length} Found Across Installed Repos)',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.palette.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
                       ),
@@ -2400,9 +2400,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   ),
                   IconButton(
                     tooltip: 'Re-scan & test all providers',
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.refresh_rounded,
-                      color: AppColors.accentGold,
+                      color: context.palette.info,
                     ),
                     onPressed: () {
                       Navigator.pop(ctx);
@@ -2415,20 +2415,20 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(
                 'Green = stream verified • Grey = untested • Red = known dead',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
+                  color: context.palette.tint(context.palette.card, 0.5),
                   fontSize: 11,
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: reports.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  separatorBuilder: (_, _) => SizedBox(height: 6),
                   itemBuilder: (context, index) {
                     final report = reports[index];
                     final source = report.source;
@@ -2441,13 +2441,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                           StreamFallbackService.sourceKey(source),
                         );
                     final healthColor = report.validStream
-                        ? AppColors.accentGreen
-                        : (isDead ? Colors.redAccent : Colors.white70);
+                        ? context.palette.success
+                        : (isDead ? context.palette.error : context.palette.textSecondary);
 
                     return Material(
                       color: isSelected
-                          ? AppColors.accentGreen.withValues(alpha: 0.18)
-                          : Colors.white.withValues(alpha: 0.05),
+                          ? context.palette.tint(context.palette.success, 0.18)
+                          : context.palette.tint(context.palette.card, 0.05),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -2457,7 +2457,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                               ? Icons.flash_on_rounded
                               : Icons.dns_rounded,
                           color: source.isFastBDIX
-                              ? AppColors.accentGold
+                              ? context.palette.info
                               : healthColor,
                         ),
                         title: Row(
@@ -2467,8 +2467,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                                 source.serverName,
                                 style: TextStyle(
                                   color: isSelected
-                                      ? AppColors.accentGreen
-                                      : Colors.white,
+                                      ? context.palette.success
+                                      : context.palette.card,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
@@ -2476,20 +2476,18 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                             ),
                             if (report.validStream)
                               Container(
-                                padding: const EdgeInsets.symmetric(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: 6,
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.accentGreen.withValues(
-                                    alpha: 0.2,
-                                  ),
+                                  color: context.palette.tint(context.palette.success, 0.2,),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
                                   '${report.latencyMs}ms',
-                                  style: const TextStyle(
-                                    color: AppColors.accentGreen,
+                                  style: TextStyle(
+                                    color: context.palette.success,
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -2504,15 +2502,15 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: isDead
-                                ? Colors.redAccent.withValues(alpha: 0.8)
-                                : Colors.white60,
+                                ? context.palette.tint(context.palette.error, 0.8)
+                                : context.palette.textSecondary,
                             fontSize: 11,
                           ),
                         ),
                         trailing: isSelected
-                            ? const Icon(
+                            ? Icon(
                                 Icons.check_circle_rounded,
-                                color: AppColors.accentGreen,
+                                color: context.palette.success,
                               )
                             : null,
                         onTap: () {
@@ -2535,7 +2533,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                                 'Switched to ${source.serverName}$providerTag',
                               ),
                               behavior: SnackBarBehavior.floating,
-                              backgroundColor: AppColors.primary,
+                              backgroundColor: context.palette.primary,
                             ),
                           );
                         },

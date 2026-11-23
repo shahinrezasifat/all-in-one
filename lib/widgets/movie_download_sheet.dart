@@ -5,14 +5,14 @@ import '../services/download_manager.dart';
 import '../services/extractor_service.dart';
 import '../services/permission_service.dart';
 import '../services/virtual_folder_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'remote_image.dart';
 
 class MovieDownloadSheet extends StatefulWidget {
   final MovieItem movie;
   final String? customTitle;
 
-  const MovieDownloadSheet({
+  MovieDownloadSheet({
     super.key,
     required this.movie,
     this.customTitle,
@@ -48,7 +48,7 @@ class _ServerOption {
   final bool isFastBDIX;
   final String rawUrl;
 
-  const _ServerOption({
+  _ServerOption({
     required this.id,
     required this.name,
     required this.badge,
@@ -71,7 +71,7 @@ class _FormatOption {
   final String rawUrl;
   final String formatId;
 
-  const _FormatOption({
+  _FormatOption({
     required this.resolution,
     required this.label,
     required this.fileSize,
@@ -93,8 +93,8 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
   bool _loading = true;
   bool _error = false;
 
-  List<_ServerOption> _servers = const [];
-  List<_FormatOption> _formats = const [];
+  List<_ServerOption> _servers = [];
+  List<_FormatOption> _formats = [];
 
   @override
   void initState() {
@@ -112,7 +112,7 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
     try {
       final result = await ExtractorService.instance
           .resolveMovieExtract(widget.movie.title)
-          .timeout(const Duration(seconds: 15));
+          .timeout(Duration(seconds: 15));
       if (result != null && mounted) {
         _buildFromExtract(result);
         setState(() {
@@ -153,7 +153,7 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
         id: 'src_${res.platform}',
         name: '${res.platform} • ${res.title}',
         badge: 'RESOLVED',
-        badgeColor: AppColors.primary,
+        badgeColor: context.palette.primary,
         ping: 'live',
         description:
             'Verified real source • ${res.duration.isNotEmpty ? res.duration : 'duration unknown'}',
@@ -178,34 +178,34 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
   LinearGradient _gradientFor(String label) {
     final l = label.toLowerCase();
     if (l.contains('2160') || l.contains('4k')) {
-      return const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF8C00)]);
+      return LinearGradient(colors: [context.palette.info, context.palette.info]);
     }
     if (l.contains('1440') || l.contains('2k')) {
-      return const LinearGradient(colors: [Color(0xFF00C6FF), Color(0xFF0072FF)]);
+      return LinearGradient(colors: [context.palette.info, context.palette.info]);
     }
     if (l.contains('1080')) {
-      return const LinearGradient(colors: [Color(0xFF00E676), Color(0xFF00B0FF)]);
+      return LinearGradient(colors: [context.palette.success, context.palette.info]);
     }
     if (l.contains('720')) {
-      return const LinearGradient(colors: [Color(0xFF4FC3F7), Color(0xFF0288D1)]);
+      return LinearGradient(colors: [context.palette.info, context.palette.info]);
     }
-    return const LinearGradient(colors: [Color(0xFF9E9E9E), Color(0xFF616161)]);
+    return LinearGradient(colors: [context.palette.textSecondary, context.palette.textSecondary]);
   }
 
   Widget _buildLoadingState() {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.symmetric(vertical: 60),
       child: Column(
         children: [
           SizedBox(
             width: 34,
             height: 34,
-            child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary),
+            child: CircularProgressIndicator(strokeWidth: 3, color: context.palette.primary),
           ),
           SizedBox(height: 16),
           Text(
             'Analyzing real servers & available qualities…',
-            style: TextStyle(fontSize: 13, color: Colors.white70),
+            style: TextStyle(fontSize: 13, color: context.palette.onPrimary),
           ),
         ],
       ),
@@ -214,30 +214,30 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
 
   Widget _buildErrorState() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      padding: EdgeInsets.symmetric(vertical: 48, horizontal: 24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.primary),
-          const SizedBox(height: 14),
-          const Text(
+          Icon(Icons.cloud_off_rounded, size: 44, color: context.palette.primary),
+          SizedBox(height: 14),
+          Text(
             'No genuine source found',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: context.palette.onPrimary),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          SizedBox(height: 8),
+          Text(
             'This movie could not be resolved from a real source right now. Nothing is faked — check your connection and retry.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Colors.white60),
+            style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.palette.primary),
             onPressed: _resolveRealSources,
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-            label: const Text(
+            icon: Icon(Icons.refresh_rounded, color: context.palette.onPrimary),
+            label: Text(
               'Retry',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: context.palette.onPrimary, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -291,14 +291,14 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.darkCard,
+          backgroundColor: context.palette.card,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          duration: const Duration(seconds: 4),
+          duration: Duration(seconds: 4),
           content: Row(
             children: [
-              const Icon(Icons.download_done_rounded, color: AppColors.primary, size: 28),
-              const SizedBox(width: 12),
+              Icon(Icons.download_done_rounded, color: context.palette.primary, size: 28),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -306,13 +306,13 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                   children: [
                     Text(
                       'Downloading "$titleToUse"',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary, fontSize: 13),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       '${selectedFormat.resolution} • ${selectedFormat.fileSize} on ${selectedServer.name.split('(').first.trim()}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      style: TextStyle(color: context.palette.textSecondary, fontSize: 11),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -338,15 +338,15 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.88,
         maxWidth: 680,
       ),
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      margin: EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        color: context.palette.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
+            color: context.palette.shadowAt(0.35),
             blurRadius: 25,
-            offset: const Offset(0, -6),
+            offset: Offset(0, -6),
           ),
         ],
       ),
@@ -356,11 +356,11 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
           // Drag handle
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 8),
+              margin: EdgeInsets.only(top: 10, bottom: 8),
               width: 44,
               height: 4,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkBorder : Colors.grey.shade300,
+                color: isDark ? context.palette.border : context.palette.textSecondary,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -368,7 +368,7 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
 
           // Header: Poster & Title (single unified download view below)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             child: Row(
               children: [
                 ClipRRect(
@@ -379,18 +379,18 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                           width: 48,
                           height: 64,
                           fit: BoxFit.cover,
-                          placeholderColor: Colors.grey.shade800,
+                          placeholderColor: context.palette.textSecondary,
                           placeholderIcon: Icons.movie_rounded,
-                          accentColor: Colors.white,
+                          accentColor: context.palette.card,
                         )
                       : Container(
                           width: 48,
                           height: 64,
-                          color: Colors.grey.shade800,
-                          child: const Icon(Icons.movie_rounded, color: Colors.white),
+                          color: context.palette.textSecondary,
+                          child: Icon(Icons.movie_rounded, color: context.palette.onPrimary),
                         ),
                 ),
-                const SizedBox(width: 14),
+                SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,32 +399,32 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.15),
+                              color: context.palette.tint(context.palette.primary, 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               '${widget.movie.year} • ${widget.movie.quality}',
-                              style: const TextStyle(
-                                color: AppColors.primary,
+                              style: TextStyle(
+                                color: context.palette.primary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8),
                           Text(
                             widget.movie.genres.isNotEmpty ? widget.movie.genres.take(2).join(', ') : 'Cinema',
                             style: TextStyle(
                               fontSize: 11,
-                              color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                              color: context.palette.onPrimary,
                             ),
                           ),
                         ],
@@ -433,7 +433,7 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded),
+                  icon: Icon(Icons.close_rounded),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -452,9 +452,9 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
           if (ready) ...[
           // Bottom Action Bar
           Container(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+            padding: EdgeInsets.fromLTRB(18, 12, 18, 20),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : Colors.white,
+              color: context.palette.card,
             ),
             child: SafeArea(
               top: false,
@@ -466,39 +466,39 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                           fit: BoxFit.scaleDown,
                           child: Row(
                             children: [
-                              const Icon(Icons.bolt_rounded, size: 16, color: AppColors.primary),
-                              const SizedBox(width: 6),
-                              const Text(
+                              Icon(Icons.bolt_rounded, size: 16, color: context.palette.primary),
+                              SizedBox(width: 6),
+                              Text(
                                 'IDM Multi-Threads:',
                                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8),
                               ...[4, 6, 8].map((th) => Padding(
-                                    padding: const EdgeInsets.only(right: 6),
+                                    padding: EdgeInsets.only(right: 6),
                                     child: ChoiceChip(
                                       visualDensity: VisualDensity.compact,
-                                      label: Text('${th}x', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      label: Text('${th}x', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                       selected: _threadsCount == th,
                                       onSelected: (val) {
                                         if (val) setState(() => _threadsCount = th);
                                       },
-                                      selectedColor: AppColors.primary,
+                                      selectedColor: context.palette.primary,
                                       labelStyle: TextStyle(
-                                        color: _threadsCount == th ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                                        color: _threadsCount == th ? context.palette.card : (isDark ? context.palette.textSecondary : context.palette.textPrimary),
                                       ),
-                                      backgroundColor: isDark ? AppColors.darkSurface : Colors.grey.shade200,
+                                      backgroundColor: context.palette.card,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
                                   )),
-                              const SizedBox(width: 12),
+                              SizedBox(width: 12),
                               Text(
                                 _formats[_selectedFormatIndex].fileSize,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: context.palette.primary),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        SizedBox(height: 10),
 
                         // Big Download CTA
                         SizedBox(
@@ -506,10 +506,10 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                           height: 52,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
+                              backgroundColor: context.palette.primary,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               elevation: 4,
-                              shadowColor: AppColors.primary.withValues(alpha: 0.45),
+                              shadowColor: context.palette.tint(context.palette.primary, 0.45),
                             ),
                             onPressed: _onStartDownloadPressed,
                             child: FittedBox(
@@ -517,11 +517,11 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.download_rounded, color: Colors.white, size: 22),
-                                  const SizedBox(width: 10),
+                                  Icon(Icons.download_rounded, color: context.palette.onPrimary, size: 22),
+                                  SizedBox(width: 10),
                                   Text(
                                     'Download ${_formats[_selectedFormatIndex].resolution} • ${_formats[_selectedFormatIndex].fileSize}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: context.palette.onScrim),
                                   ),
                                 ],
                               ),
@@ -543,18 +543,18 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
     final isSelected = _selectedServerIndex == index;
 
     return Container(
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.08)
-                : (isDark ? AppColors.darkCard : Colors.grey.shade100),
+                ? context.palette.tint(context.palette.primary, isDark ? 0.2 : 0.08)
+                : (isDark ? context.palette.card : context.palette.textSecondary),
             borderRadius: BorderRadius.circular(16),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.15),
+                      color: context.palette.tint(context.palette.primary, 0.15),
                       blurRadius: 8,
-                      offset: const Offset(0, 3),
+                      offset: Offset(0, 3),
                     ),
                   ]
                 : null,
@@ -567,7 +567,7 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
               });
             },
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: EdgeInsets.all(14),
               child: Row(
                 children: [
                   // Server Radio / Icon
@@ -576,17 +576,17 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                     height: 38,
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? AppColors.primary
-                          : (isDark ? AppColors.darkSurface : Colors.white),
+                          ? context.palette.primary
+                          : (isDark ? context.palette.surface : context.palette.card),
                       shape: BoxShape.circle,
                     ),
                     child: Center(
                       child: isSelected
-                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 22)
-                          : Icon(Icons.dns_rounded, size: 18, color: isDark ? Colors.white60 : Colors.black54),
+                          ? Icon(Icons.check_rounded, color: context.palette.onPrimary, size: 22)
+                          : Icon(Icons.dns_rounded, size: 18, color: context.palette.textSecondary),
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  SizedBox(width: 14),
 
                   // Server details
                   Expanded(
@@ -603,13 +603,13 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                                 style: TextStyle(
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                                   fontSize: 14,
-                                  color: isSelected ? AppColors.primary : null,
+                                  color: isSelected ? context.palette.primary : null,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: server.badgeColor.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
@@ -625,34 +625,34 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Text(
                           server.description,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                            color: context.palette.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Row(
                           children: [
                             Container(
                               width: 7,
                               height: 7,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF00E676),
+                              decoration: BoxDecoration(
+                                color: context.palette.success,
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            const SizedBox(width: 5),
+                            SizedBox(width: 5),
                             Text(
                               'Ping: ${server.ping} • High Speed IDM Parallel',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white60 : Colors.black54,
+                                color: context.palette.textSecondary,
                               ),
                             ),
                           ],
@@ -672,11 +672,11 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
     final isSelected = _selectedFormatIndex == index;
 
     return Container(
-            margin: const EdgeInsets.only(bottom: 10),
+            margin: EdgeInsets.only(bottom: 10),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.08)
-                  : (isDark ? AppColors.darkCard : Colors.grey.shade100),
+                  ? context.palette.tint(context.palette.primary, isDark ? 0.2 : 0.08)
+                  : (isDark ? context.palette.card : context.palette.textSecondary),
               borderRadius: BorderRadius.circular(16),
             ),
             child: InkWell(
@@ -687,7 +687,7 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                 });
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
                     // Radio button
@@ -695,16 +695,16 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : Colors.transparent,
+                        color: isSelected ? context.palette.primary : Colors.transparent,
                         shape: BoxShape.circle,
                       ),
                       child: isSelected
-                          ? const Center(
-                              child: Icon(Icons.check_rounded, color: Colors.white, size: 16),
+                          ? Center(
+                              child: Icon(Icons.check_rounded, color: context.palette.onScrim, size: 16),
                             )
                           : null,
                     ),
-                    const SizedBox(width: 14),
+                    SizedBox(width: 14),
 
                     // Details
                     Expanded(
@@ -721,20 +721,20 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                                   style: TextStyle(
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                                     fontSize: 14,
-                                    color: isSelected ? AppColors.primary : null,
+                                    color: isSelected ? context.palette.primary : null,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   gradient: format.gradient,
                                   borderRadius: BorderRadius.circular(4),
                                   boxShadow: format.badge.contains('4K')
                                       ? [
                                           BoxShadow(
-                                            color: const Color(0xFFFFD700).withValues(alpha: 0.4),
+                                            color: context.palette.info.withValues(alpha: 0.4),
                                             blurRadius: 6,
                                           ),
                                         ]
@@ -743,7 +743,7 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                                 child: Text(
                                   format.badge,
                                   style: TextStyle(
-                                    color: format.badge.contains('4K') ? Colors.black : Colors.white,
+                                    color: format.badge.contains('4K') ? context.palette.background : context.palette.card,
                                     fontSize: 9,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -751,12 +751,12 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: 2),
                           Text(
                             format.note,
                             style: TextStyle(
                               fontSize: 11,
-                              color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                              color: context.palette.textSecondary,
                             ),
                           ),
                         ],
@@ -765,14 +765,14 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
 
                     // File size chip
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurface : Colors.white,
+                        color: isDark ? context.palette.surface : context.palette.card,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         format.fileSize,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
                   ],
@@ -786,16 +786,16 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
   /// so the user picks both at once and taps Download — no wizard steps.
   Widget _buildUnifiedView(bool isDark) {
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       children: [
         _sectionHeader('SERVER', Icons.dns_rounded),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         ...List.generate(_servers.length, (i) => _buildServerTile(i, isDark)),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         _sectionHeader('RESOLUTION', Icons.high_quality_rounded),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         ...List.generate(_formats.length, (i) => _buildFormatTile(i, isDark)),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
       ],
     );
   }
@@ -803,15 +803,15 @@ class _MovieDownloadSheetState extends State<MovieDownloadSheet> {
   Widget _sectionHeader(String text, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: AppColors.primary),
-        const SizedBox(width: 8),
+        Icon(icon, size: 16, color: context.palette.primary),
+        SizedBox(width: 8),
         Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.8,
-            color: AppColors.primary,
+            color: context.palette.primary,
           ),
         ),
       ],

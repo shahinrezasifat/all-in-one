@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/site_model.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'remote_image.dart';
 
 class SpeedDialGrid extends StatelessWidget {
@@ -11,7 +11,7 @@ class SpeedDialGrid extends StatelessWidget {
   final Function(SiteModel)? onEditBookmark;
   final Function(SiteModel)? onDeleteBookmark;
 
-  const SpeedDialGrid({
+  SpeedDialGrid({
     super.key,
     required this.sites,
     required this.onSiteTap,
@@ -22,22 +22,22 @@ class SpeedDialGrid extends StatelessWidget {
   void _showSiteOptions(BuildContext context, SiteModel site) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.symmetric(vertical: 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 40,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.4),
+                    color: context.palette.tint(context.palette.textSecondary, 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -53,7 +53,7 @@ class SpeedDialGrid extends StatelessWidget {
                   ),
                   title: Text(
                     site.title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
                     site.url,
@@ -61,39 +61,39 @@ class SpeedDialGrid extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Divider(),
+                Divider(),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.open_in_browser_rounded,
-                    color: AppColors.primary,
+                    color: context.palette.primary,
                   ),
-                  title: const Text('Open in In-App Browser'),
+                  title: Text('Open in In-App Browser'),
                   onTap: () {
                     Navigator.pop(ctx);
                     onSiteTap(site);
                   },
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.edit_outlined,
-                    color: AppColors.accentGold,
+                    color: context.palette.onPrimary,
                   ),
-                  title: const Text('Edit Bookmark'),
+                  title: Text('Edit Bookmark'),
                   onTap: () {
                     Navigator.pop(ctx);
                     onEditBookmark?.call(site);
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.copy_rounded),
-                  title: const Text('Copy URL'),
+                  leading: Icon(Icons.copy_rounded),
+                  title: Text('Copy URL'),
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: site.url));
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Copied ${site.url}'),
-                        duration: const Duration(seconds: 1),
+                        duration: Duration(seconds: 1),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -101,13 +101,13 @@ class SpeedDialGrid extends StatelessWidget {
                 ),
                 if (site.isCustom || onDeleteBookmark != null)
                   ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.delete_outline_rounded,
-                      color: AppColors.accentRed,
+                      color: context.palette.error,
                     ),
-                    title: const Text(
+                    title: Text(
                       'Delete Bookmark',
-                      style: TextStyle(color: AppColors.accentRed),
+                      style: TextStyle(color: context.palette.error),
                     ),
                     onTap: () {
                       Navigator.pop(ctx);
@@ -136,7 +136,7 @@ class SpeedDialGrid extends StatelessWidget {
             ? 4
             : 3;
         return GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
+          physics: NeverScrollableScrollPhysics(),
           shrinkWrap: true,
           padding: EdgeInsets.zero,
           itemCount: sites.length,
@@ -150,7 +150,7 @@ class SpeedDialGrid extends StatelessWidget {
             final site = sites[index];
             final brand = Color(site.colorHex);
             final glow = brand.computeLuminance() < .02
-                ? const Color(0xFF25C9BA)
+                ? context.palette.textSecondary
                 : brand;
             return Material(
               color: Colors.transparent,
@@ -162,7 +162,7 @@ class SpeedDialGrid extends StatelessWidget {
                   message: site.title,
                   triggerMode: TooltipTriggerMode.manual,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: EdgeInsets.symmetric(horizontal: 2),
                     child: Column(
                       children: [
                         Container(
@@ -176,7 +176,7 @@ class SpeedDialGrid extends StatelessWidget {
                                 glow.withValues(alpha: isDark ? .10 : .07),
                                 glow.withValues(alpha: 0),
                               ],
-                              stops: const [0, .64, 1],
+                              stops: [0, .64, 1],
                             ),
                           ),
                           child: SmartNetworkImage(

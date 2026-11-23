@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../models/site_model.dart';
 import '../services/bookmark_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class BookmarkEditorSheet extends StatefulWidget {
-  const BookmarkEditorSheet({super.key, this.site});
+  BookmarkEditorSheet({super.key, this.site});
 
   final SiteModel? site;
 
@@ -104,7 +104,7 @@ class _BookmarkEditorSheetState extends State<BookmarkEditorSheet> {
     final theme = Theme.of(context);
     final palette = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final accent = dark ? AppColors.primaryLight : AppColors.primary;
+    final accent = dark ? context.palette.primary : context.palette.primary;
     final editing = widget.site != null;
     final uri = BookmarkService.parseBookmarkUrl(_link.text);
     final suggested = uri == null ? null : BookmarkService.suggestedName(uri);
@@ -118,10 +118,10 @@ class _BookmarkEditorSheetState extends State<BookmarkEditorSheet> {
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          padding: EdgeInsets.fromLTRB(24, 0, 24, 20),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
+              constraints: BoxConstraints(maxWidth: 460),
               child: Form(
                 key: _form,
                 child: Column(
@@ -136,7 +136,7 @@ class _BookmarkEditorSheetState extends State<BookmarkEditorSheet> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.all(12),
+                            padding: EdgeInsets.all(12),
                             child: Icon(
                               editing
                                   ? Icons.bookmark_rounded
@@ -145,7 +145,7 @@ class _BookmarkEditorSheetState extends State<BookmarkEditorSheet> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             editing ? 'Edit bookmark' : 'Add bookmark',
@@ -159,11 +159,11 @@ class _BookmarkEditorSheetState extends State<BookmarkEditorSheet> {
                           onPressed: _saving
                               ? null
                               : () => Navigator.pop(context),
-                          icon: const Icon(Icons.close_rounded),
+                          icon: Icon(Icons.close_rounded),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24),
                     TextFormField(
                       controller: _link,
                       enabled: !_saving,
@@ -183,18 +183,18 @@ class _BookmarkEditorSheetState extends State<BookmarkEditorSheet> {
                       decoration: InputDecoration(
                         labelText: 'Website link',
                         hintText: 'example.com',
-                        prefixIcon: const Icon(Icons.link_rounded),
+                        prefixIcon: Icon(Icons.link_rounded),
                         suffixIcon: TextButton(
                           onPressed: _saving ? null : _paste,
                           style: TextButton.styleFrom(foregroundColor: accent),
-                          child: const Text('Paste'),
+                          child: Text('Paste'),
                         ),
                         errorText: _clipboardError,
                         border: outline,
                         enabledBorder: outline,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     TextFormField(
                       controller: _name,
                       focusNode: _nameFocus,
@@ -208,29 +208,29 @@ class _BookmarkEditorSheetState extends State<BookmarkEditorSheet> {
                         helperText: !editing && suggested != null
                             ? 'Suggested name $suggested'
                             : null,
-                        prefixIcon: const Icon(Icons.edit_outlined),
+                        prefixIcon: Icon(Icons.edit_outlined),
                         border: outline,
                         enabledBorder: outline,
                       ),
                     ),
                     if (_saveError != null) ...[
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                       Text(_saveError!, style: TextStyle(color: palette.error)),
                     ],
-                    const SizedBox(height: 22),
+                    SizedBox(height: 22),
                     FilledButton.icon(
                       onPressed: _saving ? null : _save,
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 50),
+                        backgroundColor: context.palette.primary,
+                        foregroundColor: context.palette.card,
+                        minimumSize: Size(0, 50),
                       ),
                       icon: _saving
-                          ? const SizedBox.square(
+                          ? SizedBox.square(
                               dimension: 17,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.bookmark_added_outlined, size: 20),
+                          : Icon(Icons.bookmark_added_outlined, size: 20),
                       label: Text(editing ? 'Save changes' : 'Save bookmark'),
                     ),
                   ],

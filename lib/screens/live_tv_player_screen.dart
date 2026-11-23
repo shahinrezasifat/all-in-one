@@ -3,12 +3,13 @@ import 'dart:async';
 import '../services/playback_controls.dart';
 
 import 'package:flutter/material.dart';
+import '../theme/app_palette.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/movie_model.dart';
 
 class LiveTvPlayerScreen extends StatefulWidget {
-  const LiveTvPlayerScreen({
+  LiveTvPlayerScreen({
     super.key,
     required this.channel,
     required this.resolve,
@@ -65,9 +66,9 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
     try {
       List<MovieSource> sources;
       try {
-        sources = await widget.resolve().timeout(const Duration(seconds: 25));
+        sources = await widget.resolve().timeout(Duration(seconds: 25));
       } catch (_) {
-        sources = const [];
+        sources = [];
       }
       for (final source in sources) {
         if (!mounted) return;
@@ -76,7 +77,7 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
         );
         if (uri == null ||
             uri.host.isEmpty ||
-            !const ['http', 'https'].contains(uri.scheme))
+            !['http', 'https'].contains(uri.scheme))
           continue;
         final format = source.format.toLowerCase();
         final controller = VideoPlayerController.networkUrl(
@@ -90,7 +91,7 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
         );
         var retained = false;
         try {
-          await controller.initialize().timeout(const Duration(seconds: 15));
+          await controller.initialize().timeout(Duration(seconds: 15));
           if (!mounted) return;
           await controller.play();
           if (!mounted) return;
@@ -115,10 +116,10 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
   Widget build(BuildContext context) {
     final player = _player;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.palette.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: context.palette.background,
+        foregroundColor: context.palette.card,
         title: Text(
           widget.channel.title,
           maxLines: 1,
@@ -128,14 +129,14 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
       body: SafeArea(
         child: Center(
           child: _loading
-              ? const Column(
+              ? Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 16),
                     Text(
                       'Connecting to live TV…',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: context.palette.onScrim),
                     ),
                   ],
                 )
@@ -152,12 +153,12 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
                         children: [
                           VideoPlayer(player),
                           if (value.isBuffering)
-                            const Center(child: CircularProgressIndicator()),
+                            Center(child: CircularProgressIndicator()),
                           Positioned(
                             top: 10,
                             left: 12,
                             child: Chip(
-                              label: const Text('LIVE'),
+                              label: Text('LIVE'),
                               side: BorderSide.none,
                             ),
                           ),
@@ -189,12 +190,12 @@ class _LiveTvPlayerScreenState extends State<LiveTvPlayerScreen> {
   Widget _unavailable() => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
-      const Text(
+      Text(
         'This channel is unavailable right now.',
-        style: TextStyle(color: Colors.white),
+        style: TextStyle(color: context.palette.onScrim),
       ),
-      const SizedBox(height: 12),
-      FilledButton(onPressed: _connect, child: const Text('Retry')),
+      SizedBox(height: 12),
+      FilledButton(onPressed: _connect, child: Text('Retry')),
     ],
   );
 }

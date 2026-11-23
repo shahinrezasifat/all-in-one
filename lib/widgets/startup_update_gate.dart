@@ -3,20 +3,21 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_update_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class StartupUpdateGate extends StatefulWidget {
   const StartupUpdateGate({
     super.key,
     required this.child,
-    this.checkForUpdate = requestAppUpdate,
+    this.checkForUpdate = requestAutomaticAppUpdate,
+    this.downloadUpdate = downloadAppUpdate,
   });
 
   final Widget child;
   final Future<AppUpdate?> Function() checkForUpdate;
+  final UpdateDownload downloadUpdate;
 
   @override
   State<StartupUpdateGate> createState() => _StartupUpdateGateState();
@@ -37,7 +38,7 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
     requiredAppUpdate.addListener(_applyManualUpdate);
     unawaited(_check());
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      _poll = Timer.periodic(const Duration(minutes: 5), (_) {
+      _poll = Timer.periodic(Duration(minutes: 5), (_) {
         if (WidgetsBinding.instance.lifecycleState ==
             AppLifecycleState.resumed) {
           unawaited(_check());
@@ -73,7 +74,7 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
         DateTime.now().difference(_lastCheck ?? DateTime(1970)) >=
-            const Duration(minutes: 1)) {
+            Duration(minutes: 1)) {
       unawaited(_check());
     }
   }
@@ -89,16 +90,14 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
   @override
   Widget build(BuildContext context) {
     if (_starting) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final p = context.palette;
       return Scaffold(
         body: DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: isDark
-                  ? const [Color(0xFF1B1116), Color(0xFF120D10)]
-                  : const [Color(0xFFFFF6F8), Color(0xFFFFFFFF)],
+              colors: [p.background, p.card],
             ),
           ),
           child: Center(
@@ -112,9 +111,12 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
                     borderRadius: BorderRadius.circular(22),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: .28),
+                        color: context.palette.tint(
+                          context.palette.primary,
+                          .28,
+                        ),
                         blurRadius: 22,
-                        offset: const Offset(0, 8),
+                        offset: Offset(0, 8),
                       ),
                     ],
                   ),
@@ -123,23 +125,23 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
                     child: Image.asset('assets/images/app_logo.png'),
                   ),
                 ),
-                const SizedBox(height: 24),
-                const SizedBox(
+                SizedBox(height: 24),
+                SizedBox(
                   width: 28,
                   height: 28,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.6,
-                    color: AppColors.primary,
+                    color: context.palette.primary,
                     semanticsLabel: 'Checking for updates',
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Text(
+                SizedBox(height: 16),
+                Text(
                   'Checking for updates…',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.lightTextSecondary,
+                    color: context.palette.onPrimary,
                   ),
                 ),
               ],
@@ -149,60 +151,138 @@ class _StartupUpdateGateState extends State<StartupUpdateGate>
       );
     }
     final update = _required;
-    return update == null ? widget.child : _RequiredUpdateDialog(update);
+    return update == null
+        ? widget.child
+        : _RequiredUpdateDialog(update, widget.downloadUpdate);
   }
 }
 
 class _RequiredUpdateDialog extends StatefulWidget {
-  const _RequiredUpdateDialog(this.update);
+  _RequiredUpdateDialog(this.update, this.downloadUpdate);
 
   final AppUpdate update;
+  final UpdateDownload downloadUpdate;
 
   @override
   State<_RequiredUpdateDialog> createState() => _RequiredUpdateDialogState();
 }
 
-class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
-  bool _opening = false;
-  bool _launchFailed = false;
+class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog>
+    with SingleTickerProviderStateMixin {
+  late final _progressSheen = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
 
-  Future<bool> _launch(Uri url) async {
+  @override
+  void dispose() {
+    _progressSheen.dispose();
+    super.dispose();
+  }
+
+  bool _downloading = false;
+  bool _installing = false;
+  bool _installed = false;
+  bool _showInstallPermission = false;
+  bool _showFullNotes = false;
+  bool _ready = false;
+  int _received = 0;
+  int? _total;
+  String? _error;
+
+  Future<void> _download() async {
+    setState(() {
+      _downloading = true;
+      _error = null;
+      _received = 0;
+      _total = null;
+    });
+    if (!MediaQuery.disableAnimationsOf(context)) _progressSheen.repeat();
     try {
-      return await launchUrl(url, mode: LaunchMode.externalApplication);
+      var update = widget.update;
+      if (update.apkUrl == null) {
+        update = await checkForAppUpdate() ?? update;
+      }
+      if (update.apkUrl == null) {
+        if (mounted)
+          setState(
+            () => _error =
+                'The Android package is not available yet. Try again later.',
+          );
+        return;
+      }
+      await widget.downloadUpdate(update, (received, total) {
+        if (!mounted) return;
+        if (_total == total &&
+            received != total &&
+            received - _received < 256 * 1024)
+          return;
+        setState(() {
+          _received = received;
+          _total = total;
+        });
+      });
+      if (mounted) setState(() => _ready = true);
     } on Exception {
-      return false;
+      if (mounted)
+        setState(
+          () => _error = 'Download failed. Check your connection and available storage, then try again.',
+        );
+    } finally {
+      if (mounted) {
+        _progressSheen.stop();
+        setState(() => _downloading = false);
+      }
     }
   }
 
-  Future<void> _openUpdate() async {
+  Future<void> _install() async {
     setState(() {
-      _opening = true;
-      _launchFailed = false;
+      _installing = true;
+      _error = null;
     });
-    final update = widget.update;
-    final apk = update.apkUrl;
-    final opened =
-        (apk != null && await _launch(apk)) || await _launch(update.releaseUrl);
-    if (!mounted) return;
-    setState(() {
-      _opening = false;
-      _launchFailed = !opened;
-    });
+    try {
+      final opened = await installAppUpdate();
+      if (!mounted) return;
+      if (opened) {
+        setState(() => _installed = true);
+      } else {
+        setState(() => _showInstallPermission = true);
+      }
+    } on PlatformException catch (error) {
+      if (mounted)
+        setState(() {
+          _error = error.message ?? 'Android could not open the installer.';
+          if (error.code == 'INVALID_UPDATE') _ready = false;
+        });
+    } on Exception {
+      if (mounted)
+        setState(() => _error = 'Android could not open the installer.');
+    } finally {
+      if (mounted) setState(() => _installing = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? AppColors.primaryLight : AppColors.primary;
-    final bodyText = isDark
-        ? AppColors.darkTextSecondary
-        : AppColors.lightTextSecondary;
+    final accent = context.palette.primary;
+    final bodyText = context.palette.textSecondary;
+    final total = _total;
+    final progress = total == null ? null : (_received / total).clamp(0.0, 1.0);
+    final noteLines = widget.update.notes
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty && !line.startsWith('#'));
+    final summary =
+        noteLines.firstOrNull?.replaceFirst(RegExp(r'^[-*]\s+'), '') ??
+        widget.update.notes;
 
     // The main app is unmounted while the mandatory update is visible.
     return PopScope(
       canPop: false,
       child: Shortcuts(
-        shortcuts: const {
+        shortcuts: {
           SingleActivator(LogicalKeyboardKey.escape):
               DoNothingAndStopPropagationIntent(),
         },
@@ -210,15 +290,19 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              const ModalBarrier(color: Colors.black54, dismissible: false),
+              ModalBarrier(
+                color: context.palette.textSecondary,
+                dismissible: false,
+              ),
               SafeArea(
                 child: Center(
                   child: AlertDialog(
+                    scrollable: true,
                     backgroundColor: Colors.transparent,
                     elevation: 0,
                     shadowColor: Colors.transparent,
                     surfaceTintColor: Colors.transparent,
-                    insetPadding: const EdgeInsets.symmetric(
+                    insetPadding: EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 24,
                     ),
@@ -227,18 +311,16 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
                     actionsPadding: EdgeInsets.zero,
                     content: Container(
                       width: double.maxFinite,
-                      constraints: const BoxConstraints(maxWidth: 380),
+                      constraints: BoxConstraints(maxWidth: 380),
                       decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkCard : Colors.white,
+                        color: context.palette.card,
                         borderRadius: BorderRadius.circular(26),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: isDark ? .50 : .18,
-                            ),
+                            color: context.palette.shadowAt(isDark ? .50 : .18),
                             blurRadius: 34,
                             spreadRadius: -12,
-                            offset: const Offset(0, 16),
+                            offset: Offset(0, 16),
                           ),
                         ],
                       ),
@@ -250,14 +332,9 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
                           children: [
                             // Branded hero header.
                             Container(
-                              padding: const EdgeInsets.fromLTRB(
-                                22,
-                                26,
-                                22,
-                                22,
-                              ),
-                              decoration: const BoxDecoration(
-                                gradient: AppColors.primaryGradient,
+                              padding: EdgeInsets.fromLTRB(22, 26, 22, 22),
+                              decoration: BoxDecoration(
+                                gradient: context.palette.primaryGradient,
                               ),
                               child: Column(
                                 children: [
@@ -265,13 +342,15 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
                                     width: 62,
                                     height: 62,
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: .16,
+                                      color: context.palette.tint(
+                                        context.palette.card,
+                                        .16,
                                       ),
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: .28,
+                                        color: context.palette.tint(
+                                          context.palette.card,
+                                          .28,
                                         ),
                                       ),
                                     ),
@@ -282,23 +361,49 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 14),
+                                  SizedBox(height: 12),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: context.palette.card,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: context.palette.tint(
+                                          context.palette.onScrim,
+                                          0.28,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'UPDATE REQUIRED',
+                                      style: TextStyle(
+                                        color: context.palette.critical,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 9.5,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
                                   Text(
-                                    'Update required · v${widget.update.version}',
+                                    'Version ${widget.update.version} is ready',
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: context.palette.onPrimary,
                                       fontWeight: FontWeight.w800,
                                       fontSize: 17,
                                       letterSpacing: -.3,
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    'A fresh new version is ready for you',
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'Download and install in All in One',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: Colors.white70,
+                                      color: context.palette.onPrimary,
                                       fontSize: 12.5,
                                     ),
                                   ),
@@ -308,12 +413,7 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
 
                             // Message, release notes and actions.
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                22,
-                                20,
-                                22,
-                                14,
-                              ),
+                              padding: EdgeInsets.fromLTRB(22, 20, 22, 14),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -326,20 +426,19 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
                                     ),
                                   ),
                                   if (widget.update.notes.isNotEmpty) ...[
-                                    const SizedBox(height: 14),
+                                    SizedBox(height: 14),
                                     Container(
-                                      padding: const EdgeInsets.all(14),
+                                      padding: EdgeInsets.all(14),
                                       decoration: BoxDecoration(
                                         color: isDark
-                                            ? Colors.white.withValues(
-                                                alpha: .05,
+                                            ? context.palette.tint(
+                                                context.palette.card,
+                                                .05,
                                               )
-                                            : AppColors.lightBg,
+                                            : context.palette.background,
                                         borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
-                                          color: isDark
-                                              ? AppColors.darkBorder
-                                              : AppColors.lightBorder,
+                                          color: context.palette.border,
                                         ),
                                       ),
                                       child: Column(
@@ -353,7 +452,7 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
                                                 size: 16,
                                                 color: accent,
                                               ),
-                                              const SizedBox(width: 8),
+                                              SizedBox(width: 8),
                                               Text(
                                                 "WHAT'S NEW",
                                                 style: TextStyle(
@@ -365,122 +464,241 @@ class _RequiredUpdateDialogState extends State<_RequiredUpdateDialog> {
                                               ),
                                             ],
                                           ),
-                                          const SizedBox(height: 8),
-                                          ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxHeight: 130,
-                                            ),
-                                            child: SingleChildScrollView(
-                                              child: Text(
-                                                widget.update.notes,
-                                                style: TextStyle(
-                                                  fontSize: 12.5,
-                                                  height: 1.45,
-                                                  color: bodyText,
-                                                ),
-                                              ),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            _showFullNotes
+                                                ? widget.update.notes
+                                                : summary,
+                                            maxLines: _showFullNotes ? null : 1,
+                                            overflow: _showFullNotes
+                                                ? TextOverflow.visible
+                                                : TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              height: 1.45,
+                                              color: bodyText,
                                             ),
                                           ),
+                                          if (summary != widget.update.notes ||
+                                              summary.length > 45)
+                                            TextButton(
+                                              onPressed: () => setState(
+                                                () => _showFullNotes =
+                                                    !_showFullNotes,
+                                              ),
+                                              child: Text(
+                                                _showFullNotes
+                                                    ? 'Show less'
+                                                    : 'Read release notes',
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
                                   ],
-                                  if (_launchFailed) ...[
-                                    const SizedBox(height: 12),
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.accentRed.withValues(
-                                          alpha: .08,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: AppColors.accentRed.withValues(
-                                            alpha: .25,
+                                  if (_downloading || _ready) ...[
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _installed
+                                          ? 'Update installed'
+                                          : _installing
+                                          ? 'Installing update…'
+                                          : _ready
+                                          ? 'Download complete'
+                                          : progress == null
+                                          ? 'Downloading update…'
+                                          : 'Downloading update · ${(progress * 100).floor()}%',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: context.palette.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TweenAnimationBuilder<double>(
+                                      tween: Tween<double>(
+                                        end: (_ready ? 1 : progress) ?? 0,
+                                      ),
+                                      duration: Duration(milliseconds: 420),
+                                      curve: Curves.easeOutCubic,
+                                      builder: (context, value, _) => Stack(
+                                        alignment: Alignment.centerLeft,
+                                        children: [
+                                          LinearProgressIndicator(
+                                            value:
+                                                _installing ||
+                                                    (!_ready &&
+                                                        progress == null)
+                                                ? null
+                                                : value,
+                                            color: accent,
+                                            backgroundColor:
+                                                context.palette.trackBg,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            semanticsLabel: _installing
+                                                ? 'Installing update'
+                                                : 'Update download progress',
                                           ),
+                                          if (_downloading &&
+                                              progress != null &&
+                                              value > 0 &&
+                                              !MediaQuery.disableAnimationsOf(
+                                                context,
+                                              ))
+                                            FractionallySizedBox(
+                                              widthFactor: value,
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: AnimatedBuilder(
+                                                  animation: _progressSheen,
+                                                  builder: (context, _) {
+                                                    final offset =
+                                                        _progressSheen.value *
+                                                            4 -
+                                                        2;
+                                                    final highlight = context
+                                                        .palette
+                                                        .onPrimary;
+                                                    return Container(
+                                                      height: 4,
+                                                      decoration: BoxDecoration(
+                                                        gradient:
+                                                            LinearGradient(
+                                                              begin: Alignment(
+                                                                offset - .45,
+                                                                0,
+                                                              ),
+                                                              end: Alignment(
+                                                                offset + .45,
+                                                                0,
+                                                              ),
+                                                              colors: [
+                                                                highlight
+                                                                    .withValues(
+                                                                      alpha: 0,
+                                                                    ),
+                                                                highlight
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          .55,
+                                                                    ),
+                                                                highlight
+                                                                    .withValues(
+                                                                      alpha: 0,
+                                                                    ),
+                                                              ],
+                                                            ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (total != null) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '${(_received / (1024 * 1024)).toStringAsFixed(1)} / '
+                                        '${(total / (1024 * 1024)).toStringAsFixed(1)} MiB',
+                                        style: TextStyle(
+                                          color: bodyText,
+                                          fontSize: 12,
                                         ),
                                       ),
-                                      child: const Text(
-                                        'Could not open the update. Try again.',
-                                        style: TextStyle(
-                                          color: AppColors.accentRed,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                                    ],
+                                  ],
+                                  if (_showInstallPermission) ...[
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Allow installs from All in One',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const Text(
+                                      'Enable this permission in Android Settings, then return and tap Update & Install again.',
+                                    ),
+                                    Wrap(
+                                      children: [
+                                        TextButton(
+                                          onPressed: () => setState(
+                                            () =>
+                                                _showInstallPermission = false,
+                                          ),
+                                          child: const Text('Not now'),
                                         ),
+                                        TextButton(
+                                          onPressed: () async {
+                                            try {
+                                              await openAppInstallSettings();
+                                              if (mounted)
+                                                setState(
+                                                  () => _showInstallPermission =
+                                                      false,
+                                                );
+                                            } on Exception {
+                                              if (mounted)
+                                                setState(
+                                                  () => _error = 'Could not open Android Settings.',
+                                                );
+                                            }
+                                          },
+                                          child: const Text(
+                                            'Open Android Settings',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                  if (_error case final error?) ...[
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      error,
+                                      style: TextStyle(
+                                        color: context.palette.textPrimary,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ],
                                   const SizedBox(height: 18),
-                                  Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: _opening ? null : _openUpdate,
-                                      borderRadius: BorderRadius.circular(14),
-                                      child: Container(
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          gradient: AppColors.primaryGradient,
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppColors.primary
-                                                  .withValues(alpha: .30),
-                                              blurRadius: 14,
-                                              offset: const Offset(0, 5),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Center(
-                                          child: _opening
-                                              ? const Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    SizedBox.square(
-                                                      dimension: 17,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                            color: Colors.white,
-                                                          ),
-                                                    ),
-                                                    SizedBox(width: 10),
-                                                    Text(
-                                                      'Opening…',
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                )
-                                              : const Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.download_rounded,
-                                                      color: Colors.white,
-                                                      size: 18,
-                                                    ),
-                                                    SizedBox(width: 8),
-                                                    Text(
-                                                      'Update Now',
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                        ),
-                                      ),
+                                  FilledButton.icon(
+                                    onPressed:
+                                        _downloading ||
+                                            _installing ||
+                                            _showInstallPermission
+                                        ? null
+                                        : (_installed
+                                              ? restartAfterAppUpdate
+                                              : _ready
+                                              ? _install
+                                              : _download),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: accent,
+                                      foregroundColor:
+                                          context.palette.onPrimary,
+                                      minimumSize: const Size.fromHeight(48),
+                                    ),
+                                    icon: Icon(
+                                      _ready
+                                          ? Icons.install_mobile_rounded
+                                          : Icons.download_rounded,
+                                    ),
+                                    label: Text(
+                                      _installed
+                                          ? 'Restart'
+                                          : _installing
+                                          ? 'Installing…'
+                                          : _ready
+                                          ? 'Update & Install'
+                                          : _downloading
+                                          ? 'Downloading…'
+                                          : _error != null
+                                          ? 'Retry Download'
+                                          : 'Download Update',
                                     ),
                                   ),
                                   TextButton(

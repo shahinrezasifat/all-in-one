@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/movie_model.dart';
 import '../services/movie_repository_service.dart';
 import '../services/provider_engine/provider_engine_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// Step 2 of a movie download: after a format (resolution) is chosen, list
 /// every repository/source that actually carries this movie in that format.
@@ -14,7 +14,7 @@ class MovieSourcePickerSheet extends StatefulWidget {
   final int height;
   final String formatLabel;
 
-  const MovieSourcePickerSheet({
+  MovieSourcePickerSheet({
     super.key,
     required this.movie,
     required this.initialSources,
@@ -151,8 +151,8 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
             : 0,
       ),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: context.palette.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -160,47 +160,43 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
         children: [
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              margin: EdgeInsets.only(top: 12, bottom: 8),
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkBorder : Colors.grey.shade300,
+                color: isDark ? context.palette.border : context.palette.textSecondary,
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
+            padding: EdgeInsets.fromLTRB(20, 4, 16, 12),
             child: Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Choose a source',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                       ),
-                      const SizedBox(height: 3),
+                      SizedBox(height: 3),
                       Text(
                         '${widget.movie.title} • ${widget.formatLabel}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
+                          color: context.palette.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         '$enabledRepos of $totalRepos repositories enabled',
                         style: TextStyle(
                           fontSize: 10.5,
-                          color: isDark
-                              ? AppColors.darkTextTertiary
-                              : AppColors.lightTextTertiary,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                     ],
@@ -210,7 +206,7 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                   icon: Icon(
                     Icons.close_rounded,
                     size: 20,
-                    color: isDark ? Colors.white60 : Colors.black54,
+                    color: context.palette.textSecondary,
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
@@ -219,22 +215,22 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
           ),
           if (_scanning)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 6),
               child: Row(
                 children: [
-                  const SizedBox(
+                  SizedBox(
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.primary),
+                        strokeWidth: 2, color: context.palette.primary),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Scanning repositories… ${_sources.length} found',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark ? Colors.white60 : Colors.black54,
+                        color: context.palette.onPrimary,
                       ),
                     ),
                   ),
@@ -243,17 +239,17 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                     style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero),
-                    child: const Text('Stop',
+                    child: Text('Stop',
                         style: TextStyle(fontSize: 11)),
                   ),
                 ],
               ),
             ),
-          const Divider(height: 1),
+          Divider(height: 1),
           Flexible(
             child: _sources.isEmpty && !_scanning
                 ? Padding(
-                    padding: const EdgeInsets.all(40),
+                    padding: EdgeInsets.all(40),
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -261,10 +257,10 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                           Text(
                             'No source has ${widget.formatLabel} for this movie.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w600),
                           ),
-                          const SizedBox(height: 10),
+                          SizedBox(height: 10),
                           OutlinedButton.icon(
                             onPressed: () {
                               setState(() {
@@ -273,18 +269,18 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                               });
                               _startScan();
                             },
-                            icon: const Icon(Icons.refresh_rounded, size: 16),
-                            label: const Text('Retry'),
+                            icon: Icon(Icons.refresh_rounded, size: 16),
+                            label: Text('Retry'),
                           ),
                         ],
                       ),
                     ),
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
+                    padding: EdgeInsets.symmetric(
                         horizontal: 16, vertical: 8),
                     itemCount: _sources.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
+                    separatorBuilder: (_, _) => SizedBox(height: 6),
                     itemBuilder: (context, i) {
                       final s = _sources[i];
                       final isSelected =
@@ -295,16 +291,13 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                           onTap: () => setState(() => _selected = s),
                           borderRadius: BorderRadius.circular(14),
                           child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(
+                            duration: Duration(milliseconds: 180),
+                            padding: EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 10),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? AppColors.primary.withValues(
-                                      alpha: isDark ? 0.14 : 0.08)
-                                  : (isDark
-                                      ? AppColors.darkCard
-                                      : Colors.white),
+                                  ? context.palette.tint(context.palette.primary, isDark ? 0.14 : 0.08)
+                                  : (context.palette.card),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Row(
@@ -313,22 +306,22 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                                   width: 34,
                                   height: 34,
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary
+                                    color: context.palette.primary
                                         .withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Center(
                                     child: Text(
                                       _repoName(s).substring(0, 1).toUpperCase(),
-                                      style: const TextStyle(
-                                        color: AppColors.primary,
+                                      style: TextStyle(
+                                        color: context.palette.primary,
                                         fontWeight: FontWeight.w800,
                                         fontSize: 14,
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -338,36 +331,34 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                                         _repoName(s),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w700),
                                       ),
-                                      const SizedBox(height: 3),
+                                      SizedBox(height: 3),
                                       Text(
                                         '${s.resolution} • ${_size(s)} • ${s.format.toUpperCase()}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 10.5,
-                                          color: isDark
-                                              ? AppColors.darkTextTertiary
-                                              : AppColors.lightTextTertiary,
+                                          color: context.palette.textSecondary,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                SizedBox(width: 8),
                                 Icon(
                                   isSelected
                                       ? Icons.check_circle_rounded
                                       : Icons.circle_outlined,
                                   size: 18,
                                   color: isSelected
-                                      ? AppColors.primary
+                                      ? context.palette.primary
                                       : (isDark
-                                          ? Colors.white30
-                                          : Colors.black26),
+                                          ? context.palette.textSecondary
+                                          : context.palette.tint(context.palette.border, 0.26)),
                                 ),
                               ],
                             ),
@@ -378,12 +369,12 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                   ),
           ),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+              color: context.palette.surface,
               border: Border(
                 top: BorderSide(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  color: context.palette.border,
                 ),
               ),
             ),
@@ -393,30 +384,30 @@ class _MovieSourcePickerSheetState extends State<MovieSourcePickerSheet> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                    child: Text('Cancel'),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
                       onPressed: selected == null
                           ? null
                           : () => Navigator.pop(context, selected),
-                      icon: const Icon(Icons.download_rounded, size: 18),
+                      icon: Icon(Icons.download_rounded, size: 18),
                       label: Text(
                         selected == null
                             ? 'Select a source'
                             : 'Download from ${_repoName(selected)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 13),
                       ),
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: context.palette.primary,
                         disabledBackgroundColor: isDark
-                            ? Colors.white12
-                            : Colors.grey.shade300,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                            ? context.palette.tint(context.palette.onScrim, 0.12)
+                            : context.palette.textSecondary,
+                        padding: EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),

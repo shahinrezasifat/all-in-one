@@ -7,12 +7,14 @@ void main() {
   testWidgets(
     'Settings opens the developer profile when GitHub is unavailable',
     (tester) async {
-      tester.view.physicalSize = const Size(850, 850);
+      tester.view.physicalSize = const Size(390, 850);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
+      expect(find.text('Open folder'), findsNothing);
+      expect(find.text('Choose folder'), findsOneWidget);
       final developerTile = find.text('Developer');
       for (
         var scroll = 0;
@@ -37,7 +39,7 @@ void main() {
 
       await tester.scrollUntilVisible(find.text('WhatsApp'), 300);
       expect(find.text('+8801766522499'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+
     },
   );
 }

@@ -10,20 +10,20 @@ import '../services/gallery_media_service.dart';
 import '../services/player_service.dart';
 import '../services/vault_service.dart';
 import '../services/virtual_folder_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'image_viewer_dialog.dart';
 import 'remote_image.dart';
 
 class DownloadItemTile extends StatelessWidget {
   final DownloadTask task;
 
-  const DownloadItemTile({super.key, required this.task});
+  DownloadItemTile({super.key, required this.task});
 
   void _play(BuildContext context) {
     PlayerService.instance.playDownloadTask(task);
     if (task.isAudioTask && ModalRoute.of(context)?.isFirst == false) {
       Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => const AudioPlayerScreen()),
+        MaterialPageRoute(builder: (_) => AudioPlayerScreen()),
       );
     }
   }
@@ -40,9 +40,9 @@ class DownloadItemTile extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: const Row(
+              title: Row(
                 children: [
-                  Icon(Icons.folder_special_rounded, color: AppColors.primary),
+                  Icon(Icons.folder_special_rounded, color: context.palette.primary),
                   SizedBox(width: 8),
                   Text(
                     'Assign to Virtual Folder',
@@ -57,26 +57,26 @@ class DownloadItemTile extends StatelessWidget {
                   children: [
                     Text(
                       'Organize "${task.title}" into custom playlists or folders:',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: context.palette.onPrimary),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     ...folders.map((f) {
                       final isInFolder = f.taskIds.contains(task.id);
                       return CheckboxListTile(
                         dense: true,
                         title: Text(
                           f.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
                         ),
                         subtitle: Text(
                           '${f.taskIds.length} items',
-                          style: const TextStyle(fontSize: 11),
+                          style: TextStyle(fontSize: 11),
                         ),
                         value: isInFolder,
-                        activeColor: AppColors.primary,
+                        activeColor: context.palette.primary,
                         onChanged: (val) {
                           VirtualFolderService.instance.toggleItemInFolder(
                             f.id,
@@ -92,7 +92,7 @@ class DownloadItemTile extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text(
+                  child: Text(
                     'Done',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
@@ -115,15 +115,15 @@ class DownloadItemTile extends StatelessWidget {
 
     if (!vault.isUnlocked) {
       await navigator.push(
-        MaterialPageRoute(builder: (_) => const VaultScreen()),
+        MaterialPageRoute(builder: (_) => VaultScreen()),
       );
     }
 
     if (!vault.isUnlocked) {
       messenger.showSnackBar(
         SnackBar(
-          content: const Text('Vault stayed locked — nothing was moved.'),
-          backgroundColor: dark ? AppColors.darkCard : Colors.grey.shade800,
+          content: Text('Vault stayed locked — nothing was moved.'),
+          backgroundColor: context.palette.card,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -135,7 +135,7 @@ class DownloadItemTile extends StatelessWidget {
     if (file == null || !file.existsSync()) {
       await DownloadManager.instance.removeTaskOnly(task);
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('The file was already gone — removed from the list.'),
         ),
       );
@@ -146,7 +146,7 @@ class DownloadItemTile extends StatelessWidget {
       await vault.moveToVault(task);
     } catch (_) {
       messenger.showSnackBar(
-        const SnackBar(content: Text("Could not move the file to Vault")),
+        SnackBar(content: Text("Could not move the file to Vault")),
       );
       return;
     }
@@ -160,18 +160,18 @@ class DownloadItemTile extends StatelessWidget {
 
     messenger.showSnackBar(
       SnackBar(
-        backgroundColor: AppColors.accentPurple,
+        backgroundColor: context.palette.primary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         content: Row(
           children: [
-            const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
+            Icon(Icons.lock_rounded, color: context.palette.onPrimary, size: 20),
+            SizedBox(width: 10),
             Expanded(
               child: Text(
                 "\"${task.title}\" is now locked in the Secret Vault — it no longer appears in Downloads.",
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.palette.textPrimary,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -195,10 +195,10 @@ class DownloadItemTile extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : const Color(0xFFF2F2F7),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          color: isDark ? context.palette.surface : context.palette.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
         ),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,19 +208,19 @@ class DownloadItemTile extends StatelessWidget {
                 width: 40,
                 height: 4.5,
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkBorder : Colors.black26,
+                  color: isDark ? context.palette.border : context.palette.tint(context.palette.border, 0.26),
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Padding(
-              padding: const EdgeInsets.only(left: 6, bottom: 10),
+              padding: EdgeInsets.only(left: 6, bottom: 10),
               child: Text(
                 task.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14.5,
                 ),
@@ -229,14 +229,14 @@ class DownloadItemTile extends StatelessWidget {
             Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCard : Colors.white,
+                color: context.palette.card,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
                 children: [
                   _sheetAction(
                     icon: Icons.lock_rounded,
-                    color: AppColors.accentPurple,
+                    color: context.palette.primary,
                     title: 'Lock into Secret Vault',
                     subtitle: 'Hide this file — it leaves Downloads entirely',
                     isDark: isDark,
@@ -248,7 +248,7 @@ class DownloadItemTile extends StatelessWidget {
                   _sheetDivider(isDark),
                   _sheetAction(
                     icon: Icons.folder_special_rounded,
-                    color: AppColors.primary,
+                    color: context.palette.primary,
                     title: 'Add to Virtual Folder',
                     subtitle: 'Organize this file into one of your folders',
                     isDark: isDark,
@@ -265,10 +265,10 @@ class DownloadItemTile extends StatelessWidget {
                               ? Icons.music_note_rounded
                               : Icons.play_circle_rounded),
                     color: task.isImageTask
-                        ? const Color(0xFFE91E63)
+                        ? context.palette.secondary
                         : (task.isAudioTask
-                              ? const Color(0xFF1DB954)
-                              : AppColors.accentBlue),
+                              ? context.palette.success
+                              : context.palette.info),
                     title: task.isImageTask
                         ? 'View Image'
                         : (task.isAudioTask ? 'Play Music' : 'Play Video'),
@@ -286,32 +286,52 @@ class DownloadItemTile extends StatelessWidget {
                   _sheetDivider(isDark),
                   _sheetAction(
                     icon: Icons.delete_outline_rounded,
-                    color: AppColors.accentRed,
+                    color: context.palette.textSecondary,
                     title: 'Delete File',
                     subtitle: 'Remove it from this device',
                     isDark: isDark,
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(ctx);
-                      DownloadManager.instance.deleteTask(task);
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Delete download?'),
+                          content: Text(task.title),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext, true),
+                              style: TextButton.styleFrom(foregroundColor: context.palette.critical),
+                              child: const Text('Delete file'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        DownloadManager.instance.deleteTask(task);
+                      }
                     },
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               child: TextButton(
                 style: TextButton.styleFrom(
-                  backgroundColor: isDark ? AppColors.darkCard : Colors.white,
-                  foregroundColor: isDark ? Colors.white70 : Colors.black87,
+                  backgroundColor: context.palette.card,
+                  foregroundColor: isDark ? context.palette.textSecondary : context.palette.textPrimary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text(
+                child: Text(
                   'Cancel',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 ),
@@ -334,7 +354,7 @@ class DownloadItemTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Container(
@@ -346,26 +366,24 @@ class DownloadItemTile extends StatelessWidget {
               ),
               child: Icon(icon, color: color, size: 19),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark
-                          ? AppColors.darkTextSecondary
-                          : Colors.grey.shade600,
+                      color: AppPalette.current.textSecondary,
                     ),
                   ),
                 ],
@@ -373,7 +391,7 @@ class DownloadItemTile extends StatelessWidget {
             ),
             Icon(
               Icons.chevron_right_rounded,
-              color: isDark ? AppColors.darkTextTertiary : Colors.grey.shade400,
+              color: AppPalette.current.textSecondary,
             ),
           ],
         ),
@@ -385,7 +403,7 @@ class DownloadItemTile extends StatelessWidget {
     return Divider(
       height: 1,
       indent: 60,
-      color: isDark ? Colors.white12 : Colors.black12,
+      color: isDark ? AppPalette.current.tint(AppPalette.current.onScrim, 0.12) : AppPalette.current.tint(AppPalette.current.border, 0.12),
     );
   }
 
@@ -468,33 +486,33 @@ class DownloadItemTile extends StatelessWidget {
     String label = formatLabel;
 
     if (lower.contains('4k') || lower.contains('2160')) {
-      startColor = const Color(0xFFFFB300);
-      endColor = const Color(0xFFFF6D00);
+      startColor = AppPalette.current.textSecondary;
+      endColor = AppPalette.current.textSecondary;
       label = '4K UHD';
     } else if (lower.contains('1080') || lower.contains('fhd')) {
-      startColor = const Color(0xFF00E676);
-      endColor = const Color(0xFF00B0FF);
+      startColor = AppPalette.current.success;
+      endColor = AppPalette.current.info;
       label = '1080p FHD';
     } else if (lower.contains('720') || lower.contains('hd')) {
-      startColor = const Color(0xFF4FC3F7);
-      endColor = const Color(0xFF0288D1);
+      startColor = AppPalette.current.info;
+      endColor = AppPalette.current.info;
       label = '720p HD';
     } else if (lower.contains('480') || lower.contains('sd')) {
-      startColor = const Color(0xFFBA68C8);
-      endColor = const Color(0xFF7B1FA2);
+      startColor = AppPalette.current.primary;
+      endColor = AppPalette.current.primary;
       label = '480p SD';
     } else if (isAudio) {
-      startColor = const Color(0xFF1DB954);
-      endColor = const Color(0xFF1ED760);
+      startColor = AppPalette.current.success;
+      endColor = AppPalette.current.success;
       label = task.ext.isNotEmpty ? task.ext.toUpperCase() : 'AUDIO';
     } else {
-      startColor = AppColors.primary;
-      endColor = const Color(0xFF26E6A2);
+      startColor = AppPalette.current.primary;
+      endColor = AppPalette.current.success;
       label = formatLabel.isNotEmpty ? formatLabel : 'HD';
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      padding: EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [startColor, endColor],
@@ -506,14 +524,14 @@ class DownloadItemTile extends StatelessWidget {
           BoxShadow(
             color: startColor.withValues(alpha: 0.35),
             blurRadius: 4,
-            offset: const Offset(0, 1.5),
+            offset: Offset(0, 1.5),
           ),
         ],
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: AppPalette.current.textPrimary,
           fontSize: 9.5,
           fontWeight: FontWeight.w900,
           letterSpacing: 0.3,
@@ -525,6 +543,8 @@ class DownloadItemTile extends StatelessWidget {
   Widget _actionPillButton({
     required bool isDark,
     required Color color,
+    required Color bgColor,
+    required Color borderColor,
     required IconData icon,
     required String label,
     required VoidCallback onTap,
@@ -532,25 +552,28 @@ class DownloadItemTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          height: 32,
+          padding: EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
+            color: bgColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 15),
-              const SizedBox(width: 4),
+              Icon(icon, color: color, size: 14),
+              SizedBox(width: 4),
               Text(
                 label,
                 style: TextStyle(
                   color: color,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
                 ),
               ),
             ],
@@ -562,8 +585,6 @@ class DownloadItemTile extends StatelessWidget {
 
   Widget _actionIconButton({
     required bool isDark,
-    required Color color,
-    required Color hoverColor,
     required IconData icon,
     required String tooltip,
     required VoidCallback onTap,
@@ -576,14 +597,23 @@ class DownloadItemTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.all(5),
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white10
-                  : Colors.black.withValues(alpha: 0.05),
+                  ? AppPalette.current.tint(AppPalette.current.card, 0.06)
+                  : AppPalette.current.card,
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? AppPalette.current.tint(AppPalette.current.onScrim, 0.12) : AppPalette.current.card,
+                width: 1,
+              ),
             ),
-            child: Icon(icon, color: color, size: 16),
+            child: Icon(
+              icon,
+              color: AppPalette.current.textSecondary,
+              size: 15,
+            ),
           ),
         ),
       ),
@@ -608,27 +638,49 @@ class DownloadItemTile extends StatelessWidget {
         ? '${approximate && !task.isConverting ? '≈' : ''}${(task.progress * 100).floor()}%'
         : '—';
 
-    // Card border color based on status
+    final isVideo = !task.isAudio && !task.isImageTask;
+    final thumbWidth = isVideo ? 86.0 : 64.0;
+    final thumbHeight = isVideo ? 58.0 : 64.0;
+
+    Color statusDotColor = context.palette.success;
+    String statusLabel = 'ACTIVE';
+    if (isPreparing) {
+      statusDotColor = context.palette.info;
+      statusLabel = 'WAIT';
+    } else if (isPaused) {
+      statusDotColor = context.palette.textSecondary;
+      statusLabel = 'PAUSED';
+    } else if (isQueued) {
+      statusDotColor = context.palette.info;
+      statusLabel = 'QUEUED';
+    } else if (isFailed) {
+      statusDotColor = context.palette.critical;
+      statusLabel = 'ERROR';
+    }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1B1E28) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? context.palette.border : context.palette.card,
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: isDownloading
-                ? AppColors.primary.withValues(alpha: isDark ? 0.15 : 0.08)
-                : Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-            blurRadius: isDownloading ? 16 : 10,
-            offset: const Offset(0, 4),
+            color: isDark
+                ? context.palette.shadowAt(0.3)
+                : context.palette.textSecondary.withValues(alpha: 0.07),
+            blurRadius: 10,
+            offset: Offset(0, 3),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           onTap: isDone
               ? () {
                   if (task.isImageTask) {
@@ -639,37 +691,37 @@ class DownloadItemTile extends StatelessWidget {
                 }
               : null,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Row: Thumbnail + Title + Metadata Badges
+                // Top Row: Thumbnail + Title + Badges
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Modern Poster / Thumbnail
+                    // Modern 16:9 widescreen or square media thumbnail
                     Stack(
                       children: [
                         Container(
-                          width: task.isAudio ? 72 : 64,
-                          height: task.isAudio ? 72 : 92,
+                          width: thumbWidth,
+                          height: thumbHeight,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
+                                color: context.palette.shadowAt(0.25),
                                 blurRadius: 6,
-                                offset: const Offset(0, 3),
+                                offset: Offset(0, 2),
                               ),
                             ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(12),
                             child: task.thumbnailUrl.isNotEmpty
                                 ? SmartNetworkImage(
                                     url: task.thumbnailUrl,
-                                    width: task.isAudio ? 72 : 64,
-                                    height: task.isAudio ? 72 : 92,
+                                    width: thumbWidth,
+                                    height: thumbHeight,
                                     fit: BoxFit.cover,
                                   )
                                 : _buildPlaceholderIcon(),
@@ -681,18 +733,18 @@ class DownloadItemTile extends StatelessWidget {
                           bottom: 4,
                           right: 4,
                           child: Container(
-                            padding: const EdgeInsets.all(4),
+                            padding: EdgeInsets.all(3.5),
                             decoration: BoxDecoration(
                               color: task.isImageTask
-                                  ? const Color(0xFFE91E63)
+                                  ? context.palette.secondary
                                   : (task.isAudioTask
-                                        ? const Color(0xFF1DB954)
-                                        : AppColors.primary),
+                                        ? context.palette.success
+                                        : context.palette.primary),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.4),
-                                  blurRadius: 4,
+                                  color: context.palette.shadowAt(0.4),
+                                  blurRadius: 3,
                                 ),
                               ],
                             ),
@@ -702,25 +754,29 @@ class DownloadItemTile extends StatelessWidget {
                                   : (task.isAudioTask
                                         ? Icons.music_note_rounded
                                         : Icons.videocam_rounded),
-                              color: Colors.white,
-                              size: 11,
+                              color: context.palette.textPrimary,
+                              size: 10,
                             ),
                           ),
                         ),
 
-                        // Live status badge on poster
-                        if (isDownloading)
+                        // Sleek Glassmorphic Status Pill on Thumbnail
+                        if (!isDone)
                           Positioned(
                             top: 4,
                             left: 4,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
+                              padding: EdgeInsets.symmetric(
                                 horizontal: 5,
-                                vertical: 1.5,
+                                vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.65),
-                                borderRadius: BorderRadius.circular(4),
+                                color: context.palette.shadowAt(0.72),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(
+                                  color: context.palette.tint(context.palette.onScrim, 0.12),
+                                  width: 0.5,
+                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -729,20 +785,27 @@ class DownloadItemTile extends StatelessWidget {
                                     width: 5,
                                     height: 5,
                                     decoration: BoxDecoration(
-                                      color: isPreparing
-                                          ? AppColors.accentGold
-                                          : AppColors.accentGreen,
+                                      color: statusDotColor,
                                       shape: BoxShape.circle,
+                                      boxShadow: [
+                                        if (isDownloading)
+                                          BoxShadow(
+                                            color: statusDotColor.withValues(
+                                              alpha: 0.9,
+                                            ),
+                                            blurRadius: 3,
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 3),
+                                  SizedBox(width: 3.5),
                                   Text(
-                                    isPreparing ? 'WAIT' : 'ACTIVE',
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    statusLabel,
+                                    style: TextStyle(
+                                      color: context.palette.onScrim,
                                       fontSize: 7.5,
                                       fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.5,
+                                      letterSpacing: 0.4,
                                     ),
                                   ),
                                 ],
@@ -752,9 +815,9 @@ class DownloadItemTile extends StatelessWidget {
                       ],
                     ),
 
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
 
-                    // Title & Info Details
+                    // Title & Badges Details
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -764,19 +827,17 @@ class DownloadItemTile extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
                               height: 1.25,
-                              color: isDark
-                                  ? Colors.white
-                                  : const Color(0xFF1E293B),
+                              color: context.palette.textPrimary,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: 5),
 
-                          // Badges: Quality + Type + Extension
+                          // Badges: Quality + Category + Container Format
                           Wrap(
-                            spacing: 6,
+                            spacing: 5,
                             runSpacing: 4,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
@@ -785,78 +846,86 @@ class DownloadItemTile extends StatelessWidget {
                                 task.isAudio,
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: 6,
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isDark
-                                      ? Colors.white12
-                                      : Colors.black.withValues(alpha: 0.06),
+                                      ? context.palette.tint(context.palette.card, 0.08)
+                                      : context.palette.card,
                                   borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? context.palette.tint(context.palette.onScrim, 0.12)
+                                        : context.palette.card,
+                                    width: 0.8,
+                                  ),
                                 ),
                                 child: Text(
                                   task.isAudio
                                       ? 'AUDIO'
                                       : (task.category.toUpperCase().isNotEmpty
                                             ? task.category.toUpperCase()
-                                            : 'MOVIE'),
+                                            : 'VIDEO'),
                                   style: TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize: 9,
                                     fontWeight: FontWeight.w700,
                                     color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
+                                        ? context.palette.border
+                                        : context.palette.textSecondary,
                                   ),
                                 ),
                               ),
                               if (task.ext.isNotEmpty)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                     horizontal: 5,
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
                                     color: isDark
-                                        ? Colors.white10
-                                        : Colors.black.withValues(alpha: 0.04),
+                                        ? context.palette.tint(context.palette.card, 0.05)
+                                        : context.palette.background,
                                     borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? context.palette.tint(context.palette.onScrim, 0.10)
+                                          : context.palette.card,
+                                      width: 0.8,
+                                    ),
                                   ),
                                   child: Text(
                                     task.ext.toUpperCase(),
                                     style: TextStyle(
-                                      fontSize: 9.5,
+                                      fontSize: 9,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white54
-                                          : Colors.black54,
+                                      color: context.palette.textSecondary,
                                     ),
                                   ),
                                 ),
                             ],
                           ),
 
-                          const SizedBox(height: 5),
+                          SizedBox(height: 4),
 
-                          // Clean CDN / Server Line
+                          // Clean CDN / Channel Source
                           Row(
                             children: [
                               Icon(
-                                Icons.cloud_download_outlined,
-                                size: 13,
-                                color: isDark ? Colors.white38 : Colors.black38,
+                                Icons.cloud_outlined,
+                                size: 12,
+                                color: context.palette.textSecondary,
                               ),
-                              const SizedBox(width: 4),
+                              SizedBox(width: 4),
                               Expanded(
                                 child: Text(
                                   _cleanSourceLabel(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 11,
-                                    color: isDark
-                                        ? Colors.white54
-                                        : Colors.black54,
+                                    fontSize: 10.5,
+                                    color: context.palette.textSecondary,
                                   ),
                                 ),
                               ),
@@ -871,10 +940,10 @@ class DownloadItemTile extends StatelessWidget {
                       if (task.isImageTask)
                         IconButton(
                           tooltip: 'View Image',
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.image_rounded,
-                            color: Color(0xFFE91E63),
-                            size: 34,
+                            color: context.palette.secondary,
+                            size: 32,
                           ),
                           onPressed: () {
                             ImageViewerDialog.show(context, task);
@@ -883,10 +952,10 @@ class DownloadItemTile extends StatelessWidget {
                       else if (task.isAudioTask)
                         IconButton(
                           tooltip: 'Play Music',
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.play_circle_fill_rounded,
-                            color: Color(0xFF1DB954),
-                            size: 36,
+                            color: context.palette.success,
+                            size: 34,
                           ),
                           onPressed: () {
                             _play(context);
@@ -895,10 +964,10 @@ class DownloadItemTile extends StatelessWidget {
                       else
                         IconButton(
                           tooltip: 'Play Video',
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.play_circle_fill_rounded,
-                            color: AppColors.primary,
-                            size: 36,
+                            color: context.palette.onAccent,
+                            size: 34,
                           ),
                           onPressed: () {
                             _play(context);
@@ -909,19 +978,17 @@ class DownloadItemTile extends StatelessWidget {
                         icon: Icon(
                           Icons.lock_outline_rounded,
                           color: isDark
-                              ? AppColors.accentPurple
-                              : AppColors.accentPurple.withValues(alpha: 0.8),
-                          size: 22,
+                              ? context.palette.primary
+                              : context.palette.tint(context.palette.primary, 0.8),
+                          size: 20,
                         ),
                         onPressed: () => _handleLockTap(context),
                       ),
                       IconButton(
                         icon: Icon(
                           Icons.more_vert_rounded,
-                          color: isDark
-                              ? AppColors.darkTextTertiary
-                              : AppColors.lightTextTertiary,
-                          size: 20,
+                          color: context.palette.textSecondary,
+                          size: 19,
                         ),
                         onPressed: () => _showActionSheet(context),
                       ),
@@ -931,325 +998,390 @@ class DownloadItemTile extends StatelessWidget {
 
                 // Downloading Progress & Controls Section
                 if (!isDone) ...[
-                  const SizedBox(height: 12),
+                  SizedBox(height: 11),
 
                   if (isPreparing)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          task.statusNote == 'Starting download…'
-                              ? 'Starting download'
-                              : task.isVideoTask
-                                  ? 'Analyzing video…'
-                                  : 'Preparing download…',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          task.statusNote == 'Starting download…'
-                              ? (total > 0 ? 'Download size checked' : 'Total unknown')
-                              : task.statusNote ?? 'Waiting for the download to start',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        if (total > 0) ...[
-                          const SizedBox(height: 4),
-                          Text('Total $totalLabel · $percentLabel',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: LinearProgressIndicator(
-                            minHeight: 6,
-                            color: AppColors.primary,
-                            backgroundColor: AppColors.primary.withValues(
-                              alpha: .15,
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: context.palette.primary,
+                              ),
                             ),
-                            semanticsLabel: 'Preparing download',
+                            SizedBox(width: 7),
+                            Text(
+                              task.statusNote == 'Starting download…'
+                                  ? 'Starting download…'
+                                  : task.isVideoTask
+                                      ? 'Analyzing video…'
+                                      : 'Preparing download…',
+                              style: TextStyle(
+                                color: context.palette.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                            Spacer(),
+                            if (total > 0)
+                              Text(
+                                'Total $totalLabel · $percentLabel',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.palette.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          task.statusNote == 'Starting download…'
+                              ? (total > 0
+                                  ? 'Download size checked'
+                                  : 'Total unknown')
+                              : task.statusNote ??
+                                  'Waiting for the download to start…',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.palette.textSecondary,
                           ),
+                        ),
+                        SizedBox(height: 8),
+                        _SmoothDownloadProgressSlider(
+                          progress: null,
+                          isPreparing: true,
+                          primaryColor: context.palette.primary,
+                          secondaryColor: context.palette.primary,
                         ),
                       ],
                     )
                   else ...[
-                    // Live transfer stats
+                    // Live transfer stats row
                     Row(
                       children: [
-                        // Status & Speed Badges (Wrapped in Expanded to prevent horizontal overflow)
-                        Expanded(
-                          child: Row(
-                            children: [
-                              if (isDownloading &&
-                                  task.speedFormatted.isNotEmpty) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 2.5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.14,
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.bolt_rounded,
-                                        size: 14,
-                                        color: AppColors.primary,
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        task.speedFormatted,
-                                        style: const TextStyle(
-                                          color: AppColors.primary,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                              ],
-
-                              // ETA / Status
-                              if (isDownloading &&
-                                  task.etaFormatted.isNotEmpty) ...[
+                        // Dynamic Speed Badge (UC Browser signature "+ <speed>")
+                        if (isDownloading &&
+                            task.speedFormatted.isNotEmpty) ...[
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.palette.selectedBg,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: context.palette.trackBg,
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                                 Icon(
-                                  Icons.schedule_rounded,
-                                  size: 13,
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.black45,
+                                  Icons.arrow_downward_rounded,
+                                  size: 11,
+                                  color: context.palette.textPrimary,
                                 ),
-                                const SizedBox(width: 3),
-                                Flexible(
-                                  child: Text(
-                                    '${task.etaFormatted} left',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.black54,
-                                    ),
+                                SizedBox(width: 2),
+                                Text(
+                                  '+',
+                                  style: TextStyle(
+                                    color: context.palette.textPrimary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
-                              ] else if (isPaused || isQueued) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentGold.withValues(
-                                      alpha: 0.15,
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    isQueued ? 'Queued' : 'Paused',
-                                    style: const TextStyle(
-                                      color: AppColors.accentGold,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ] else if (isFailed) ...[
-                                Flexible(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.accentRed.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      task.errorMessage ?? 'Download Failed',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: AppColors.accentRed,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ] else if (task.isConverting) ...[
-                                Flexible(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.accentGold.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      task.convertStage ?? 'Processing…',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: AppColors.accentGold,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                SizedBox(width: 2),
+                                Text(
+                                  task.speedFormatted,
+                                  style: TextStyle(
+                                    color: context.palette.textPrimary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.2,
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                        ],
+
+                        // ETA / Status
+                        if (isDownloading && total > 0 &&
+                            task.etaFormatted.isNotEmpty) ...[
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.schedule_rounded,
+                                size: 12,
+                                color: context.palette.textSecondary,
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                '${task.etaFormatted} left',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.palette.textSecondary,
+                                ),
+                              ),
                             ],
                           ),
-                        ),
+                        ] else if (isPaused || isQueued) ...[
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isPaused
+                                  ? context.palette.tint(
+                                      context.palette.textSecondary, .12)
+                                  : context.palette.selectedBg,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              isQueued ? 'Queued' : 'Paused',
+                              style: TextStyle(
+                                color: context.palette.textPrimary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ] else if (isFailed) ...[
+                          Flexible(
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? context.palette.error
+                                    : context.palette.tint(context.palette.error, 0.06),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isDark
+                                      ? context.palette.tint(context.palette.error, 0.30)
+                                      : context.palette.error,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                task.errorMessage ?? 'Download Failed',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: context.palette.error,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else if (task.isConverting) ...[
+                          Flexible(
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? context.palette.secondary
+                                    : context.palette.card,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                task.convertStage ?? 'Processing…',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: context.palette.info,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+
                         const SizedBox(width: 6),
 
-                        Flexible(
+                        // Downloaded / Total Bytes
+                        Expanded(
                           child: Text(
-                            '${formatBytes(task.downloadedBytes)} / $totalLabel',
+                            isPaused
+                                ? (total > 0
+                                    ? '${formatBytes(task.downloadedBytes)} of $totalLabel'
+                                    : '${formatBytes(task.downloadedBytes)} saved')
+                                : '${formatBytes(task.downloadedBytes)} / $totalLabel',
                             textAlign: TextAlign.end,
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white60 : Colors.black54,
+                              color: context.palette.textSecondary,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: 6),
 
-                        // Bold Percentage
+                        // Bold Percentage Chip
                         Container(
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 6,
                             vertical: 1.5,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.15),
+                            color: (task.isAudio
+                                    ? context.palette.success
+                                    : context.palette.primary)
+                                .withValues(alpha: isDark ? 0.22 : 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             percentLabel,
-                            style: const TextStyle(
-                              fontSize: 11.5,
+                            style: TextStyle(
+                              fontSize: 11,
                               fontWeight: FontWeight.w900,
-                              color: AppColors.primary,
+                              color: task.isAudio
+                                  ? context.palette.success
+                                  : (context.palette.primary),
                             ),
                           ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
 
-                    LinearProgressIndicator(
-                      value: isDownloading && !task.hasDownloadProgress
+                    // Ultra-Smooth UC Browser Slider with Lead Buffer & Flowing Shimmer
+                    _SmoothDownloadProgressSlider(
+                      progress: isDownloading && !task.hasDownloadProgress
                           ? null
                           : task.progress,
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(8),
-                      color: AppColors.primary,
-                      backgroundColor: AppColors.primary.withValues(alpha: .14),
-                      semanticsLabel: 'Download progress',
+                      isPreparing: false,
+                      isPaused: isPaused,
+                      isDownloading: isDownloading,
+                      isFailed: isFailed,
+                      primaryColor: task.isAudio
+                          ? context.palette.success
+                          : context.palette.primary,
+                      secondaryColor: task.isAudio
+                          ? context.palette.success
+                          : context.palette.primary,
                     ),
                   ],
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
 
-                  // Bottom Controls & Threads Row
+                  // Bottom Controls & Multi-Threads Row
                   Row(
                     children: [
                       if (task.threadsCount > 1)
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 3.5,
-                            ),
-                            decoration: BoxDecoration(
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? context.palette.tint(context.palette.card, 0.05)
+                                : context.palette.card,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
                               color: isDark
-                                  ? Colors.white.withValues(alpha: 0.07)
-                                  : Colors.black.withValues(alpha: 0.04),
-                              borderRadius: BorderRadius.circular(7),
+                                  ? context.palette.tint(context.palette.onScrim, 0.10)
+                                  : context.palette.card,
+                              width: 0.8,
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.flash_on_rounded,
-                                  size: 12,
-                                  color: AppColors.primary,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.flash_on_rounded,
+                                size: 12,
+                                color: context.palette.info,
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                '${task.threadsCount}x Multi-Threads',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.palette.textSecondary,
                                 ),
-                                const SizedBox(width: 3),
-                                Flexible(
-                                  child: Text(
-                                    '${task.threadsCount}x Multi-Threads',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
 
-                      const Spacer(),
+                      Spacer(),
 
-                      // Pause / Resume / Retry Button
+                      // Cohesive 32px Pause / Resume / Retry Pill
                       _actionPillButton(
                         isDark: isDark,
                         color: isFailed
-                            ? AppColors.accentRed
+                            ? (isDark
+                                ? context.palette.onPrimary
+                                : context.palette.error)
                             : (isPaused
-                                  ? AppColors.primary
-                                  : AppColors.accentGold),
+                                ? context.palette.success
+                                : (isDark
+                                    ? context.palette.onSecondary
+                                    : context.palette.info)),
+                        bgColor: isFailed
+                            ? (isDark
+                                ? context.palette.error
+                                : context.palette.tint(context.palette.error, 0.06))
+                            : (isPaused
+                                ? (isDark
+                                    ? context.palette.tint(context.palette.success, 0.10)
+                                    : context.palette.tint(context.palette.success, 0.08))
+                                : (isDark
+                                    ? context.palette.secondary
+                                    : context.palette.card)),
+                        borderColor: isFailed
+                            ? (isDark
+                                ? context.palette.tint(context.palette.error, 0.30)
+                                : context.palette.error)
+                            : (isPaused
+                                ? (context.palette.success)
+                                : (isDark
+                                    ? context.palette.secondary
+                                    : context.palette.tint(context.palette.info, 0.18))),
                         icon: isFailed
                             ? Icons.refresh_rounded
                             : (isPaused
-                                  ? Icons.play_arrow_rounded
-                                  : Icons.pause_rounded),
+                                ? Icons.play_arrow_rounded
+                                : Icons.pause_rounded),
                         label: isFailed
                             ? 'Retry'
                             : (isPaused ? 'Resume' : 'Pause'),
                         onTap: isFailed
                             ? () => DownloadManager.instance.resumeTask(task)
                             : (isDownloading || isQueued
-                                  ? () =>
-                                        DownloadManager.instance.pauseTask(task)
-                                  : () => DownloadManager.instance.resumeTask(
+                                ? () =>
+                                    DownloadManager.instance.pauseTask(task)
+                                : () => DownloadManager.instance.resumeTask(
                                       task,
                                     )),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
 
-                      // Cancel Button
+                      // Harmonized 32x32 Cancel Button
                       _actionIconButton(
                         isDark: isDark,
-                        color: isDark ? Colors.white54 : Colors.black45,
-                        hoverColor: AppColors.accentRed,
                         icon: Icons.close_rounded,
                         tooltip: 'Cancel Download',
                         onTap: () => DownloadManager.instance.cancelTask(task),
@@ -1267,11 +1399,307 @@ class DownloadItemTile extends StatelessWidget {
 
   Widget _buildPlaceholderIcon() {
     return Container(
-      color: AppColors.darkSurface,
+      color: AppPalette.current.surface,
       child: Icon(
         task.isAudio ? Icons.music_note_rounded : Icons.videocam_rounded,
-        color: task.isAudio ? const Color(0xFF1DB954) : AppColors.primary,
+        color: task.isAudio ? AppPalette.current.success : AppPalette.current.primary,
         size: 30,
+      ),
+    );
+  }
+}
+
+class _SmoothDownloadProgressSlider extends StatefulWidget {
+  final double? progress;
+  final bool isPreparing;
+  final bool isPaused;
+  final bool isDownloading;
+  final bool isFailed;
+  final Color? primaryColor;
+  final Color? secondaryColor;
+
+  _SmoothDownloadProgressSlider({
+    required this.progress,
+    this.isPreparing = false,
+    this.isPaused = false,
+    this.isDownloading = false,
+    this.isFailed = false,
+    this.primaryColor,
+    this.secondaryColor,
+  });
+
+  static double sliderHeight = 7.0;
+
+  @override
+  State<_SmoothDownloadProgressSlider> createState() =>
+      _SmoothDownloadProgressSliderState();
+}
+
+class _SmoothDownloadProgressSliderState
+    extends State<_SmoothDownloadProgressSlider>
+    with TickerProviderStateMixin {
+  late final AnimationController _animController;
+
+  /// Sweeping highlight across the filled part while a transfer is running.
+  late final AnimationController _shimmerController;
+
+  bool get _isDownloading =>
+      widget.isDownloading &&
+      !widget.isPaused &&
+      !widget.isFailed &&
+      !widget.isPreparing &&
+      widget.progress != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1800),
+    );
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1400),
+    );
+    if (widget.isPreparing || widget.progress == null) {
+      _animController.repeat();
+    }
+    if (_isDownloading) _shimmerController.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SmoothDownloadProgressSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((widget.isPreparing || widget.progress == null) &&
+        !_animController.isAnimating) {
+      _animController.repeat();
+    } else if (!widget.isPreparing &&
+        widget.progress != null &&
+        _animController.isAnimating) {
+      _animController.stop();
+    }
+    if (_isDownloading && !_shimmerController.isAnimating) {
+      _shimmerController.repeat();
+    } else if (!_isDownloading && _shimmerController.isAnimating) {
+      _shimmerController.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trackColor = context.palette.trackBg;
+
+    final targetProgress = widget.progress?.clamp(0.0, 1.0);
+    final isIndeterminate = widget.isPreparing || targetProgress == null;
+
+    final primary = widget.isFailed
+        ? context.palette.error
+        : (widget.isPaused
+            ? context.palette.info
+            : (widget.primaryColor ?? context.palette.primary));
+    final secondary = widget.secondaryColor ??
+        (widget.isFailed
+            ? context.palette.error
+            : (widget.isPaused
+                ? context.palette.info
+                : context.palette.primary));
+
+    final height = _SmoothDownloadProgressSlider.sliderHeight;
+
+    return Semantics(
+      label: 'Download progress',
+      value: targetProgress != null
+          ? '${(targetProgress * 100).toInt()}%'
+          : null,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          // Semantic & test integration
+          SizedBox(
+            width: 0,
+            height: 0,
+            child: Opacity(
+              opacity: 0,
+              child: LinearProgressIndicator(
+                value: isIndeterminate ? null : targetProgress,
+                color: context.palette.primary,
+                backgroundColor: context.palette.tint(context.palette.primary, 0.14),
+              ),
+            ),
+          ),
+
+          // Custom High-End Smooth UC Browser Slider
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final totalWidth = constraints.maxWidth;
+
+              if (isIndeterminate) {
+                // Smooth traveling wave
+                return AnimatedBuilder(
+                  animation: _animController,
+                  builder: (context, child) {
+                    final t = _animController.value;
+                    return Container(
+                      height: height,
+                      width: totalWidth,
+                      decoration: BoxDecoration(
+                        color: trackColor,
+                        borderRadius: BorderRadius.circular(height / 2),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: (t * (totalWidth + 120)) - 100,
+                            top: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 90,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    primary.withValues(alpha: 0.0),
+                                    primary.withValues(alpha: 0.7),
+                                    primary,
+                                    primary.withValues(alpha: 0.7),
+                                    primary.withValues(alpha: 0.0),
+                                  ],
+                                ),
+                                borderRadius:
+                                    BorderRadius.circular(height / 2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              }
+
+              return TweenAnimationBuilder<double>(
+                tween: Tween<double>(
+                  begin: 0.0,
+                  end: targetProgress,
+                ),
+                duration: Duration(milliseconds: 620),
+                curve: Curves.easeOutCubic,
+                builder: (context, animatedValue, child) {
+                  final filledWidth = totalWidth * animatedValue;
+                  return Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      // Track + filled segment, clipped to a clean pill.
+                      Container(
+                        height: height,
+                        width: totalWidth,
+                        decoration: BoxDecoration(
+                          color: trackColor,
+                          borderRadius: BorderRadius.circular(height / 2),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Stack(
+                          children: [
+                            FractionallySizedBox(
+                              widthFactor: animatedValue,
+                              heightFactor: 1,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [secondary, primary],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Thin specular highlight along the top edge.
+                            if (animatedValue > 0.01)
+                              Positioned(
+                                left: 0,
+                                top: 0.8,
+                                child: Container(
+                                  width: filledWidth.clamp(0.0, totalWidth),
+                                  height: height * 0.30,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(colors: [
+                                      context.palette.tint(
+                                          context.palette.onScrim, 0.05),
+                                      context.palette.tint(
+                                          context.palette.onScrim, 0.34),
+                                      context.palette.tint(
+                                          context.palette.onScrim, 0.05),
+                                    ]),
+                                    borderRadius: BorderRadius.circular(height),
+                                  ),
+                                ),
+                              ),
+                            // UC / Opera Mini style traveling light sweep.
+                            if (_isDownloading && filledWidth > 12)
+                              AnimatedBuilder(
+                                animation: _shimmerController,
+                                builder: (context, _) {
+                                  final t = _shimmerController.value;
+                                  return Positioned(
+                                    left: t * (filledWidth + 80) - 80,
+                                    top: 0,
+                                    bottom: 0,
+                                    child: IgnorePointer(
+                                      child: Container(
+                                        width: 70,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(colors: [
+                                            context.palette.tint(
+                                                context.palette.onScrim, 0.0),
+                                            context.palette.tint(
+                                                context.palette.onScrim, 0.42),
+                                            context.palette.tint(
+                                                context.palette.onScrim, 0.0),
+                                          ]),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                      // Soft glow at the leading edge of completed progress.
+                      if (_isDownloading && filledWidth > 4 && totalWidth >= 10)
+                        Positioned(
+                          left: (filledWidth - 5).clamp(0.0, totalWidth - 10),
+                          top: (height - 10) / 2,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: context.palette
+                                  .tint(context.palette.onScrim, 0.55),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: context.palette
+                                      .tint(primary, 0.55),
+                                  blurRadius: 9,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        ],
       ),
     );
   }

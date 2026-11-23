@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/download_task.dart';
 import '../services/player_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class ImageViewerDialog extends StatelessWidget {
   final DownloadTask task;
 
-  const ImageViewerDialog({super.key, required this.task});
+  ImageViewerDialog({super.key, required this.task});
 
   static Future<void> show(BuildContext context, DownloadTask task) {
     return Navigator.of(context).push(
@@ -34,12 +34,12 @@ class ImageViewerDialog extends StatelessWidget {
     final fileSize = fileExists ? file.lengthSync() : task.totalBytes;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.palette.background,
       appBar: AppBar(
-        backgroundColor: Colors.black87,
+        backgroundColor: context.palette.textPrimary,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: Icon(Icons.arrow_back_rounded, color: context.palette.onPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Column(
@@ -47,13 +47,13 @@ class ImageViewerDialog extends StatelessWidget {
           children: [
             Text(
               task.title,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: context.palette.onPrimary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             Text(
               task.author.isNotEmpty ? task.author : 'Cover Thumbnail',
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
+              style: TextStyle(fontSize: 12, color: context.palette.onPrimary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -62,7 +62,7 @@ class ImageViewerDialog extends StatelessWidget {
         actions: [
           if (fileExists)
             IconButton(
-              icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primary),
+              icon: Icon(Icons.open_in_new_rounded, color: context.palette.onPrimary),
               tooltip: 'Open in System Gallery',
               onPressed: () {
                 PlayerService.instance.launchSystemPlayer(file.path);
@@ -77,7 +77,7 @@ class ImageViewerDialog extends StatelessWidget {
               child: Center(
                 child: InteractiveViewer(
                   panEnabled: true,
-                  boundaryMargin: const EdgeInsets.all(20),
+                  boundaryMargin: EdgeInsets.all(20),
                   minScale: 0.8,
                   maxScale: 5.0,
                   child: fileExists
@@ -93,46 +93,46 @@ class ImageViewerDialog extends StatelessWidget {
 
             // Bottom Information Bar
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              color: Colors.black87,
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              color: context.palette.textPrimary,
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.25),
+                      color: context.palette.tint(context.palette.primary, 0.25),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       task.ext.toUpperCase(),
-                      style: const TextStyle(
-                        color: AppColors.primary,
+                      style: TextStyle(
+                        color: context.palette.primary,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                   if (fileSize > 0) ...[
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Text(
                       _formatSize(fileSize),
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: TextStyle(color: context.palette.onPrimary, fontSize: 12),
                     ),
                   ],
-                  const Spacer(),
+                  Spacer(),
                   if (fileExists)
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        backgroundColor: context.palette.primary,
+                        foregroundColor: context.palette.card,
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () {
                         PlayerService.instance.launchSystemPlayer(file.path);
                       },
-                      icon: const Icon(Icons.photo_library_rounded, size: 16),
-                      label: const Text('Open in Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      icon: Icon(Icons.photo_library_rounded, size: 16),
+                      label: Text('Open in Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                 ],
               ),
@@ -150,7 +150,7 @@ class ImageViewerDialog extends StatelessWidget {
         fit: BoxFit.contain,
         loadingBuilder: (_, child, progress) {
           if (progress == null) return child;
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          return Center(child: CircularProgressIndicator(color: AppPalette.current.primary));
         },
         errorBuilder: (_, __, ___) => _buildPlaceholder(),
       );
@@ -159,13 +159,13 @@ class ImageViewerDialog extends StatelessWidget {
   }
 
   Widget _buildPlaceholder() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.broken_image_rounded, size: 64, color: Colors.grey),
+          Icon(Icons.broken_image_rounded, size: 64, color: AppPalette.current.onPrimary),
           SizedBox(height: 12),
-          Text('Could not load image', style: TextStyle(color: Colors.grey)),
+          Text('Could not load image', style: TextStyle(color: AppPalette.current.textSecondary)),
         ],
       ),
     );

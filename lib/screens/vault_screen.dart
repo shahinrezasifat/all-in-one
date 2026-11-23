@@ -8,7 +8,7 @@ import '../models/video_item.dart';
 import '../services/player_service.dart';
 import 'audio_player_screen.dart';
 import '../services/vault_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class VaultScreen extends StatefulWidget {
   const VaultScreen({super.key});
@@ -45,10 +45,10 @@ class _VaultScreenState extends State<VaultScreen> {
   // Theme helpers
   // ---------------------------------------------------------------------------
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
-  Color get _accent => _dark ? AppColors.primaryLight : AppColors.primary;
+  Color get _accent => _dark ? context.palette.primary : context.palette.primary;
   Color get _accentSoft => _accent.withValues(alpha: .12);
   Color get _secondaryText =>
-      _dark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+      _dark ? context.palette.textSecondary : context.palette.textSecondary;
 
   Widget _glass({
     required Widget child,
@@ -65,10 +65,10 @@ class _VaultScreenState extends State<VaultScreen> {
             shadows ??
             [
               BoxShadow(
-                color: Colors.black.withValues(alpha: _dark ? .30 : .07),
+                color: context.palette.shadowAt(_dark ? .30 : .07),
                 blurRadius: 22,
                 spreadRadius: -8,
-                offset: const Offset(0, 8),
+                offset: Offset(0, 8),
               ),
             ],
       ),
@@ -81,12 +81,12 @@ class _VaultScreenState extends State<VaultScreen> {
             decoration: BoxDecoration(
               color:
                   color ??
-                  (_dark ? const Color(0x16FFFFFF) : const Color(0xA8FFFFFF)),
+                  (_dark ? context.palette.tint(context.palette.card, 0.086) : context.palette.tint(context.palette.card, 0.659)),
               borderRadius: borderRadius,
               border: Border.all(
                 color: _dark
-                    ? const Color(0x22FFFFFF)
-                    : const Color(0x99FFFFFF),
+                    ? context.palette.tint(context.palette.card, 0.133)
+                    : context.palette.tint(context.palette.card, 0.600),
                 width: 1,
               ),
             ),
@@ -113,8 +113,8 @@ class _VaultScreenState extends State<VaultScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: _dark
-              ? const [Color(0xFF110E1C), Color(0xFF141120), Color(0xFF0C1119)]
-              : const [Color(0xFFF7F4FF), Color(0xFFF2F7F5), Color(0xFFFDF4F7)],
+              ? [context.palette.background, context.palette.background, context.palette.background]
+              : [context.palette.background, context.palette.tint(context.palette.primary, 0.04), context.palette.background],
         ),
       ),
       child: Stack(
@@ -129,7 +129,7 @@ class _VaultScreenState extends State<VaultScreen> {
             right: -120,
             bottom: -120,
             child: _orb(
-              AppColors.accentRed.withValues(alpha: _dark ? .18 : .12),
+              context.palette.tint(context.palette.error, _dark ? .18 : .12),
               340,
             ),
           ),
@@ -273,10 +273,10 @@ class _VaultScreenState extends State<VaultScreen> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.all(24),
                 child: _glass(
                   blur: 22,
-                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
+                  padding: EdgeInsets.fromLTRB(24, 28, 24, 26),
                   borderRadius: BorderRadius.circular(30),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -301,7 +301,7 @@ class _VaultScreenState extends State<VaultScreen> {
                             BoxShadow(
                               color: _accent.withValues(alpha: .22),
                               blurRadius: 20,
-                              offset: const Offset(0, 8),
+                              offset: Offset(0, 8),
                             ),
                           ],
                         ),
@@ -313,9 +313,9 @@ class _VaultScreenState extends State<VaultScreen> {
                           color: _accent,
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: 20),
                       AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
+                        duration: Duration(milliseconds: 220),
                         child: Text(
                           key: ValueKey(headline),
                           headline,
@@ -327,22 +327,22 @@ class _VaultScreenState extends State<VaultScreen> {
                               ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         subline,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium
                             ?.copyWith(color: _secondaryText),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(4, (index) {
                           final filled = index < _enteredPin.length;
                           return AnimatedContainer(
-                            duration: const Duration(milliseconds: 220),
+                            duration: Duration(milliseconds: 220),
                             curve: Curves.easeOutCubic,
-                            margin: const EdgeInsets.symmetric(horizontal: 9),
+                            margin: EdgeInsets.symmetric(horizontal: 9),
                             width: filled ? 16 : 12,
                             height: filled ? 16 : 12,
                             decoration: BoxDecoration(
@@ -355,7 +355,7 @@ class _VaultScreenState extends State<VaultScreen> {
                                       BoxShadow(
                                         color: _accent.withValues(alpha: .4),
                                         blurRadius: 10,
-                                        offset: const Offset(0, 3),
+                                        offset: Offset(0, 3),
                                       ),
                                     ]
                                   : null,
@@ -369,30 +369,30 @@ class _VaultScreenState extends State<VaultScreen> {
                         }),
                       ),
                       if (_errorMessage != null) ...[
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16),
                         _glass(
                           blur: 8,
-                          color: AppColors.accentRed.withValues(alpha: .10),
-                          padding: const EdgeInsets.symmetric(
+                          color: context.palette.tint(context.palette.error, .10),
+                          padding: EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 10,
                           ),
                           borderRadius: BorderRadius.circular(14),
-                          shadows: const [],
+                          shadows: [],
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 Icons.error_outline_rounded,
                                 size: 16,
-                                color: AppColors.accentRed,
+                                color: context.palette.error,
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8),
                               Flexible(
                                 child: Text(
                                   _errorMessage!,
                                   style: TextStyle(
-                                    color: AppColors.accentRed,
+                                    color: context.palette.error,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 12,
                                   ),
@@ -403,7 +403,7 @@ class _VaultScreenState extends State<VaultScreen> {
                         ),
                       ],
                       if (VaultService.instance.biometricsEnabled) ...[
-                        const SizedBox(height: 18),
+                        SizedBox(height: 18),
                         _glass(
                           blur: 8,
                           padding: EdgeInsets.zero,
@@ -416,7 +416,7 @@ class _VaultScreenState extends State<VaultScreen> {
                                   : () => _useBiometrics(enable: false),
                               borderRadius: BorderRadius.circular(30),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: 18,
                                   vertical: 10,
                                 ),
@@ -428,7 +428,7 @@ class _VaultScreenState extends State<VaultScreen> {
                                       size: 18,
                                       color: _accent,
                                     ),
-                                    const SizedBox(width: 8),
+                                    SizedBox(width: 8),
                                     Text(
                                       'Unlock with biometrics',
                                       style: TextStyle(
@@ -444,21 +444,21 @@ class _VaultScreenState extends State<VaultScreen> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 24),
+                      SizedBox(height: 24),
                       SizedBox(
                         width: 280,
                         child: Column(
                           children: [
                             _buildPadRow(['1', '2', '3']),
-                            const SizedBox(height: 14),
+                            SizedBox(height: 14),
                             _buildPadRow(['4', '5', '6']),
-                            const SizedBox(height: 14),
+                            SizedBox(height: 14),
                             _buildPadRow(['7', '8', '9']),
-                            const SizedBox(height: 14),
+                            SizedBox(height: 14),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                const SizedBox(width: 64, height: 64),
+                                SizedBox(width: 64, height: 64),
                                 _buildPadButton('0'),
                                 SizedBox(
                                   width: 64,
@@ -467,9 +467,9 @@ class _VaultScreenState extends State<VaultScreen> {
                                     blur: 8,
                                     padding: EdgeInsets.zero,
                                     borderRadius: BorderRadius.circular(20),
-                                    shadows: const [],
+                                    shadows: [],
                                     child: IconButton(
-                                      icon: const Icon(
+                                      icon: Icon(
                                         Icons.backspace_outlined,
                                         size: 22,
                                       ),
@@ -503,8 +503,8 @@ class _VaultScreenState extends State<VaultScreen> {
     blur: 8,
     padding: EdgeInsets.zero,
     borderRadius: BorderRadius.circular(20),
-    color: _dark ? const Color(0x14FFFFFF) : const Color(0x8CFFFFFF),
-    shadows: const [],
+    color: context.palette.selectedBg,
+    shadows: [],
     child: Material(
       color: Colors.transparent,
       child: InkWell(
@@ -516,7 +516,7 @@ class _VaultScreenState extends State<VaultScreen> {
           child: Center(
             child: Text(
               digit,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              style: TextStyle(color: context.palette.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -589,8 +589,8 @@ class _VaultScreenState extends State<VaultScreen> {
                     ? 'Disable biometric unlock'
                     : 'Enable biometric unlock',
                 iconSize: 20,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                constraints: const BoxConstraints(),
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                constraints: BoxConstraints(),
                 icon: Icon(Icons.fingerprint_rounded, color: _accent),
                 onPressed: _biometricBusy
                     ? null
@@ -599,15 +599,15 @@ class _VaultScreenState extends State<VaultScreen> {
             IconButton(
               tooltip: 'Lock Vault',
               iconSize: 20,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              constraints: const BoxConstraints(),
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              constraints: BoxConstraints(),
               icon: Icon(Icons.lock_outline_rounded, color: _accent),
               onPressed: () {
                 _folderPath.clear();
                 vault.lock();
               },
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
           ],
         ),
         body: Stack(
@@ -617,12 +617,12 @@ class _VaultScreenState extends State<VaultScreen> {
               child: AnimatedSwitcher(
                 duration: MediaQuery.disableAnimationsOf(context)
                     ? Duration.zero
-                    : const Duration(milliseconds: 200),
+                    : Duration(milliseconds: 200),
                 transitionBuilder: (child, animation) => FadeTransition(
                   opacity: animation,
                   child: SlideTransition(
                     position: Tween(
-                      begin: const Offset(.035, 0),
+                      begin: Offset(.035, 0),
                       end: Offset.zero,
                     ).animate(animation),
                     child: child,
@@ -640,7 +640,7 @@ class _VaultScreenState extends State<VaultScreen> {
                     if (atRoot) ...[
                       _glass(
                         blur: 18,
-                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                        padding: EdgeInsets.fromLTRB(18, 16, 18, 16),
                         borderRadius: BorderRadius.circular(26),
                         child: Row(
                           children: [
@@ -665,7 +665,7 @@ class _VaultScreenState extends State<VaultScreen> {
                                 size: 23,
                               ),
                             ),
-                            const SizedBox(width: 14),
+                            SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -675,7 +675,7 @@ class _VaultScreenState extends State<VaultScreen> {
                                     style: theme.textTheme.titleMedium
                                         ?.copyWith(fontWeight: FontWeight.w800),
                                   ),
-                                  const SizedBox(height: 3),
+                                  SizedBox(height: 3),
                                   Text(
                                     '$total ${total == 1 ? 'item' : 'items'} secured · only you can see these',
                                     style: theme.textTheme.bodySmall?.copyWith(
@@ -688,11 +688,11 @@ class _VaultScreenState extends State<VaultScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: 20),
                     ],
                     if (!atRoot)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
+                        padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
                         child: Row(
                           children: [
                             Icon(
@@ -700,7 +700,7 @@ class _VaultScreenState extends State<VaultScreen> {
                               size: 14,
                               color: _secondaryText,
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 ['Vault', ..._folderPath].join(' / '),
@@ -715,7 +715,7 @@ class _VaultScreenState extends State<VaultScreen> {
                     if (folders.isEmpty && files.isEmpty)
                       _glass(
                         blur: 14,
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           vertical: 44,
                           horizontal: 24,
                         ),
@@ -734,7 +734,7 @@ class _VaultScreenState extends State<VaultScreen> {
                                 size: 28,
                               ),
                             ),
-                            const SizedBox(height: 14),
+                            SizedBox(height: 14),
                             Text(
                               atRoot
                                   ? 'Your vault is empty'
@@ -743,7 +743,7 @@ class _VaultScreenState extends State<VaultScreen> {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            SizedBox(height: 6),
                             Text(
                               atRoot
                                   ? 'Move a file here from Downloads to keep it private.'
@@ -758,7 +758,7 @@ class _VaultScreenState extends State<VaultScreen> {
                       ),
                     for (final folder in folderEntries)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+                        padding: EdgeInsets.only(bottom: 10),
                         child: _glass(
                           blur: 14,
                           padding: EdgeInsets.zero,
@@ -766,7 +766,7 @@ class _VaultScreenState extends State<VaultScreen> {
                           child: Material(
                             color: Colors.transparent,
                             child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
+                              contentPadding: EdgeInsets.symmetric(
                                 horizontal: 14,
                                 vertical: 8,
                               ),
@@ -836,7 +836,7 @@ class _VaultScreenState extends State<VaultScreen> {
         ? (Icons.headphones_rounded, 'AUDIO')
         : (Icons.play_arrow_rounded, 'VIDEO');
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(bottom: 10),
       child: _glass(
         blur: 14,
         padding: EdgeInsets.zero,
@@ -844,7 +844,7 @@ class _VaultScreenState extends State<VaultScreen> {
         child: Material(
           color: Colors.transparent,
           child: ListTile(
-            contentPadding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+            contentPadding: EdgeInsets.fromLTRB(12, 6, 6, 6),
             onTap: busy ? null : () => _openItem(item),
             leading: Container(
               width: 48,
@@ -869,7 +869,7 @@ class _VaultScreenState extends State<VaultScreen> {
             subtitle: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
+                  padding: EdgeInsets.symmetric(
                     horizontal: 7,
                     vertical: 2,
                   ),
@@ -887,7 +887,7 @@ class _VaultScreenState extends State<VaultScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   '${item.ext.replaceAll('.', '').toUpperCase()} · ${(item.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB',
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -906,10 +906,10 @@ class _VaultScreenState extends State<VaultScreen> {
                   )
                 : PopupMenuButton<bool>(
                     tooltip: 'File options',
-                    color: _dark ? AppColors.darkCard : Colors.white,
+                    color: _dark ? context.palette.card : context.palette.card,
                     onSelected: (restore) =>
                         _updateItem(vault, item, restore: restore),
-                    itemBuilder: (_) => const [
+                    itemBuilder: (_) => [
                       PopupMenuItem(
                         value: true,
                         child: Text('Restore to Downloads'),
@@ -943,7 +943,7 @@ class _VaultScreenState extends State<VaultScreen> {
     PlayerService.instance.playVideoItem(video, isAudio: item.isAudio);
     if (item.isAudio && ModalRoute.of(context)?.isFirst == false) {
       Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => const AudioPlayerScreen()),
+        MaterialPageRoute(builder: (_) => AudioPlayerScreen()),
       );
     }
   }
@@ -957,16 +957,16 @@ class _VaultScreenState extends State<VaultScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialog) => AlertDialog(
-          title: const Text('Delete this file?'),
+          title: Text('Delete this file?'),
           content: Text(item.title),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialog, false),
-              child: const Text('Cancel'),
+              child: Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialog, true),
-              child: const Text('Delete'),
+              child: Text('Delete'),
             ),
           ],
         ),
@@ -997,33 +997,33 @@ class _VaultScreenState extends State<VaultScreen> {
 
 /// Minimal, modern full-screen image viewer for vault images.
 class _VaultImageViewer extends StatelessWidget {
-  const _VaultImageViewer({required this.item});
+  _VaultImageViewer({required this.item});
 
   final VaultItem item;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.palette.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: context.palette.background,
+        foregroundColor: context.palette.card,
         title: Text(
           item.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
       body: Center(
         child: InteractiveViewer(
           child: Image.file(
             File(item.vaultPath),
-            errorBuilder: (_, _, _) => const Padding(
+            errorBuilder: (_, _, _) => Padding(
               padding: EdgeInsets.all(24),
               child: Text(
                 'Could not open this image',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: context.palette.textSecondary),
               ),
             ),
           ),

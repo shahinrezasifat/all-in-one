@@ -9,7 +9,7 @@ import '../services/download_manager.dart';
 import '../services/permission_service.dart';
 import '../services/provider_engine/provider_engine_service.dart';
 import '../services/provider_engine/provider_models.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/remote_image.dart';
 import 'movie_player_screen.dart';
 
@@ -28,7 +28,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
   final _expandedEpisodes = <ProviderEpisode, bool>{};
   late Future<List<ProviderEpisode>> _episodes;
   Future<List<MovieSource>>? _movieFormats;
-  List<MovieSource> _discoveredMovieFormats = const [];
+  List<MovieSource> _discoveredMovieFormats = [];
   int _formatRequest = 0;
   final _selectedLanguages = <ProviderEpisode?, String>{};
 
@@ -37,13 +37,13 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
     super.initState();
     _episodes = widget.movie.isSeries
         ? _engine.episodesFor(widget.movie)
-        : Future.value(const []);
+        : Future.value([]);
     if (!widget.movie.isSeries) _movieFormats = _loadMovieFormats();
   }
 
   Future<List<MovieSource>> _loadMovieFormats() async {
     final request = ++_formatRequest;
-    _discoveredMovieFormats = const [];
+    _discoveredMovieFormats = [];
     final seen = <(String, String, String)>{};
     final pending = Queue<MovieSource>();
     var running = 0;
@@ -107,12 +107,12 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
   // Theme helpers
   // ---------------------------------------------------------------------------
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
-  Color get _accent => _dark ? AppColors.primaryLight : AppColors.primaryDark;
+  Color get _accent => _dark ? context.palette.primary : context.palette.primary;
   Color get _accentSoft => _accent.withValues(alpha: .12);
   Color get _secondaryText =>
-      _dark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+      _dark ? context.palette.textSecondary : context.palette.textSecondary;
   Color get _primaryText =>
-      _dark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+      _dark ? context.palette.textPrimary : context.palette.textPrimary;
 
   Future<List<MovieSource>> _formats([ProviderEpisode? episode]) => _engine
       .resolveStreams(widget.movie, episode: episode, keepAllFormats: true);
@@ -161,7 +161,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
   Future<Map<String, Map<String, List<MovieSource>>>> _seasonOptions(
     List<ProviderEpisode> episodes,
   ) async {
-    final results = List<List<MovieSource>>.filled(episodes.length, const []);
+    final results = List<List<MovieSource>>.filled(episodes.length, []);
     var next = 0;
     Future<void> resolveEpisodes() async {
       while (mounted && next < episodes.length) {
@@ -242,47 +242,45 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
           builder: (sheetContext) {
             final sheetTheme = Theme.of(sheetContext);
             final sheetDark = sheetTheme.brightness == Brightness.dark;
-            final sheetSurface = sheetDark ? AppColors.darkCard : Colors.white;
+            final sheetSurface = sheetDark ? context.palette.card : context.palette.card;
             final sheetBorder = sheetDark
-                ? AppColors.darkBorder
-                : AppColors.lightBorder;
+                ? context.palette.border
+                : context.palette.border;
             final accent = sheetDark
-                ? AppColors.primaryLight
-                : AppColors.primary;
+                ? context.palette.primary
+                : context.palette.primary;
             final secondary = sheetDark
-                ? AppColors.darkTextSecondary
-                : AppColors.lightTextSecondary;
+                ? context.palette.textSecondary
+                : context.palette.textSecondary;
             final soft = sheetDark
-                ? Colors.white.withValues(alpha: .04)
-                : AppColors.lightBg;
+                ? context.palette.tint(context.palette.card, .04)
+                : context.palette.background;
 
             return FractionallySizedBox(
               heightFactor: .68,
               child: Container(
                 decoration: BoxDecoration(
                   color: sheetSurface,
-                  borderRadius: const BorderRadius.vertical(
+                  borderRadius: BorderRadius.vertical(
                     top: Radius.circular(28),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: sheetDark ? .45 : .14,
-                      ),
+                      color: context.palette.shadowAt(sheetDark ? .45 : .14,),
                       blurRadius: 28,
                       spreadRadius: -8,
-                      offset: const Offset(0, -6),
+                      offset: Offset(0, -6),
                     ),
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
+                  borderRadius: BorderRadius.vertical(
                     top: Radius.circular(28),
                   ),
                   child: StatefulBuilder(
                     builder: (context, update) {
                       Widget chip(String label) => Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 5,
                         ),
@@ -311,7 +309,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                         Widget? trailing,
                       }) {
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
+                          padding: EdgeInsets.only(bottom: 10),
                           child: Material(
                             color: Colors.transparent,
                             child: InkWell(
@@ -319,7 +317,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                               borderRadius: BorderRadius.circular(16),
                               splashColor: accent.withValues(alpha: .10),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: 14,
                                   vertical: 11,
                                 ),
@@ -343,7 +341,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                         size: 20,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -355,12 +353,12 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                               fontSize: 14,
                                               fontWeight: FontWeight.w700,
                                               color: sheetDark
-                                                  ? Colors.white
-                                                  : AppColors.lightTextPrimary,
+                                                  ? context.palette.card
+                                                  : context.palette.textPrimary,
                                             ),
                                           ),
                                           if (subtitle != null) ...[
-                                            const SizedBox(height: 2),
+                                            SizedBox(height: 2),
                                             Text(
                                               subtitle,
                                               style: TextStyle(
@@ -412,7 +410,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                 child: Container(
                                   width: 40,
                                   height: 4,
-                                  margin: const EdgeInsets.only(top: 10),
+                                  margin: EdgeInsets.only(top: 10),
                                   decoration: BoxDecoration(
                                     color: secondary.withValues(alpha: .35),
                                     borderRadius: BorderRadius.circular(4),
@@ -420,7 +418,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(
+                                padding: EdgeInsets.fromLTRB(
                                   20,
                                   16,
                                   20,
@@ -431,7 +429,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                   children: [
                                     if (!choosingLanguage)
                                       Padding(
-                                        padding: const EdgeInsets.only(
+                                        padding: EdgeInsets.only(
                                           right: 12,
                                         ),
                                         child: Container(
@@ -475,7 +473,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                                   letterSpacing: -.4,
                                                 ),
                                           ),
-                                          const SizedBox(height: 8),
+                                          SizedBox(height: 8),
                                           Wrap(
                                             spacing: 6,
                                             runSpacing: 6,
@@ -498,22 +496,22 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                         width: 44,
                                         height: 44,
                                         decoration: BoxDecoration(
-                                          gradient: AppColors.primaryGradient,
+                                          gradient: context.palette.primaryGradient,
                                           borderRadius: BorderRadius.circular(
                                             15,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: AppColors.primary
+                                              color: context.palette.primary
                                                   .withValues(alpha: .28),
                                               blurRadius: 12,
-                                              offset: const Offset(0, 4),
+                                              offset: Offset(0, 4),
                                             ),
                                           ],
                                         ),
-                                        child: const Icon(
+                                        child: Icon(
                                           Icons.language_rounded,
-                                          color: Colors.white,
+                                          color: context.palette.onPrimary,
                                           size: 22,
                                         ),
                                       ),
@@ -521,7 +519,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.symmetric(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: 20,
                                 ),
                                 child: Row(
@@ -530,28 +528,28 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                       child: Container(
                                         height: 4,
                                         decoration: BoxDecoration(
-                                          gradient: AppColors.primaryGradient,
+                                          gradient: context.palette.primaryGradient,
                                           borderRadius: BorderRadius.circular(
                                             4,
                                           ),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 5),
+                                    SizedBox(width: 5),
                                     Expanded(
                                       child: Container(
                                         height: 4,
                                         decoration: BoxDecoration(
                                           color: choosingLanguage
                                               ? sheetBorder
-                                              : AppColors.primary,
+                                              : context.palette.primary,
                                           borderRadius: BorderRadius.circular(
                                             4,
                                           ),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    SizedBox(width: 10),
                                     Text(
                                       choosingLanguage ? '1 / 2' : '2 / 2',
                                       style: TextStyle(
@@ -563,7 +561,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              SizedBox(height: 12),
                               Divider(height: 1, color: sheetBorder),
                               Expanded(
                                 child:
@@ -573,10 +571,10 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                         child: Column(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const CircularProgressIndicator(
-                                              color: AppColors.primary,
+                                            CircularProgressIndicator(
+                                              color: context.palette.primary,
                                             ),
-                                            const SizedBox(height: 14),
+                                            SizedBox(height: 14),
                                             Text(
                                               'Checking formats for every episode…',
                                               style: TextStyle(
@@ -590,7 +588,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                     : data == null || data.isEmpty
                                     ? Center(
                                         child: Padding(
-                                          padding: const EdgeInsets.symmetric(
+                                          padding: EdgeInsets.symmetric(
                                             horizontal: 28,
                                           ),
                                           child: Column(
@@ -601,7 +599,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                                 size: 38,
                                                 color: secondary,
                                               ),
-                                              const SizedBox(height: 12),
+                                              SizedBox(height: 12),
                                               Text(
                                                 snapshot.hasError
                                                     ? 'Could not check formats for all episodes.'
@@ -612,25 +610,25 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                                   color: secondary,
                                                 ),
                                               ),
-                                              const SizedBox(height: 14),
+                                              SizedBox(height: 14),
                                               FilledButton.icon(
                                                 onPressed: () => update(() {
                                                   options = _seasonOptions(
                                                     episodes,
                                                   );
                                                 }),
-                                                icon: const Icon(
+                                                icon: Icon(
                                                   Icons.refresh_rounded,
                                                   size: 16,
                                                 ),
-                                                label: const Text('Try again'),
+                                                label: Text('Try again'),
                                               ),
                                             ],
                                           ),
                                         ),
                                       )
                                     : ListView.builder(
-                                        padding: const EdgeInsets.fromLTRB(
+                                        padding: EdgeInsets.fromLTRB(
                                           20,
                                           14,
                                           20,
@@ -677,7 +675,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                                 : '${entry.value.length} episode sources',
                                             trailing: Container(
                                               padding:
-                                                  const EdgeInsets.symmetric(
+                                                  EdgeInsets.symmetric(
                                                     horizontal: 9,
                                                     vertical: 5,
                                                   ),
@@ -787,7 +785,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(13),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: Duration(milliseconds: 200),
             width: 40,
             height: 40,
             decoration: BoxDecoration(
@@ -798,7 +796,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                       BoxShadow(
                         color: _accent.withValues(alpha: .30),
                         blurRadius: 12,
-                        offset: const Offset(0, 4),
+                        offset: Offset(0, 4),
                       ),
                     ]
                   : null,
@@ -807,7 +805,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
               icon,
               size: 19,
               color: highlighted
-                  ? Colors.white
+                  ? context.palette.card
                   : (onPressed == null ? _secondaryText : _accent),
             ),
           ),
@@ -850,7 +848,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
         size,
     ].join(' · ');
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
           Expanded(
@@ -860,11 +858,11 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                   ? () => _showFormatSources(quality, sources, episode, formats)
                   : null,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         horizontal: 9,
                         vertical: 8,
                       ),
@@ -880,7 +878,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         subtitle,
@@ -902,14 +900,14 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           _actionButton(
             icon: Icons.play_arrow_rounded,
             tooltip: 'Play ${primary.resolution} from ${_sourceName(primary)}',
             highlighted: true,
             onPressed: () => _play(primary, formats, episode),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           _actionButton(
             icon: Icons.download_rounded,
             tooltip: downloadable == null
@@ -945,7 +943,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
             maxHeight: MediaQuery.sizeOf(sheet).height * .65,
           ),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
             shrinkWrap: true,
             children: [
               ListTile(title: Text('$quality sources')),
@@ -970,7 +968,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                       if (source.fileSize.isNotEmpty) source.fileSize,
                     ].join(' · '),
                   ),
-                  leading: const Icon(Icons.play_arrow_rounded),
+                  leading: Icon(Icons.play_arrow_rounded),
                   onTap: () {
                     Navigator.of(sheet).pop();
                     _play(source, formats, episode);
@@ -979,7 +977,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                       ? null
                       : IconButton(
                           tooltip: 'Download from ${_sourceName(source)}',
-                          icon: const Icon(Icons.download_rounded),
+                          icon: Icon(Icons.download_rounded),
                           onPressed: _queuing
                               ? null
                               : () {
@@ -1035,7 +1033,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
       }.values.toList();
       if (waiting && formats.isEmpty) {
         return _surface(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           borderRadius: BorderRadius.circular(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1043,7 +1041,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
               Row(
                 children: [
                   Icon(Icons.auto_awesome_rounded, size: 16, color: _accent),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Finding available sources…',
@@ -1055,7 +1053,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
@@ -1070,12 +1068,12 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
       }
       if (formats.isEmpty) {
         return _surface(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           borderRadius: BorderRadius.circular(18),
           child: Row(
             children: [
               Icon(Icons.cloud_off_rounded, size: 20, color: _secondaryText),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Text(
                   snapshot.hasError
@@ -1086,7 +1084,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                   ),
                 ),
               ),
-              TextButton(onPressed: retry, child: const Text('Retry')),
+              TextButton(onPressed: retry, child: Text('Retry')),
             ],
           ),
         );
@@ -1120,7 +1118,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
         ...languages.keys.where((language) => language != 'hi'),
       ];
       return _surface(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(12),
         borderRadius: BorderRadius.circular(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1131,7 +1129,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                 children: [
                   for (final language in languageOrder)
                     Padding(
-                      padding: const EdgeInsets.only(right: 8),
+                      padding: EdgeInsets.only(right: 8),
                       child: ChoiceChip(
                         label: Text(movieSourceLanguageLabels[language]!),
                         selected: language == activeLanguage,
@@ -1156,7 +1154,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             if (waiting)
               LinearProgressIndicator(
                 minHeight: 2,
@@ -1166,7 +1164,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
               )
             else
               Divider(height: 1, color: _accent.withValues(alpha: .13)),
-            const SizedBox(height: 5),
+            SizedBox(height: 5),
             for (final quality in order)
               _sourceRow(
                 quality,
@@ -1218,9 +1216,9 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
       borderRadius: BorderRadius.circular(24),
       shadows: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: _dark ? .27 : .12),
+          color: context.palette.shadowAt(_dark ? .27 : .12),
           blurRadius: 20,
-          offset: const Offset(0, 8),
+          offset: Offset(0, 8),
         ),
       ],
       child: Stack(
@@ -1230,19 +1228,19 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
               url: movie.backdropUrl,
               fallbackUrl: movie.posterUrl,
               fit: BoxFit.cover,
-              placeholderColor: const Color(0xFF321A22),
+              placeholderColor: context.palette.background,
             ),
           ),
-          const Positioned.fill(
+          Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0x160E090B),
-                    Color(0xAC160E12),
-                    Color(0xFA100A0D),
+                    context.palette.scrimAt(0.086),
+                    context.palette.scrimAt(0.675),
+                    context.palette.scrimAt(0.980),
                   ],
                   stops: [0, .48, 1],
                 ),
@@ -1250,7 +1248,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 72, 16, 16),
+            padding: EdgeInsets.fromLTRB(16, 72, 16, 16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -1263,7 +1261,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                   borderRadius: BorderRadius.circular(12),
                   fallbackInitials: SmartNetworkImage.initialsFor(movie.title),
                 ),
-                const SizedBox(width: 14),
+                SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1272,26 +1270,26 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                       Text(
                         metadata.join(' · '),
                         style: theme.textTheme.labelMedium?.copyWith(
-                          color: const Color(0xFFFFBDCB),
+                          color: context.palette.onScrim,
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      SizedBox(height: 5),
                       Text(
                         movie.title,
                         style: theme.textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
+                          color: context.palette.onScrim,
                           fontWeight: FontWeight.w800,
                           height: 1.12,
                         ),
                       ),
                       if (movie.providerName.trim().isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         Text(
                           movie.providerName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
+                            color: context.palette.textSecondary,
                           ),
                         ),
                       ],
@@ -1314,21 +1312,21 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                     opacity: downloadSeason == null ? .55 : 1,
                     child: Container(
                       height: 38,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         gradient: downloadSeason == null
                             ? null
-                            : AppColors.primaryGradient,
-                        color: downloadSeason == null ? Colors.black45 : null,
+                            : context.palette.primaryGradient,
+                        color: downloadSeason == null ? context.palette.textSecondary : null,
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: .28),
+                          color: context.palette.tint(context.palette.card, .28),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primaryDeep.withValues(alpha: .42),
+                            color: context.palette.tint(context.palette.primary, .42),
                             blurRadius: 14,
-                            offset: const Offset(0, 5),
+                            offset: Offset(0, 5),
                           ),
                         ],
                       ),
@@ -1339,20 +1337,20 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                             width: 22,
                             height: 22,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: .18),
+                              color: context.palette.tint(context.palette.card, .18),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.download_rounded,
                               size: 13,
-                              color: Colors.white,
+                              color: context.palette.onScrim,
                             ),
                           ),
-                          const SizedBox(width: 7),
-                          const Text(
+                          SizedBox(width: 7),
+                          Text(
                             'Full season',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.palette.onScrim,
                               fontWeight: FontWeight.w800,
                               fontSize: 11.5,
                               letterSpacing: .1,
@@ -1384,7 +1382,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
         ),
         if (count != null)
           Padding(
-            padding: const EdgeInsets.only(left: 8),
+            padding: EdgeInsets.only(left: 8),
             child: Text(
               count == 1 ? '1 episode' : '$count episodes',
               style: theme.textTheme.labelMedium?.copyWith(
@@ -1407,12 +1405,12 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
       borderRadius: BorderRadius.circular(22),
       child: ExpansionTile(
         key: ObjectKey(episode),
-        shape: const Border(),
-        collapsedShape: const Border(),
+        shape: Border(),
+        collapsedShape: Border(),
         iconColor: _accent,
         collapsedIconColor: _secondaryText,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        tilePadding: EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        childrenPadding: EdgeInsets.fromLTRB(14, 0, 14, 14),
         initiallyExpanded: expanded,
         onExpansionChanged: (value) {
           setState(() => _expandedEpisodes[episode] = value);
@@ -1449,7 +1447,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
         subtitle: (episode.group == null || episode.group!.trim().isEmpty)
             ? null
             : Padding(
-                padding: const EdgeInsets.only(top: 5),
+                padding: EdgeInsets.only(top: 5),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1458,7 +1456,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                       size: 12,
                       color: _secondaryText,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         episode.group!,
@@ -1474,13 +1472,13 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
               ),
         trailing: AnimatedRotation(
           turns: expanded ? .5 : 0,
-          duration: const Duration(milliseconds: 250),
+          duration: Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
           child: _surface(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(8),
             borderRadius: BorderRadius.circular(12),
             color: _accentSoft,
-            shadows: const [],
+            shadows: [],
             child: Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 20,
@@ -1504,10 +1502,10 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: _dark ? AppColors.darkBg : AppColors.lightBg,
+    backgroundColor: _dark ? context.palette.background : context.palette.background,
     appBar: AppBar(
       title: Text(widget.movie.isSeries ? 'Series details' : 'Movie details'),
-      backgroundColor: _dark ? AppColors.darkBg : AppColors.lightBg,
+      backgroundColor: _dark ? context.palette.background : context.palette.background,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -1520,7 +1518,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
           final loadingEpisodes =
               widget.movie.isSeries &&
               snapshot.connectionState != ConnectionState.done;
-          final episodes = snapshot.data ?? const <ProviderEpisode>[];
+          final episodes = snapshot.data ?? <ProviderEpisode>[];
           final seasons = <int?, List<ProviderEpisode>>{};
           for (final episode in episodes) {
             seasons.putIfAbsent(episode.season, () => []).add(episode);
@@ -1528,15 +1526,15 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
           final seasonNumbers = seasons.keys.toList();
           final selectedSeason = seasonNumbers.elementAtOrNull(_seasonIndex);
           final selectedEpisodes =
-              seasons[selectedSeason] ?? const <ProviderEpisode>[];
+              seasons[selectedSeason] ?? <ProviderEpisode>[];
           final seasonName = selectedSeason == null && seasonNumbers.length > 1
               ? 'Other episodes'
               : 'Season ${selectedSeason ?? 1}';
           return Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
+              constraints: BoxConstraints(maxWidth: 720),
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
                   _titleHeader(
                     widget.movie.isSeries || episodes.isNotEmpty,
@@ -1544,37 +1542,37 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                         ? null
                         : () => _downloadSeason(seasonName, selectedEpisodes),
                   ),
-                  const SizedBox(height: 22),
+                  SizedBox(height: 22),
                   _sectionHeader(
                     widget.movie.isSeries ? 'Episodes' : 'Available formats',
                     count: episodes.isEmpty ? null : episodes.length,
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   if (seasonNumbers.length > 1) ...[
                     SizedBox(
                       height: 48,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: seasonNumbers.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        separatorBuilder: (_, _) => SizedBox(width: 8),
                         itemBuilder: (_, index) {
                           final selected = index == _seasonIndex;
                           return _surface(
                             shadows: selected
                                 ? [
                                     BoxShadow(
-                                      color: _accent.withValues(alpha: .28),
-                                      blurRadius: 14,
-                                      offset: const Offset(0, 5),
+                                      color: _accent.withValues(alpha: .17),
+                                      blurRadius: 6,
+                                      offset: Offset(0, 2),
                                     ),
                                   ]
-                                : const [],
+                                : [],
                             borderRadius: BorderRadius.circular(30),
                             color: selected
                                 ? _accent
                                 : (_dark
-                                      ? const Color(0x14FFFFFF)
-                                      : const Color(0x8CFFFFFF)),
+                                      ? context.palette.tint(context.palette.card, 0.078)
+                                      : context.palette.tint(context.palette.card, 0.549)),
                             child: Material(
                               color: Colors.transparent,
                               child: InkWell(
@@ -1582,7 +1580,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                     setState(() => _seasonIndex = index),
                                 borderRadius: BorderRadius.circular(30),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                     horizontal: 18,
                                     vertical: 8,
                                   ),
@@ -1596,7 +1594,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                           .labelLarge
                                           ?.copyWith(
                                             color: selected
-                                                ? Colors.white
+                                                ? context.palette.onPrimary
                                                 : _primaryText,
                                             fontWeight: selected
                                                 ? FontWeight.w800
@@ -1611,7 +1609,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                   ],
                   if (!widget.movie.isSeries)
                     _formatList(
@@ -1619,7 +1617,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                       () => setState(() => _movieFormats = _loadMovieFormats()),
                     )
                   else if (loadingEpisodes)
-                    const LinearProgressIndicator(
+                    LinearProgressIndicator(
                       semanticsLabel: 'Loading episodes',
                     )
                   else if (episodes.isEmpty)
@@ -1634,13 +1632,13 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                           _seasonIndex = 0;
                           _episodes = _engine.episodesFor(widget.movie);
                         }),
-                        child: const Text('Retry'),
+                        child: Text('Retry'),
                       ),
                     )
                   else
                     for (final episode in selectedEpisodes)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+                        padding: EdgeInsets.only(bottom: 10),
                         child: _episodeCard(episode),
                       ),
                 ],

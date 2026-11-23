@@ -11,7 +11,7 @@ import '../services/permission_service.dart';
 import '../services/preference_service.dart';
 import '../services/search_service.dart';
 import '../services/trending_engine_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/analyze_download_flow.dart';
 import '../widgets/bookmark_editor_sheet.dart';
 import '../widgets/remote_image.dart';
@@ -169,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// loads, or an honest end-of-feed note once the seeds are exhausted.
   Widget _buildFeedFooter(bool isDark) {
     if (_loadingFeed || _loadingMoreFeed) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
         child: Center(
           child: Column(
@@ -179,13 +179,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 height: 26,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: AppColors.primary,
+                  color: context.palette.primary,
                 ),
               ),
               SizedBox(height: 10),
               Text(
                 'Finding fresh videos…',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: context.palette.onPrimary),
               ),
             ],
           ),
@@ -194,20 +194,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!_hasMoreFeed) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        padding: EdgeInsets.symmetric(vertical: 24),
         child: Center(
           child: Text(
             'You’re caught up.',
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? Colors.white54 : Colors.black45,
+              color: context.palette.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
         ),
       );
     }
-    return const SizedBox(height: 8);
+    return SizedBox(height: 8);
   }
 
   Future<void> _handleFastDownload({String? customUrl}) async {
@@ -216,9 +216,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final uri = Uri.tryParse(url);
     if (uri == null ||
         uri.host.isEmpty ||
-        !const ['http', 'https'].contains(uri.scheme)) {
+        !['http', 'https'].contains(uri.scheme)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a YouTube or website URL.')),
+        SnackBar(content: Text('Enter a YouTube or website URL.')),
       );
       return;
     }
@@ -236,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final withScheme = text.contains('://') ? text : 'https://$text';
     final uri = Uri.tryParse(withScheme);
     if (uri == null ||
-        !const ['http', 'https'].contains(uri.scheme) ||
+        !['http', 'https'].contains(uri.scheme) ||
         uri.host.isEmpty ||
         RegExp(r'\s').hasMatch(text)) {
       return null;
@@ -264,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (text == null || _submittedLink(text) == null) {
       _searchFocus.requestFocus();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Copy a video link to paste it here.')),
+        SnackBar(content: Text('Copy a video link to paste it here.')),
       );
       return;
     }
@@ -287,13 +287,13 @@ class _HomeScreenState extends State<HomeScreen> {
               .where((entry) => entry.toLowerCase().contains(query))
               .take(5)
               .toList()
-        : const <String>[];
-    final accent = dark ? AppColors.primaryLight : AppColors.primary;
-    final surface = dark ? AppColors.darkCard : Colors.white;
-    final border = dark ? AppColors.darkBorder : AppColors.lightBorder;
+        : <String>[];
+    final accent = dark ? context.palette.primary : context.palette.primary;
+    final surface = dark ? context.palette.card : context.palette.card;
+    final border = dark ? context.palette.border : context.palette.border;
     final muted = dark
-        ? AppColors.darkTextSecondary
-        : AppColors.lightTextSecondary;
+        ? context.palette.textSecondary
+        : context.palette.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -308,22 +308,22 @@ class _HomeScreenState extends State<HomeScreen> {
               border: Border.all(color: border),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: dark ? .22 : .06),
+                  color: context.palette.shadowAt(dark ? .22 : .06),
                   blurRadius: 16,
                   spreadRadius: -6,
-                  offset: const Offset(0, 6),
+                  offset: Offset(0, 6),
                 ),
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(left: 6),
+                    padding: EdgeInsets.only(left: 6),
                     child: Icon(Icons.search_rounded, color: accent, size: 22),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Expanded(
                     child: TextField(
                       controller: _searchController,
@@ -332,15 +332,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         hintText: 'Search videos or paste a link',
                         hintStyle: TextStyle(
                           color: dark
-                              ? AppColors.darkTextTertiary
-                              : AppColors.lightTextTertiary,
+                              ? context.palette.textSecondary
+                              : context.palette.textSecondary,
                           fontSize: 14,
                         ),
                         filled: false,
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
+                        contentPadding: EdgeInsets.symmetric(
                           vertical: 12,
                         ),
                       ),
@@ -356,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icon(
                         Icons.close_rounded,
                         size: 18,
-                        color: dark ? Colors.white54 : Colors.black45,
+                        color: dark ? context.palette.textSecondary : context.palette.textSecondary,
                       ),
                       visualDensity: VisualDensity.compact,
                     ),
@@ -366,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: Icon(Icons.link_rounded, size: 19, color: accent),
                     visualDensity: VisualDensity.compact,
                   ),
-                  const SizedBox(width: 2),
+                  SizedBox(width: 2),
                   Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -378,31 +378,31 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
+                          gradient: context.palette.primaryGradient,
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: .26),
+                              color: context.palette.tint(context.palette.primary, .26),
                               blurRadius: 10,
-                              offset: const Offset(0, 4),
+                              offset: Offset(0, 4),
                             ),
                           ],
                         ),
                         child: _isExtracting
-                            ? const Center(
+                            ? Center(
                                 child: SizedBox.square(
                                   dimension: 18,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white,
+                                    color: context.palette.card,
                                   ),
                                 ),
                               )
-                            : const Tooltip(
+                            : Tooltip(
                                 message: 'Search videos',
                                 child: Icon(
                                   Icons.arrow_forward_rounded,
-                                  color: Colors.white,
+                                  color: context.palette.textPrimary,
                                   size: 21,
                                 ),
                               ),
@@ -415,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         if (matches.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
               color: surface,
@@ -423,10 +423,10 @@ class _HomeScreenState extends State<HomeScreen> {
               border: Border.all(color: border),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: dark ? .20 : .07),
+                  color: context.palette.shadowAt(dark ? .20 : .07),
                   blurRadius: 18,
                   spreadRadius: -8,
-                  offset: const Offset(0, 8),
+                  offset: Offset(0, 8),
                 ),
               ],
             ),
@@ -436,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 2),
                     child: Text(
                       'RECENT SEARCHES',
                       style: TextStyle(
@@ -444,8 +444,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.1,
                         color: dark
-                            ? AppColors.darkTextTertiary
-                            : AppColors.lightTextTertiary,
+                            ? context.palette.textSecondary
+                            : context.palette.textSecondary,
                       ),
                     ),
                   ),
@@ -486,7 +486,7 @@ class _HomeScreenState extends State<HomeScreen> {
       SnackBar(
         content: Text(site == null ? 'Bookmark added' : 'Bookmark updated'),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -549,10 +549,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ];
 
             return Container(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                borderRadius: const BorderRadius.vertical(
+                color: context.palette.surface,
+                borderRadius: BorderRadius.vertical(
                   top: Radius.circular(24),
                 ),
               ),
@@ -562,43 +562,43 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.download_rounded,
-                        color: AppColors.primary,
+                        color: context.palette.primary,
                         size: 24,
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Choose Format for ${_selectedVideos.length} Selected Downloads',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded),
+                        icon: Icon(Icons.close_rounded),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
+                  SizedBox(height: 4),
+                  Text(
                     'Select format option before downloading. Downloads will start after tapping the button below.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
 
-                  const Text(
+                  Text(
                     'Video Formats',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: AppColors.primary,
+                      color: context.palette.primary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   ...videoFormats.map((f) {
                     final val = f['value'] as String;
                     final isSel = selectedFormat == val && !isAudioFormat;
@@ -610,7 +610,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         });
                       },
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           vertical: 4,
                           horizontal: 8,
                         ),
@@ -620,17 +620,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               isSel
                                   ? Icons.radio_button_checked
                                   : Icons.radio_button_off,
-                              color: isSel ? AppColors.primary : Colors.grey,
+                              color: isSel ? context.palette.primary : context.palette.textSecondary,
                               size: 20,
                             ),
-                            const SizedBox(width: 10),
+                            SizedBox(width: 10),
                             Text(
                               f['label'] as String,
                               style: TextStyle(
                                 fontWeight: isSel
                                     ? FontWeight.bold
                                     : FontWeight.normal,
-                                color: isSel ? AppColors.primary : null,
+                                color: isSel ? context.palette.primary : null,
                               ),
                             ),
                           ],
@@ -639,16 +639,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   }),
 
-                  const SizedBox(height: 10),
-                  const Text(
+                  SizedBox(height: 10),
+                  Text(
                     'Audio Formats (MP3)',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: AppColors.accentGold,
+                      color: context.palette.info,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   ...audioFormats.map((f) {
                     final val = f['value'] as String;
                     final isSel = selectedFormat == val && isAudioFormat;
@@ -660,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         });
                       },
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           vertical: 4,
                           horizontal: 8,
                         ),
@@ -670,17 +670,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               isSel
                                   ? Icons.radio_button_checked
                                   : Icons.radio_button_off,
-                              color: isSel ? AppColors.accentGold : Colors.grey,
+                              color: isSel ? context.palette.info : context.palette.textSecondary,
                               size: 20,
                             ),
-                            const SizedBox(width: 10),
+                            SizedBox(width: 10),
                             Text(
                               f['label'] as String,
                               style: TextStyle(
                                 fontWeight: isSel
                                     ? FontWeight.bold
                                     : FontWeight.normal,
-                                color: isSel ? AppColors.accentGold : null,
+                                color: isSel ? context.palette.info : null,
                               ),
                             ),
                           ],
@@ -689,7 +689,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   }),
 
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -699,21 +699,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         _executeBatchDownload(selectedFormat, isAudioFormat);
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: context.palette.primary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.download_done_rounded,
-                        color: Colors.white,
+                        color: context.palette.onPrimary,
                       ),
                       label: Text(
                         'Start Batch Download ($selectedFormat)',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
-                          color: Colors.white,
+                          color: context.palette.textPrimary,
                         ),
                       ),
                     ),
@@ -755,7 +755,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'Started batch download of $count items ($formatLabel)...',
         ),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.primary,
+        backgroundColor: context.palette.primary,
       ),
     );
 
@@ -769,7 +769,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, 20, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -785,13 +785,13 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               FilledButton.tonalIcon(
                 onPressed: _showBookmarkEditor,
-                icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-                label: const Text('Add bookmark'),
+                icon: Icon(Icons.bookmark_add_outlined, size: 18),
+                label: Text('Add bookmark'),
                 style: FilledButton.styleFrom(
                   foregroundColor: accent,
                   backgroundColor: accent.withValues(alpha: dark ? .17 : .09),
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  textStyle: const TextStyle(
+                  padding: EdgeInsets.symmetric(horizontal: 13),
+                  textStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
@@ -799,7 +799,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           AnimatedBuilder(
             animation: BookmarkService.instance,
             builder: (context, _) => SpeedDialGrid(
@@ -821,10 +821,10 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Divider(
             height: 1,
-            color: dark ? AppColors.darkBorder : AppColors.lightBorder,
+            color: dark ? context.palette.border : context.palette.border,
           ),
         ],
       ),
@@ -838,52 +838,57 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final actionStyle = TextButton.styleFrom(
       foregroundColor: theme.colorScheme.onSurfaceVariant,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      padding: EdgeInsets.symmetric(horizontal: 9),
+      textStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      padding: EdgeInsets.fromLTRB(16, 2, 16, 8),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              showingResults
-                  ? 'Results for "$_activeSearchQuery"'
-                  : 'Trending now',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!showingResults)
+                  Text('Discover', style: theme.textTheme.labelMedium),
+                Text(
+                  showingResults
+                      ? 'Results for "$_activeSearchQuery"'
+                      : 'Trending now',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
           if (!showingResults)
-            TextButton(
+            IconButton.filledTonal(
+              tooltip: 'Refresh',
               onPressed: _loadingMoreFeed ? null : _refreshFeed,
-              style: actionStyle,
-              child: const Text('Refresh'),
+              icon: const Icon(Icons.refresh_rounded, size: 20),
             ),
-          TextButton(
+          const SizedBox(width: 6),
+          IconButton.filledTonal(
+            tooltip: _isMultiSelect ? 'Finish selection' : 'Batch download',
+            color: _isMultiSelect ? accent : theme.colorScheme.onSurfaceVariant,
             onPressed: () {
               setState(() {
                 _isMultiSelect = !_isMultiSelect;
                 if (!_isMultiSelect) _selectedVideos.clear();
               });
             },
-            style: _isMultiSelect
-                ? actionStyle.copyWith(
-                    foregroundColor: WidgetStatePropertyAll(accent),
-                  )
-                : actionStyle,
-            child: Text(_isMultiSelect ? 'Done' : 'Batch'),
+            icon: Icon(_isMultiSelect ? Icons.check_rounded : Icons.playlist_add_check_rounded, size: 20),
           ),
           if (showingResults)
             TextButton(
               onPressed: _clearSearch,
               style: actionStyle,
-              child: const Text('Clear'),
+              child: Text('Clear'),
             ),
         ],
       ),
@@ -893,7 +898,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? AppColors.primaryLight : AppColors.primary;
+    final accent = context.palette.primary;
     final bottomClearance = MediaQuery.paddingOf(context).bottom;
     final showingResults = _activeSearchQuery.isNotEmpty;
     final displayedVideos = showingResults ? _searchResults : _feedVideos;
@@ -919,14 +924,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: _buildSearchPanel(),
                     ),
                   ),
                   if (!showingResults)
                     SliverToBoxAdapter(child: _buildQuickAccess(accent))
                   else
-                    const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                    SliverToBoxAdapter(child: SizedBox(height: 14)),
                   SliverToBoxAdapter(
                     child: _buildFeedHeader(
                       showingResults: showingResults,
@@ -936,14 +941,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // Video Feed List
                   _isSearching
-                      ? const SliverToBoxAdapter(
+                      ? SliverToBoxAdapter(
                           child: Padding(
                             padding: EdgeInsets.all(40),
                             child: Center(
                               child: Column(
                                 children: [
                                   CircularProgressIndicator(
-                                    color: AppColors.primary,
+                                    color: context.palette.primary,
                                   ),
                                   SizedBox(height: 16),
                                   Text('Searching YouTube & web for videos...'),
@@ -953,7 +958,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         )
                       : showingResults && displayedVideos.isEmpty
-                      ? const SliverToBoxAdapter(
+                      ? SliverToBoxAdapter(
                           child: Padding(
                             padding: EdgeInsets.all(40),
                             child: Center(
@@ -964,7 +969,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         )
                       : SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: EdgeInsets.symmetric(horizontal: 16),
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate((
                               context,
@@ -1020,27 +1025,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 right: 16,
                 bottom: bottomClearance + 10,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
+                  padding: EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                    color: context.palette.card,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: isDark ? 0.4 : 0.15,
-                        ),
+                        color: context.palette.shadowAt(isDark ? 0.4 : 0.15,),
                         blurRadius: 18,
-                        offset: const Offset(0, 6),
+                        offset: Offset(0, 6),
                       ),
                     ],
                   ),
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 20),
+                        icon: Icon(Icons.close_rounded, size: 20),
                         onPressed: () {
                           setState(() {
                             _selectedVideos.clear();
@@ -1050,30 +1053,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       Text(
                         'Selected: ${_selectedVideos.length} items',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
                       ),
-                      const Spacer(),
+                      Spacer(),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor: context.palette.primary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.download_rounded,
-                          color: Colors.white,
+                          color: context.palette.onPrimary,
                           size: 18,
                         ),
-                        label: const Text(
+                        label: Text(
                           'Download Selected',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: Colors.white,
+                            color: context.palette.textPrimary,
                           ),
                         ),
                         onPressed: _selectedVideos.isNotEmpty

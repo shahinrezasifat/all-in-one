@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/video_item.dart';
 import '../services/search_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/video_card.dart';
 
 class ExploreScreen extends StatefulWidget {
   final String? initialQuery;
 
-  const ExploreScreen({super.key, this.initialQuery});
+  ExploreScreen({super.key, this.initialQuery});
 
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
@@ -78,7 +78,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         title: Container(
           height: 44,
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkCard : AppColors.lightCard,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(14),
           ),
           child: TextField(
@@ -86,10 +86,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
             autofocus: false,
             decoration: InputDecoration(
               hintText: 'Search YouTube, Music, Videos...',
-              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+              prefixIcon: Icon(Icons.search_rounded, color: context.palette.primary, size: 20),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
+                      icon: Icon(Icons.clear, size: 18),
                       onPressed: () {
                         _searchCtrl.clear();
                         setState(() {
@@ -103,7 +103,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              contentPadding: EdgeInsets.symmetric(vertical: 10),
             ),
             onChanged: _onQueryChanged,
             onSubmitted: _performSearch,
@@ -112,7 +112,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         actions: [
           TextButton(
             onPressed: () => _performSearch(_searchCtrl.text),
-            child: const Text('Search', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            child: Text('Search', style: TextStyle(color: context.palette.primary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -120,11 +120,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
         children: [
           // Main results or popular tags
           if (_isLoading)
-            const Center(
+            Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(color: AppColors.primary),
+                  CircularProgressIndicator(color: context.palette.primary),
                   SizedBox(height: 16),
                   Text('Searching high quality streams...'),
                 ],
@@ -135,24 +135,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.search_off_rounded, size: 64, color: AppColors.primary),
-                  const SizedBox(height: 16),
+                  Icon(Icons.search_off_rounded, size: 64, color: context.palette.primary),
+                  SizedBox(height: 16),
                   Text(
                     'No videos found for "${_searchCtrl.text}"',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  const SizedBox(height: 8),
-                  const Text('Try different keywords or paste a direct video link.'),
+                  SizedBox(height: 8),
+                  Text('Try different keywords or paste a direct video link.'),
                 ],
               ),
             )
           else if (_searchResults.isNotEmpty)
             ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               itemCount: _searchResults.length + 1,
               itemBuilder: (context, index) {
                 if (index == _searchResults.length) {
-                  return const SizedBox(height: 80);
+                  return SizedBox(height: 80);
                 }
                 final video = _searchResults[index];
                 return VideoCard(video: video);
@@ -161,21 +161,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
           else
             // Popular Discover Tags
             ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               children: [
-                const Text(
+                Text(
                   'Popular Searches',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 10,
                   children: _popularTags.map((tag) {
                     return ActionChip(
                       label: Text(tag),
-                      avatar: const Icon(Icons.trending_up, size: 16, color: AppColors.primary),
-                      backgroundColor: isDark ? AppColors.darkCard : Colors.grey.shade200,
+                      avatar: Icon(Icons.trending_up, size: 16, color: context.palette.primary),
+                      backgroundColor: context.palette.card,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       onPressed: () {
                         _searchCtrl.text = tag;
@@ -184,21 +184,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 24),
-                const Text(
+                SizedBox(height: 24),
+                Text(
                   'Explore by Platform',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 12),
-                _buildPlatformCard('YouTube Trending', Icons.video_collection_rounded, AppColors.accentRed, () {
+                SizedBox(height: 12),
+                _buildPlatformCard('YouTube Trending', Icons.video_collection_rounded, context.palette.error, () {
                   _performSearch('Trending YouTube');
                 }, isDark),
-                const SizedBox(height: 10),
-                _buildPlatformCard('TikTok Viral Sounds', Icons.music_note_rounded, AppColors.accentGold, () {
+                SizedBox(height: 10),
+                _buildPlatformCard('TikTok Viral Sounds', Icons.music_note_rounded, context.palette.info, () {
                   _performSearch('Viral TikTok Sounds');
                 }, isDark),
-                const SizedBox(height: 10),
-                _buildPlatformCard('Hi-Fi Audio Search', Icons.headphones_rounded, AppColors.accentGreen, () {
+                SizedBox(height: 10),
+                _buildPlatformCard('Hi-Fi Audio Search', Icons.headphones_rounded, context.palette.success, () {
                   _performSearch('official audio high quality');
                 }, isDark),
               ],
@@ -212,23 +212,23 @@ class _ExploreScreenState extends State<ExploreScreen> {
               right: 16,
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  color: context.palette.card,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
+                      color: context.palette.shadowAt(0.3),
                       blurRadius: 20,
-                      offset: const Offset(0, 10),
+                      offset: Offset(0, 10),
                     )
                   ],
                 ),
                 child: ListView.separated(
                   shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: EdgeInsets.symmetric(vertical: 8),
                   itemCount: _suggestions.length.clamp(0, 8),
                   separatorBuilder: (_, _) => Divider(
                     height: 1,
-                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    color: context.palette.border,
                   ),
                   itemBuilder: (context, index) {
                     final s = _suggestions[index];
@@ -236,9 +236,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       color: Colors.transparent,
                       child: ListTile(
                         dense: true,
-                        leading: const Icon(Icons.history_rounded, size: 18, color: Colors.grey),
-                        title: Text(s, style: const TextStyle(fontSize: 14)),
-                        trailing: const Icon(Icons.north_west_rounded, size: 16, color: Colors.grey),
+                        leading: Icon(Icons.history_rounded, size: 18, color: context.palette.textSecondary),
+                        title: Text(s, style: TextStyle(fontSize: 14)),
+                        trailing: Icon(Icons.north_west_rounded, size: 16, color: context.palette.textSecondary),
                         onTap: () {
                           _searchCtrl.text = s;
                           _performSearch(s);
@@ -257,7 +257,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _buildPlatformCard(String title, IconData icon, Color color, VoidCallback onTap, bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Material(
@@ -266,15 +266,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
         child: ListTile(
           onTap: onTap,
           leading: Container(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
           ),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+          title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          trailing: Icon(Icons.chevron_right_rounded, color: context.palette.textSecondary),
         ),
       ),
     );

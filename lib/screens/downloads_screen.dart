@@ -4,8 +4,9 @@ import '../models/download_task.dart';
 import '../services/download_manager.dart';
 import '../services/player_service.dart';
 import '../services/virtual_folder_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/download_item_tile.dart';
+import '../widgets/folder_picker_sheet.dart';
 import '../widgets/movie_card.dart';
 import '../widgets/remote_image.dart';
 
@@ -17,6 +18,23 @@ class DownloadsScreen extends StatefulWidget {
 }
 
 class _DownloadsScreenState extends State<DownloadsScreen> {
+  Future<void> _pickFolder(BuildContext context) async {
+    final manager = DownloadManager.instance;
+    final picked = await FolderPickerSheet.show(
+      context,
+      initialPath: manager.downloadDirectory,
+    );
+    if (picked == null || picked.isEmpty || !context.mounted) return;
+    await manager.setDownloadDirectory(picked);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Downloads now save to $picked'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   int _activeTabIndex = 0; // 0 = Downloading, 1 = Downloaded
   String? _openedFolderType; // null = Root Folder View, 'custom_id'
   String? _openedFolderName;
@@ -65,9 +83,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.create_new_folder_rounded, color: AppColors.primary),
+            Icon(Icons.create_new_folder_rounded, color: context.palette.primary),
             SizedBox(width: 8),
             Text(
               'Create Real Folder',
@@ -79,11 +97,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Enter folder name to create a real directory on disk:',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: context.palette.onPrimary),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             TextField(
               controller: ctrl,
               autofocus: true,
@@ -99,11 +117,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: context.palette.primary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -124,11 +142,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 );
               }
             },
-            child: const Text(
+            child: Text(
               'Create Folder',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: context.palette.textPrimary,
               ),
             ),
           ),
@@ -167,15 +185,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   _openedFolderType == null &&
                   _openedWebsite == null
               ? Padding(
-                  padding: const EdgeInsets.only(bottom: 76.0),
+                  padding: EdgeInsets.only(bottom: 76.0),
                   child: FloatingActionButton(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: const CircleBorder(),
+                    backgroundColor: context.palette.primary,
+                    foregroundColor: context.palette.card,
+                    shape: CircleBorder(),
                     elevation: 5,
                     tooltip: 'New Folder',
                     onPressed: _showCreateFolderDialog,
-                    child: const Icon(
+                    child: Icon(
                       Icons.create_new_folder_rounded,
                       size: 28,
                     ),
@@ -186,7 +204,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
@@ -199,11 +217,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
                 // Modern Floating Segmented Switcher (Downloading vs Downloaded)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : Colors.grey.shade200,
+                      color: context.palette.selectedBg,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -217,21 +235,19 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                               });
                             },
                             child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              duration: Duration(milliseconds: 200),
+                              padding: EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 color: _activeTabIndex == 0
-                                    ? AppColors.primary
+                                    ? context.palette.primary
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(26),
                                 boxShadow: _activeTabIndex == 0
                                     ? [
                                         BoxShadow(
-                                          color: AppColors.primary.withValues(
-                                            alpha: 0.35,
-                                          ),
+                                          color: context.palette.tint(context.palette.primary, 0.35,),
                                           blurRadius: 10,
-                                          offset: const Offset(0, 3),
+                                          offset: Offset(0, 3),
                                         ),
                                       ]
                                     : [],
@@ -243,43 +259,39 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                     Icons.download_rounded,
                                     size: 18,
                                     color: _activeTabIndex == 0
-                                        ? Colors.white
-                                        : (isDark
-                                              ? Colors.white70
-                                              : Colors.black87),
+                                        ? context.palette.onPrimary
+                                        : context.palette.textPrimary,
                                   ),
-                                  const SizedBox(width: 6),
+                                  SizedBox(width: 6),
                                   Text(
                                     'Downloading',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
                                       color: _activeTabIndex == 0
-                                          ? Colors.white
-                                          : (isDark
-                                                ? Colors.white70
-                                                : Colors.black87),
+                                          ? context.palette.onPrimary
+                                        : context.palette.textPrimary,
                                     ),
                                   ),
                                   if (activeList.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
+                                    SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
+                                      padding: EdgeInsets.symmetric(
                                         horizontal: 6,
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
                                         color: _activeTabIndex == 0
-                                            ? Colors.white
-                                            : AppColors.primary,
+                                            ? context.palette.onPrimary
+                                            : context.palette.trackBg,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Text(
                                         '${activeList.length}',
                                         style: TextStyle(
                                           color: _activeTabIndex == 0
-                                              ? AppColors.primary
-                                              : Colors.white,
+                                              ? context.palette.primary
+                                              : context.palette.textPrimary,
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -301,21 +313,19 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                               });
                             },
                             child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              duration: Duration(milliseconds: 200),
+                              padding: EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 color: _activeTabIndex == 1
-                                    ? AppColors.primary
+                                    ? context.palette.primary
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(26),
                                 boxShadow: _activeTabIndex == 1
                                     ? [
                                         BoxShadow(
-                                          color: AppColors.primary.withValues(
-                                            alpha: 0.35,
-                                          ),
+                                          color: context.palette.tint(context.palette.primary, 0.35,),
                                           blurRadius: 10,
-                                          offset: const Offset(0, 3),
+                                          offset: Offset(0, 3),
                                         ),
                                       ]
                                     : [],
@@ -327,47 +337,41 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                     Icons.cloud_done_rounded,
                                     size: 18,
                                     color: _activeTabIndex == 1
-                                        ? Colors.white
-                                        : (isDark
-                                              ? Colors.white70
-                                              : Colors.black87),
+                                        ? context.palette.onPrimary
+                                        : context.palette.textPrimary,
                                   ),
-                                  const SizedBox(width: 6),
+                                  SizedBox(width: 6),
                                   Text(
                                     'Downloaded',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
                                       color: _activeTabIndex == 1
-                                          ? Colors.white
-                                          : (isDark
-                                                ? Colors.white70
-                                                : Colors.black87),
+                                          ? context.palette.onPrimary
+                                        : context.palette.textPrimary,
                                     ),
                                   ),
                                   if (completedList.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
+                                    SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
+                                      padding: EdgeInsets.symmetric(
                                         horizontal: 6,
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
                                         color: _activeTabIndex == 1
-                                            ? Colors.white
-                                            : (isDark
-                                                  ? AppColors.darkSurface
-                                                  : Colors.grey.shade300),
+                                            ? context.palette.onPrimary
+                                            : context.palette.trackBg,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Text(
                                         '${completedList.length}',
                                         style: TextStyle(
                                           color: _activeTabIndex == 1
-                                              ? AppColors.primary
+                                              ? context.palette.primary
                                               : (isDark
-                                                    ? Colors.white70
-                                                    : Colors.black87),
+                                                    ? context.palette.textSecondary
+                                                    : context.palette.textPrimary),
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -384,7 +388,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 // Content View
                 Expanded(
@@ -404,7 +408,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                   ),
                                   Expanded(
                                     child: ListView.builder(
-                                      padding: const EdgeInsets.symmetric(
+                                      padding: EdgeInsets.symmetric(
                                         horizontal: 16,
                                         vertical: 4,
                                       ),
@@ -484,7 +488,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final movieGroups = titles.values.toList();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 110),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -493,29 +497,29 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               'Movies & Series',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             GridView.builder(
               padding: EdgeInsets.zero,
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+              physics: NeverScrollableScrollPhysics(),
               gridDelegate: MovieCard.catalogGrid,
               itemCount: movieGroups.length,
               itemBuilder: (context, index) =>
                   _buildDownloadedPoster(movieGroups[index]),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
           ],
           // 1. AUTO-ORGANIZED WEBSITE FOLDERS (YouTube, Facebook, etc.)
           if (websiteFolders.isNotEmpty) ...[
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.auto_awesome_rounded,
-                  color: AppColors.primary,
+                  color: context.palette.primary,
                   size: 16,
                 ),
-                const SizedBox(width: 6),
-                const Expanded(
+                SizedBox(width: 6),
+                Expanded(
                   child: Text(
                     'Auto Organized Folders (ওয়েবসাইট ও চ্যানেল ফোল্ডার)',
                     maxLines: 1,
@@ -523,21 +527,21 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 Text(
                   '${websiteFolders.length} sites',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  style: TextStyle(fontSize: 11, color: context.palette.onPrimary),
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.folder_open_rounded,
-                    color: AppColors.primary,
+                    color: context.palette.primary,
                     size: 18,
                   ),
                   tooltip: 'Open Directory in System Explorer',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: BoxConstraints(),
                   onPressed: () {
                     PlayerService.instance.launchSystemPlayer(
                       manager.downloadDirectory,
@@ -546,11 +550,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             GridView.builder(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              physics: NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
@@ -602,16 +606,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
 
           // 2. USER-CREATED CUSTOM FOLDERS
           if (userFolders.isNotEmpty) ...[
-            const Row(
+            Row(
               children: [
                 Icon(
                   Icons.folder_copy_rounded,
-                  color: AppColors.accentBlue,
+                  color: context.palette.info,
                   size: 16,
                 ),
                 SizedBox(width: 6),
@@ -625,11 +629,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             GridView.builder(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              physics: NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
@@ -645,7 +649,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   title: folder.name,
                   subtitle: '$liveCount Files',
                   icon: Icons.folder_special_rounded,
-                  color: AppColors.primary,
+                  color: context.palette.primary,
                   count: liveCount,
                   isDark: isDark,
                   onTap: () {
@@ -661,7 +665,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 );
               },
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
 
           // 3. NOTICE IF ZERO FOLDERS OF ANY KIND EXIST
@@ -670,10 +674,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               movieGroups.isEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              margin: const EdgeInsets.only(top: 20, bottom: 16),
+              padding: EdgeInsets.all(24),
+              margin: EdgeInsets.only(top: 20, bottom: 16),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCard : Colors.grey.shade100,
+                color: isDark ? context.palette.card : context.palette.textSecondary,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -681,26 +685,26 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 children: [
                   Icon(
                     Icons.folder_open_outlined,
-                    color: AppColors.primary.withValues(alpha: 0.7),
+                    color: context.palette.tint(context.palette.primary, 0.7),
                     size: 48,
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
+                  SizedBox(height: 12),
+                  Text(
                     'No download folders yet (কোনো ফোল্ডার তৈরি হয়নি)',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
+                  SizedBox(height: 6),
+                  Text(
                     'Downloaded videos and files will automatically be organized into website and channel folders here.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
                     textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
 
-          const SizedBox(height: 80),
+          SizedBox(height: 80),
         ],
       ),
     );
@@ -754,11 +758,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     ? selectedSeason
                     : labels.firstOrNull;
                 return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
                   children: [
                     Text(title, style: Theme.of(context).textTheme.titleLarge),
                     if (labels.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         'Downloaded seasons',
                         style: Theme.of(context).textTheme.labelLarge,
@@ -777,14 +781,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                         ],
                       ),
                     ],
-                    const SizedBox(height: 12),
-                    if (files.isEmpty) const Text('No downloaded files'),
+                    SizedBox(height: 12),
+                    if (files.isEmpty) Text('No downloaded files'),
                     if (seriesTitle == null)
                       for (final file in files)
                         DownloadItemTile(key: ValueKey(file.id), task: file),
                     if (activeSeason != null) ...[
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: EdgeInsets.only(bottom: 8),
                         child: Text(
                           '$activeSeason · ${seasons[activeSeason]!.length} downloaded',
                           style: Theme.of(context).textTheme.titleMedium,
@@ -822,7 +826,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     url: task.thumbnailUrl,
                     fallbackUrl: series?.posterUrl,
                     placeholderIcon: Icons.movie_rounded,
-                    placeholderColor: AppColors.darkSurface,
+                    placeholderColor: context.palette.surface,
                   ),
                   Positioned(
                     right: 4,
@@ -844,12 +848,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
+              padding: EdgeInsets.fromLTRB(8, 7, 8, 8),
               child: Text(
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   height: 1.2,
                   fontWeight: FontWeight.w700,
@@ -874,21 +878,21 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final totalFiles = channels.values.fold<int>(0, (s, l) => s + l.length);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Breadcrumb Navigation
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : Colors.grey.shade200,
+              color: isDark ? context.palette.card : context.palette.textSecondary,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                  icon: Icon(Icons.arrow_back_rounded, size: 20),
                   onPressed: () {
                     setState(() {
                       _openedWebsite = null;
@@ -901,14 +905,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   color: _colorForWebsite(website),
                   size: 20,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Downloads > $website',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -916,18 +920,18 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       ),
                       Text(
                         '${channels.length} $folderLabel • $totalFiles files',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.folder_open_rounded,
-                    color: AppColors.primary,
+                    color: context.palette.primary,
                     size: 20,
                   ),
                   tooltip: 'Open in System File Manager',
@@ -937,25 +941,34 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     );
                   },
                 ),
+                IconButton(
+                  icon: Icon(
+                    Icons.edit_location_alt_rounded,
+                    color: context.palette.primary,
+                    size: 20,
+                  ),
+                  tooltip: 'Change download folder',
+                  onPressed: () => _pickFolder(context),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
 
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.folder_shared_rounded,
-                color: AppColors.primary,
+                color: context.palette.primary,
                 size: 18,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   isSeries ? 'Seasons' : '$website Channels (চ্যানেল ফোল্ডার)',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -963,7 +976,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
 
           if (channels.isEmpty)
             _buildEmptyState(
@@ -974,8 +987,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           else
             GridView.builder(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              physics: NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
@@ -995,7 +1008,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   title: displayTitle,
                   subtitle: '${taskList.length} Files',
                   icon: icon,
-                  color: AppColors.accentBlue,
+                  color: context.palette.info,
                   count: taskList.length,
                   isDark: isDark,
                   onTap: () {
@@ -1013,7 +1026,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               },
             ),
 
-          const SizedBox(height: 80),
+          SizedBox(height: 80),
         ],
       ),
     );
@@ -1044,17 +1057,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       children: [
         // Breadcrumb Navigation
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : Colors.grey.shade200,
+              color: isDark ? context.palette.card : context.palette.textSecondary,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                  icon: Icon(Icons.arrow_back_rounded, size: 20),
                   onPressed: () {
                     setState(() {
                       final websiteChannels =
@@ -1074,7 +1087,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   color: _colorForWebsite(website),
                   size: 18,
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1083,7 +1096,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                         channel == 'Unknown'
                             ? 'Downloads > $website'
                             : 'Downloads > $website > $channel',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -1095,18 +1108,18 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             : allInChannel.any((task) => task.series != null)
                             ? '${allInChannel.length} episodes'
                             : '${allInChannel.length} items in this channel',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.folder_open_rounded,
-                    color: AppColors.primary,
+                    color: context.palette.primary,
                     size: 20,
                   ),
                   tooltip: 'Open in System File Manager',
@@ -1121,11 +1134,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
 
         // In-Folder Filter Bar
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 16),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -1160,7 +1173,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
 
         Expanded(
           child: tasks.isEmpty
@@ -1171,11 +1184,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       'No downloaded files match the selected filter in $channel.',
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   itemCount: tasks.length + 1,
                   itemBuilder: (context, index) {
                     if (index == tasks.length) {
-                      return const SizedBox(height: 80);
+                      return SizedBox(height: 80);
                     }
                     return DownloadItemTile(task: tasks[index]);
                   },
@@ -1204,47 +1217,47 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   Color _colorForWebsite(String website) {
     final lower = website.toLowerCase();
-    if (lower.contains('youtube')) return const Color(0xFFFF0000);
-    if (lower.contains('facebook')) return const Color(0xFF1877F2);
-    if (lower.contains('instagram')) return const Color(0xFFE4405F);
-    if (lower.contains('tiktok')) return const Color(0xFF00F2FE);
-    if (lower.contains('pornhub')) return const Color(0xFFFFA31A);
-    if (lower.contains('soundcloud')) return const Color(0xFFFF5500);
-    return AppColors.primary;
+    if (lower.contains('youtube')) return context.palette.primary;
+    if (lower.contains('facebook')) return context.palette.primary;
+    if (lower.contains('instagram')) return context.palette.primary;
+    if (lower.contains('tiktok')) return context.palette.secondary;
+    if (lower.contains('pornhub')) return context.palette.primary;
+    if (lower.contains('soundcloud')) return context.palette.primary;
+    return context.palette.primary;
   }
 
   void _showFolderOptionsSheet(VirtualFolder folder) {
     final renameCtrl = TextEditingController(text: folder.name);
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Folder Options: ${folder.name}',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.edit_rounded, color: AppColors.primary),
-              title: const Text('Rename Folder'),
+              leading: Icon(Icons.edit_rounded, color: context.palette.primary),
+              title: Text('Rename Folder'),
               onTap: () {
                 Navigator.pop(ctx);
                 showDialog(
                   context: context,
                   builder: (dCtx) => AlertDialog(
-                    title: const Text('Rename Folder'),
+                    title: Text('Rename Folder'),
                     content: TextField(controller: renameCtrl, autofocus: true),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(dCtx),
-                        child: const Text('Cancel'),
+                        child: Text('Cancel'),
                       ),
                       ElevatedButton(
                         onPressed: () async {
@@ -1257,7 +1270,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             if (dCtx.mounted) nav.pop();
                           }
                         },
-                        child: const Text('Save'),
+                        child: Text('Save'),
                       ),
                     ],
                   ),
@@ -1265,13 +1278,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.delete_forever_rounded,
-                color: Colors.red,
+                color: context.palette.error,
               ),
-              title: const Text(
+              title: Text(
                 'Delete Folder',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: context.palette.error),
               ),
               onTap: () async {
                 final nav = Navigator.of(ctx);
@@ -1318,17 +1331,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       children: [
         // Top Folder Navigation Breadcrumb
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : Colors.grey.shade200,
+              color: isDark ? context.palette.card : context.palette.textSecondary,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                  icon: Icon(Icons.arrow_back_rounded, size: 20),
                   onPressed: () {
                     setState(() {
                       _openedFolderType = null;
@@ -1336,19 +1349,19 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     });
                   },
                 ),
-                const Icon(
+                Icon(
                   Icons.folder_open_rounded,
-                  color: AppColors.primary,
+                  color: context.palette.primary,
                   size: 20,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         _openedFolderName ?? 'Folder View',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -1356,9 +1369,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       ),
                       Text(
                         '${tasksInFolder.length} files in this folder',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                     ],
@@ -1369,11 +1382,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
 
         // In-Folder Filter Bar
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 16),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -1408,7 +1421,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
 
         Expanded(
           child: tasksInFolder.isEmpty
@@ -1418,11 +1431,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   subtitle: 'Downloaded files assigned to this folder will automatically appear here.',
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   itemCount: tasksInFolder.length + 1,
                   itemBuilder: (context, index) {
                     if (index == tasksInFolder.length) {
-                      return const SizedBox(height: 80);
+                      return SizedBox(height: 80);
                     }
                     return DownloadItemTile(task: tasksInFolder[index]);
                   },
@@ -1441,26 +1454,27 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final isSelected = _inFolderFilter == label;
 
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: EdgeInsets.only(right: 8),
       child: ChoiceChip(
         avatar: icon != null
             ? Icon(
                 icon,
                 size: 14,
-                color: isSelected ? Colors.white : AppColors.primary,
+                color: isSelected ? context.palette.onPrimary : context.palette.primary,
               )
             : null,
         label: Text('$label ($count)'),
         selected: isSelected,
-        selectedColor: AppColors.primary,
+        selectedColor: context.palette.primary,
         labelStyle: TextStyle(
           color: isSelected
-              ? Colors.white
-              : (isDark ? Colors.white70 : Colors.black87),
+              ? context.palette.onPrimary
+              : (isDark ? context.palette.textSecondary : context.palette.textPrimary),
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           fontSize: 12,
         ),
-        backgroundColor: isDark ? AppColors.darkCard : Colors.grey.shade200,
+        backgroundColor: context.palette.card,
+        side: BorderSide(color: isSelected ? context.palette.primary : context.palette.border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onSelected: (val) {
           if (val) {
@@ -1485,13 +1499,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.palette.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+            color: context.palette.shadowAt(isDark ? 0.25 : 0.05),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -1503,7 +1518,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1511,7 +1526,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
@@ -1519,7 +1534,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       child: Icon(icon, color: color, size: 24),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         horizontal: 7,
                         vertical: 3,
                       ),
@@ -1538,22 +1553,23 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     ),
                   ],
                 ),
-                const Spacer(),
+                Spacer(),
                 Text(
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                  style: TextStyle(
+                    color: context.palette.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  style: TextStyle(fontSize: 11, color: context.palette.textSecondary),
                 ),
               ],
             ),
@@ -1567,7 +1583,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     List<DownloadTask> activeList,
     bool isDark,
   ) {
-    if (activeList.isEmpty) return const SizedBox.shrink();
+    if (activeList.isEmpty) return SizedBox.shrink();
 
     double totalSpeedBytes = 0;
     for (final t in activeList) {
@@ -1589,34 +1605,40 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     );
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: EdgeInsets.fromLTRB(16, 0, 16, 10),
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1B1E28) : Colors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? context.palette.border : context.palette.card,
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            color: isDark
+                ? context.palette.shadowAt(0.25)
+                : context.palette.textSecondary.withValues(alpha: 0.06),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(7),
+            padding: EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.15),
+              color: context.palette.tint(context.palette.primary, 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.speed_rounded,
-              color: AppColors.primary,
+              color: context.palette.primary,
               size: 20,
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1626,32 +1648,41 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   children: [
                     Text(
                       '${activeList.length} Active Download${activeList.length > 1 ? "s" : ""}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     Container(
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
                         color: isAnyDownloading
-                            ? AppColors.accentGreen
-                            : AppColors.accentGold,
+                            ? context.palette.success
+                            : context.palette.info,
                         shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isAnyDownloading
+                                    ? context.palette.success
+                                    : context.palette.info)
+                                .withValues(alpha: 0.8),
+                            blurRadius: 3,
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 1),
+                SizedBox(height: 1),
                 Text(
                   totalSpeedBytes <= 0 && preparingCount > 0
                       ? '$preparingCount preparing to start'
                       : 'Combined speed · $totalSpeedText',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? Colors.white60 : Colors.black54,
+                    color: context.palette.textSecondary,
                   ),
                 ),
               ],
@@ -1660,7 +1691,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(20),
               onTap: () {
                 final mgr = DownloadManager.instance;
                 if (isAnyDownloading) {
@@ -1680,15 +1711,25 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
+                height: 32,
+                padding: EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: isAnyDownloading
-                      ? AppColors.accentGold.withValues(alpha: 0.14)
-                      : AppColors.primary.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(10),
+                      ? (isDark
+                          ? context.palette.secondary
+                          : context.palette.card)
+                      : (isDark
+                          ? context.palette.tint(context.palette.success, 0.10)
+                          : context.palette.tint(context.palette.success, 0.08)),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isAnyDownloading
+                        ? (isDark
+                            ? context.palette.secondary
+                            : context.palette.tint(context.palette.info, 0.18))
+                        : (context.palette.success),
+                    width: 1,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1697,20 +1738,24 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       isAnyDownloading
                           ? Icons.pause_rounded
                           : Icons.play_arrow_rounded,
-                      size: 15,
+                      size: 14,
                       color: isAnyDownloading
-                          ? AppColors.accentGold
-                          : AppColors.primary,
+                          ? (isDark
+                              ? context.palette.onSecondary
+                              : context.palette.info)
+                          : context.palette.success,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4),
                     Text(
                       isAnyDownloading ? 'Pause All' : 'Resume All',
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w700,
                         color: isAnyDownloading
-                            ? AppColors.accentGold
-                            : AppColors.primary,
+                            ? (isDark
+                                ? context.palette.onSecondary
+                                : context.palette.info)
+                            : context.palette.success,
                       ),
                     ),
                   ],
@@ -1730,26 +1775,26 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
               size: 72,
-              color: AppColors.primary.withValues(alpha: 0.5),
+              color: context.palette.tint(context.palette.primary, 0.5),
             ),
-            const SizedBox(height: 18),
+            SizedBox(height: 18),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.grey,
+              style: TextStyle(
+                color: context.palette.textSecondary,
                 fontSize: 13,
                 height: 1.4,
               ),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/player_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'remote_image.dart';
 
 class MiniPlayerBar extends StatelessWidget {
-  const MiniPlayerBar({super.key});
+  MiniPlayerBar({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -12,21 +12,21 @@ class MiniPlayerBar extends StatelessWidget {
       animation: PlayerService.instance,
       builder: (context, _) {
         final player = PlayerService.instance;
-        if (!player.hasMedia) return const SizedBox.shrink();
+        if (!player.hasMedia) return SizedBox.shrink();
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final progress = (player.currentSeconds / player.totalSeconds).clamp(0.0, 1.0);
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkCard : AppColors.lightCard,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                color: context.palette.shadowAt(isDark ? 0.35 : 0.08),
                 blurRadius: 16,
-                offset: const Offset(0, 6),
+                offset: Offset(0, 6),
               ),
             ],
           ),
@@ -34,7 +34,7 @@ class MiniPlayerBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(8),
                 child: Row(
                   children: [
                     // Media thumbnail
@@ -49,7 +49,7 @@ class MiniPlayerBar extends StatelessWidget {
                             )
                           : _buildPlaceholder(player.isAudio),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
 
                     // Title & duration
                     Expanded(
@@ -60,13 +60,13 @@ class MiniPlayerBar extends StatelessWidget {
                             player.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: 2),
                           Text(
                             '${player.positionFormatted} / ${player.durationFormatted} • ${player.author}',
                             style: TextStyle(
-                              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              color: context.palette.textSecondary,
                               fontSize: 11,
                             ),
                           ),
@@ -76,7 +76,7 @@ class MiniPlayerBar extends StatelessWidget {
 
                     // Open external player button
                     IconButton(
-                      icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                      icon: Icon(Icons.open_in_new_rounded, size: 20),
                       tooltip: 'Open in System Player',
                       onPressed: () {
                         player.launchSystemPlayer(player.filePath);
@@ -87,7 +87,7 @@ class MiniPlayerBar extends StatelessWidget {
                     IconButton(
                       icon: Icon(
                         player.isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
-                        color: AppColors.primary,
+                        color: context.palette.primary,
                         size: 32,
                       ),
                       onPressed: player.togglePlay,
@@ -95,7 +95,7 @@ class MiniPlayerBar extends StatelessWidget {
 
                     // Close
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20, color: Colors.grey),
+                      icon: Icon(Icons.close_rounded, size: 20, color: context.palette.onPrimary),
                       onPressed: player.close,
                     ),
                   ],
@@ -104,12 +104,12 @@ class MiniPlayerBar extends StatelessWidget {
 
               // Progress bar line
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 3,
                   backgroundColor: Colors.transparent,
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  valueColor: AlwaysStoppedAnimation<Color>(context.palette.primary),
                 ),
               ),
             ],
@@ -123,10 +123,10 @@ class MiniPlayerBar extends StatelessWidget {
     return Container(
       width: 48,
       height: 48,
-      color: AppColors.darkSurface,
+      color: AppPalette.current.surface,
       child: Icon(
         isAudio ? Icons.music_note_rounded : Icons.videocam_rounded,
-        color: isAudio ? AppColors.accentGold : AppColors.primary,
+        color: isAudio ? AppPalette.current.info : AppPalette.current.primary,
         size: 24,
       ),
     );

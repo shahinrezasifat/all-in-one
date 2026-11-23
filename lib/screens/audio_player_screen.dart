@@ -1,12 +1,13 @@
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
+import '../theme/app_palette.dart';
 
 import '../services/player_service.dart';
 import '../widgets/remote_image.dart';
 
 class AudioPlayerScreen extends StatelessWidget {
-  const AudioPlayerScreen({super.key, this.returnToVideo});
+  AudioPlayerScreen({super.key, this.returnToVideo});
 
   final VoidCallback? returnToVideo;
 
@@ -27,7 +28,7 @@ class AudioPlayerScreen extends StatelessWidget {
                 Navigator.of(context).pop();
               }
             });
-            return const SizedBox.shrink();
+            return SizedBox.shrink();
           }
           return AudioPlayerView(
             player: player,
@@ -45,7 +46,7 @@ class AudioPlayerScreen extends StatelessWidget {
 }
 
 class AudioPlayerView extends StatelessWidget {
-  const AudioPlayerView({
+  AudioPlayerView({
     super.key,
     required this.player,
     required this.onMinimize,
@@ -58,34 +59,34 @@ class AudioPlayerView extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback? onVideo;
 
-  static const _background = Color(0xFF100C12);
-  static const _artBackground = Color(0xFF302037);
-  static const _foreground = Color(0xFFFFF5F9);
-  static const _muted = Color(0xFFC7B7C6);
-  static const _accent = Color(0xFFFFA4BE);
-  static const _outline = Color(0xFF4B3C4B);
+  static final _background = AppPalette.current.background;
+  static final _artBackground = AppPalette.current.background;
+  static final _foreground = AppPalette.current.textPrimary;
+  static final _muted = AppPalette.current.textSecondary;
+  static final _accent = AppPalette.current.textSecondary;
+  static final _outline = AppPalette.current.textSecondary;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Theme(
       data: theme.copyWith(
-        colorScheme: const ColorScheme.dark(
+        colorScheme: ColorScheme.dark(
           primary: _accent,
           onPrimary: _background,
           surface: _background,
           onSurface: _foreground,
         ),
-        iconTheme: const IconThemeData(color: _foreground),
+        iconTheme: IconThemeData(color: _foreground),
       ),
       child: Scaffold(
         backgroundColor: _background,
         body: DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: RadialGradient(
               center: Alignment(-0.65, -0.85),
               radius: 1.25,
-              colors: [Color(0xFF472439), Color(0xFF211624), _background],
+              colors: [context.palette.tint(context.palette.primary, 0.10), context.palette.tint(context.palette.primary, 0.04), _background],
               stops: [0, 0.45, 1],
             ),
           ),
@@ -106,7 +107,7 @@ class AudioPlayerView extends StatelessWidget {
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, body) => SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                          padding: EdgeInsets.fromLTRB(24, 16, 24, 24),
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
                               minHeight: (body.maxHeight - 40).clamp(
@@ -123,7 +124,7 @@ class AudioPlayerView extends StatelessWidget {
                                     ? Row(
                                         children: [
                                           artwork,
-                                          const SizedBox(width: 40),
+                                          SizedBox(width: 40),
                                           Expanded(child: controls),
                                         ],
                                       )
@@ -131,7 +132,7 @@ class AudioPlayerView extends StatelessWidget {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           artwork,
-                                          const SizedBox(height: 28),
+                                          SizedBox(height: 28),
                                           controls,
                                         ],
                                       ),
@@ -153,7 +154,7 @@ class AudioPlayerView extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 2),
       child: Row(
         children: [
           _headerButton(
@@ -161,7 +162,7 @@ class AudioPlayerView extends StatelessWidget {
             icon: Icons.keyboard_arrow_down_rounded,
             onPressed: onMinimize,
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               'Audio player',
@@ -175,7 +176,7 @@ class AudioPlayerView extends StatelessWidget {
               icon: Icons.videocam_outlined,
               onPressed: player.isResolving ? null : onVideo,
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
           ],
           _headerButton(
             tooltip: 'Close audio',
@@ -197,22 +198,22 @@ class AudioPlayerView extends StatelessWidget {
       icon: Icon(icon),
       onPressed: onPressed,
       style: IconButton.styleFrom(
-        minimumSize: const Size.square(48),
+        minimumSize: Size.square(48),
         foregroundColor: _foreground,
-        backgroundColor: const Color(0x14FFFFFF),
-        side: const BorderSide(color: Color(0x20FFFFFF)),
+        backgroundColor: AppPalette.current.tint(AppPalette.current.card, 0.078),
+        side: BorderSide(color: AppPalette.current.tint(AppPalette.current.card, 0.125)),
       ),
     );
   }
 
   Widget _buildArtwork(double size) {
-    const borderRadius = BorderRadius.all(Radius.circular(28));
+    final borderRadius = BorderRadius.all(Radius.circular(28));
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         borderRadius: borderRadius,
         boxShadow: [
           BoxShadow(
-            color: Color(0x90000000),
+            color: AppPalette.current.scrimAt(0.565),
             blurRadius: 32,
             offset: Offset(0, 14),
           ),
@@ -220,7 +221,7 @@ class AudioPlayerView extends StatelessWidget {
       ),
       foregroundDecoration: BoxDecoration(
         borderRadius: borderRadius,
-        border: Border.all(color: const Color(0x30FFFFFF)),
+        border: Border.all(color: AppPalette.current.tint(AppPalette.current.card, 0.188)),
       ),
       child: ClipRRect(
         borderRadius: borderRadius,
@@ -229,10 +230,10 @@ class AudioPlayerView extends StatelessWidget {
           child: SmartNetworkImage(
             url: player.thumbnailUrl,
             fit: BoxFit.cover,
-            placeholder: const DecoratedBox(
+            placeholder: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF6A3552), _artBackground],
+                  colors: [AppPalette.current.primary, _artBackground],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -253,7 +254,7 @@ class AudioPlayerView extends StatelessWidget {
     final unavailable = player.isResolving || player.resolveError;
     final timeStyle = text.labelMedium?.copyWith(
       color: _muted,
-      fontFeatures: const [FontFeature.tabularFigures()],
+      fontFeatures: [FontFeature.tabularFigures()],
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -270,7 +271,7 @@ class AudioPlayerView extends StatelessWidget {
           ),
         ),
         if (player.author.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             player.author,
             maxLines: 2,
@@ -278,18 +279,18 @@ class AudioPlayerView extends StatelessWidget {
             style: text.bodyMedium?.copyWith(color: _muted),
           ),
         ],
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         if (player.resolveError)
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               onPressed: player.retryAudio,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Could not play this audio. Retry'),
+              icon: Icon(Icons.refresh_rounded),
+              label: Text('Could not play this audio. Retry'),
             ),
           )
         else if (player.isResolving)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 20),
             child: LinearProgressIndicator(
               borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -303,8 +304,8 @@ class AudioPlayerView extends StatelessWidget {
               activeTrackColor: _accent,
               inactiveTrackColor: _outline,
               thumbColor: _accent,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
               padding: EdgeInsets.zero,
             ),
             child: Slider(
@@ -320,20 +321,20 @@ class AudioPlayerView extends StatelessWidget {
             Text(player.durationFormatted, style: timeStyle),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             IconButton(
               tooltip: 'Back 10 seconds',
               onPressed: unavailable ? null : () => player.skip(-10),
-              icon: const Icon(Icons.replay_10_rounded),
+              icon: Icon(Icons.replay_10_rounded),
             ),
             IconButton.filled(
               tooltip: player.isPlaying ? 'Pause audio' : 'Play audio',
               onPressed: unavailable ? null : player.togglePlay,
               style: IconButton.styleFrom(
-                minimumSize: const Size.square(72),
+                minimumSize: Size.square(72),
                 backgroundColor: _accent,
                 foregroundColor: _background,
               ),
@@ -347,7 +348,7 @@ class AudioPlayerView extends StatelessWidget {
             IconButton(
               tooltip: 'Forward 10 seconds',
               onPressed: unavailable ? null : () => player.skip(10),
-              icon: const Icon(Icons.forward_10_rounded),
+              icon: Icon(Icons.forward_10_rounded),
             ),
             IconButton(
               tooltip: 'Repeat audio',
@@ -356,11 +357,11 @@ class AudioPlayerView extends StatelessWidget {
               style: IconButton.styleFrom(
                 foregroundColor: player.isLooping ? _accent : _muted,
                 backgroundColor: player.isLooping
-                    ? const Color(0x27FFA4BE)
+                    ? context.palette.tint(context.palette.primary, 0.15)
                     : Colors.transparent,
               ),
-              icon: const Icon(Icons.repeat_rounded),
-              selectedIcon: const Icon(Icons.repeat_one_rounded),
+              icon: Icon(Icons.repeat_rounded),
+              selectedIcon: Icon(Icons.repeat_one_rounded),
             ),
           ],
         ),

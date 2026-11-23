@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/video_item.dart';
+import '../services/channel_avatar_service.dart';
 import '../services/player_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'analyze_download_flow.dart';
 import 'remote_image.dart';
 
@@ -13,7 +14,7 @@ class VideoCard extends StatelessWidget {
   final VoidCallback? onSelectToggle;
   final VoidCallback? onLongPress;
 
-  const VideoCard({
+  VideoCard({
     super.key,
     required this.video,
     this.isCompact = false,
@@ -36,19 +37,19 @@ class VideoCard extends StatelessWidget {
 
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: isSelected
-            ? AppColors.primary.withValues(alpha: isDark ? 0.15 : 0.08)
-            : (isDark ? AppColors.darkCard : AppColors.lightCard),
+            ? context.palette.tint(context.palette.primary, isDark ? 0.15 : 0.08)
+            : (context.palette.card),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: isSelected
-                ? AppColors.primary.withValues(alpha: 0.25)
-                : Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+                ? context.palette.tint(context.palette.primary, 0.25)
+                : context.palette.shadowAt(isDark ? 0.25 : 0.05),
             blurRadius: isSelected ? 16 : 12,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -71,15 +72,15 @@ class VideoCard extends StatelessWidget {
               Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
                       child: SmartNetworkImage(
                         url: video.thumbnailUrl,
                         fit: BoxFit.cover,
-                        placeholderColor: AppColors.darkSurface,
+                        placeholderColor: context.palette.surface,
                         placeholderIcon: Icons.movie,
-                        accentColor: AppColors.primary,
+                        accentColor: context.palette.primary,
                       ),
                     ),
                   ),
@@ -92,21 +93,21 @@ class VideoCard extends StatelessWidget {
                       child: GestureDetector(
                         onTap: onSelectToggle,
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
+                          duration: Duration(milliseconds: 200),
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isSelected ? AppColors.primary : Colors.black54,
+                            color: isSelected ? context.palette.primary : context.palette.textSecondary,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.4),
+                                color: context.palette.shadowAt(0.4),
                                 blurRadius: 4,
                               ),
                             ],
                           ),
                           child: isSelected
-                              ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                              ? Icon(Icons.check_rounded, color: context.palette.onScrim, size: 18)
                               : null,
                         ),
                       ),
@@ -117,20 +118,20 @@ class VideoCard extends StatelessWidget {
                       top: 8,
                       left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.80),
+                          color: context.palette.shadowAt(0.80),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.hd_rounded, color: AppColors.accentGold, size: 13),
+                            Icon(Icons.hd_rounded, color: context.palette.info, size: 13),
                             SizedBox(width: 3),
                             Text(
                               '4K UHD',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: context.palette.onScrim,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -151,27 +152,27 @@ class VideoCard extends StatelessWidget {
                           onTap: () => _handleDownload(context),
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
+                              gradient: context.palette.primaryGradient,
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.5),
+                                  color: context.palette.tint(context.palette.primary, 0.5),
                                   blurRadius: 8,
-                                  offset: const Offset(0, 2),
+                                  offset: Offset(0, 2),
                                 ),
                               ],
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.download_rounded, color: Colors.white, size: 14),
+                                Icon(Icons.download_rounded, color: context.palette.onScrim, size: 14),
                                 SizedBox(width: 4),
                                 Text(
                                   'Download',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: context.palette.onScrim,
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -188,15 +189,15 @@ class VideoCard extends StatelessWidget {
                     bottom: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.85),
+                        color: context.palette.shadowAt(0.85),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         video.duration,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.palette.onScrim,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -209,12 +210,12 @@ class VideoCard extends StatelessWidget {
                     Positioned.fill(
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: context.palette.shadowAt(0.4),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
+                          child: Icon(Icons.play_arrow_rounded, color: context.palette.onScrim, size: 32),
                         ),
                       ),
                     ),
@@ -223,23 +224,12 @@ class VideoCard extends StatelessWidget {
 
               // Title and Channel Information
               Padding(
-                padding: const EdgeInsets.all(14),
+                padding: EdgeInsets.all(14),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                      child: Text(
-                        video.author.isNotEmpty ? video.author[0].toUpperCase() : 'Y',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
+                    _channelAvatar(context, video),
+                    SizedBox(width: 12),
 
                     Expanded(
                       child: Column(
@@ -249,17 +239,17 @@ class VideoCard extends StatelessWidget {
                             video.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                               height: 1.25,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           Text(
                             '${video.author} • ${video.views}',
                             style: TextStyle(
-                              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              color: context.palette.textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -267,19 +257,19 @@ class VideoCard extends StatelessWidget {
                       ),
                     ),
 
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
 
                     // Quick Free Download Button (if not in multi select mode)
                     if (!isMultiSelect)
                       Container(
                         decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
+                          gradient: context.palette.primaryGradient,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.35),
+                              color: context.palette.tint(context.palette.primary, 0.35),
                               blurRadius: 8,
-                              offset: const Offset(0, 2),
+                              offset: Offset(0, 2),
                             ),
                           ],
                         ),
@@ -289,16 +279,16 @@ class VideoCard extends StatelessWidget {
                             onTap: () => _handleDownload(context),
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              child: const Row(
+                              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                                  Icon(Icons.download_rounded, color: context.palette.onScrim, size: 18),
                                   SizedBox(width: 4),
                                   Text(
                                     '4K / MP3',
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: context.palette.onScrim,
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -321,12 +311,12 @@ class VideoCard extends StatelessWidget {
 
   Widget _buildCompact(BuildContext context, bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(10),
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: isSelected
-            ? AppColors.primary.withValues(alpha: 0.15)
-            : (isDark ? AppColors.darkCard : AppColors.lightCard),
+            ? context.palette.tint(context.palette.primary, 0.15)
+            : (context.palette.card),
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
@@ -342,10 +332,10 @@ class VideoCard extends StatelessWidget {
           children: [
             if (isMultiSelect)
               Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: EdgeInsets.only(right: 8),
                 child: Icon(
                   isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                  color: isSelected ? AppColors.primary : Colors.grey,
+                  color: isSelected ? context.palette.primary : context.palette.textSecondary,
                   size: 22,
                 ),
               ),
@@ -358,29 +348,29 @@ class VideoCard extends StatelessWidget {
                     width: 110,
                     height: 68,
                     fit: BoxFit.cover,
-                    placeholderColor: AppColors.darkSurface,
+                    placeholderColor: context.palette.surface,
                     placeholderIcon: Icons.movie,
-                    accentColor: AppColors.primary,
+                    accentColor: context.palette.primary,
                   ),
                 ),
                 Positioned(
                   bottom: 4,
                   right: 4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.8),
+                      color: context.palette.shadowAt(0.8),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       video.duration,
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: context.palette.onScrim, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
 
             Expanded(
               child: Column(
@@ -390,15 +380,22 @@ class VideoCard extends StatelessWidget {
                     video.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    video.author,
-                    style: TextStyle(
-                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                      fontSize: 11,
-                    ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _channelAvatar(context, video, size: 20),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          video.author,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: context.palette.textSecondary, fontSize: 11),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -407,18 +404,18 @@ class VideoCard extends StatelessWidget {
             if (!isMultiSelect)
               Container(
                 decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
+                  gradient: context.palette.primaryGradient,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.4),
+                      color: context.palette.tint(context.palette.primary, 0.4),
                       blurRadius: 6,
-                      offset: const Offset(0, 2),
+                      offset: Offset(0, 2),
                     ),
                   ],
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.download_rounded, color: Colors.white, size: 20),
+                  icon: Icon(Icons.download_rounded, color: context.palette.onScrim, size: 20),
                   tooltip: 'Download',
                   onPressed: () => _handleDownload(context),
                 ),
@@ -426,6 +423,54 @@ class VideoCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// Original channel logo when YouTube exposes it; a palette-tinted initial
+  /// stays as the offline/cache fallback.
+  Widget _channelAvatar(BuildContext context, VideoItem video, {double size = 36}) {
+    final p = context.palette;
+    final initial = CircleAvatar(
+      radius: size / 2,
+      backgroundColor: p.tint(p.primary, 0.2),
+      child: Text(
+        video.author.isNotEmpty ? video.author[0].toUpperCase() : 'Y',
+        style: TextStyle(
+          color: p.primary,
+          fontWeight: FontWeight.bold,
+          fontSize: size * .39,
+        ),
+      ),
+    );
+    final known = video.channelAvatarUrl;
+    if (known != null && known.isNotEmpty) {
+      return ClipOval(
+        child: SmartNetworkImage(
+          url: known,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          placeholder: initial,
+        ),
+      );
+    }
+    final channelId = video.channelId;
+    if (channelId == null || channelId.isEmpty) return initial;
+    return FutureBuilder<String?>(
+      future: ChannelAvatarService.instance.avatarFor(channelId),
+      builder: (context, snapshot) {
+        final logo = snapshot.data;
+        if (logo == null || logo.isEmpty) return initial;
+        return ClipOval(
+          child: SmartNetworkImage(
+            url: logo,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            placeholder: initial,
+          ),
+        );
+      },
     );
   }
 }

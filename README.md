@@ -7,7 +7,7 @@
 <p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
 <p align="center">
-  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.8 for ARM64" width="300"></a>
+  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.9/split-all-in-one-v1.0.9-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.9 for ARM64" width="300"></a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 | **Downloads and offline playback** | Browse downloaded movies by poster and play them with one tap. Open a series and switch among its downloaded seasons. Web videos stay grouped by website and channel. |
 | **Audio and video controls** | Choose available video resolutions or audio-only formats, manage downloads, and play saved media with the built-in player. |
 | **Private Vault** | Keep personal media in a dedicated vault with a PIN and optional fingerprint or supported biometric unlock on Android. |
-| **GitHub release updates** | Android checks GitHub at startup, when you return to the app, and periodically while it is open. You can also check from Settings. A newer release blocks access and opens the APK download. |
+| **GitHub release updates** | On Wi-Fi, Android automatically checks GitHub while the app is open. You can also check from Settings. A required update downloads inside the app and opens Android’s installation confirmation. |
 
 All in One is useful if you regularly switch between a web browser, a video downloader, a movie player, and a private media folder. Download and stream media you have permission to use.
 
@@ -59,10 +59,10 @@ The format picker and progress screen use Blender’s *Big Buck Bunny*. The comp
 
 | Android APK | Download size | Device |
 | --- | ---: | --- |
-| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-arm64-v8a.apk) | ~87 MB | Most modern Android phones and tablets |
-| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-armeabi-v7a.apk) | ~87 MB | Older 32-bit ARM devices |
-| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/split-all-in-one-v1.0.8-x86_64.apk) | ~90 MB | Compatible Intel or AMD Android devices and emulators |
-| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/all-in-one-v1.0.8.apk) | ~230 MB | Contains all three CPU architectures in one installer |
+| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.9/split-all-in-one-v1.0.9-arm64-v8a.apk) | ~87 MB | Most modern Android phones and tablets |
+| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.9/split-all-in-one-v1.0.9-armeabi-v7a.apk) | ~87 MB | Older 32-bit ARM devices |
+| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.9/split-all-in-one-v1.0.9-x86_64.apk) | ~90 MB | Compatible Intel or AMD Android devices and emulators |
+| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.9/all-in-one-v1.0.9.apk) | ~230 MB | Contains all three CPU architectures in one installer |
 
 Each architecture-specific APK includes the app and the media engines for its CPU. The listed size is the APK download size. Installed storage usage can be higher.
 
@@ -74,8 +74,8 @@ Each architecture-specific APK includes the app and the media engines for its CP
 
 | Platform | Package | Run |
 | --- | --- | --- |
-| Windows x64 | [Portable ZIP](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/all-in-one-v1.0.8-windows-x64.zip) | Extract the entire ZIP and open `snaptube_pure.exe` |
-| Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.8/all-in-one-v1.0.8-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
+| Windows x64 | [Portable ZIP](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.9/all-in-one-v1.0.9-windows-x64.zip) | Extract the entire ZIP and open `snaptube_pure.exe` |
+| Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.9/all-in-one-v1.0.9-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
 
 Windows needs the x64 Visual C++ Runtime and WebView2 for the in-app browser. Keep the executable, DLLs, and data folder together. [Microsoft Visual C++ Runtime](https://aka.ms/vc14/vc_redist.x64.exe) · [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
 
@@ -107,7 +107,7 @@ flutter run
 flutter build apk --release
 ```
 
-For a new APK release, increase both the version and Android build number in `pubspec.yaml`, sign with the same key used for the previous release, and attach the universal APK to a GitHub Release tagged `v<version>`. [GitHub Releases](https://github.com/shahinrezasifat/all-in-one/releases)
+For a new APK release, increase both the version and Android build number in `pubspec.yaml`, sign with the same key used for the previous release, and attach the universal APK as `all-in-one-v<version>.apk` to a GitHub Release tagged `v<version>`. The updater also recognizes compatible architecture-specific APKs and a single-module bundletool archive named `all-in-one-v<version>.apks` with the base and configuration splits. [GitHub Releases](https://github.com/shahinrezasifat/all-in-one/releases)
 
 ## Developer
 

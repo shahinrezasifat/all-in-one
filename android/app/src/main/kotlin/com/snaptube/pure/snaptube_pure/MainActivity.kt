@@ -1,8 +1,18 @@
 package com.snaptube.pure.snaptube_pure
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
+import android.net.Uri
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
+import android.os.Environment
+import android.os.storage.StorageManager
+import android.provider.DocumentsContract
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
@@ -23,6 +33,8 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.core.content.pm.PackageInfoCompat
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.nio.ByteBuffer
@@ -45,6 +57,140 @@ class MainActivity : FlutterActivity() {
     private var brightnessOwner: Int? = null
     private val awakeOwners = mutableSetOf<Int>()
     private var vaultAuthentication: CancellationSignal? = null
+    private var pendingFolderResult: MethodChannel.Result? = null
+
+    companion object {
+        private const val REQUEST_PICK_DOWNLOAD_FOLDER = 7319
+        private const val REQUEST_INSTALL_UPDATE = 7321
+    }
+
+    private var pendingInstallResult: MethodChannel.Result? = null
+    private var installReceiver: BroadcastReceiver? = null
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_PICK_DOWNLOAD_FOLDER) {
+            val result = pendingFolderResult
+            pendingFolderResult = null
+            val uri = data?.data
+            if (resultCode != RESULT_OK || uri == null || result == null) {
+                result?.success(null)
+                return
+            }
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+            }
+            result.success(
+                mapOf(
+                    "path" to treeUriToRawPath(uri),
+                    "uri" to uri.toString()
+                )
+            )
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private fun treeUriToRawPath(uri: Uri): String? {
+        val documentId = try {
+            DocumentsContract.getTreeDocumentId(uri)
+        } catch (_: IllegalArgumentException) {
+            null
+        } ?: return null
+        val externalRoot = Environment.getExternalStorageDirectory().absolutePath
+        // Some providers return "raw:/storage/emulated/0/Download/Folder"
+        // instead of "primary:Download/Folder" — handle both shapes.
+        if (documentId.startsWith("raw:")) {
+            val raw = documentId.removePrefix("raw:").trim()
+            if (raw.startsWith("/")) return File(raw).absolutePath
+        }
+        val separator = documentId.indexOf(':')
+        if (separator <= 0) return null
+        val root = documentId.substring(0, separator)
+        val relative = documentId.substring(separator + 1)
+            .removePrefix("/")
+            .replace('/', File.separatorChar)
+        val base = when (root) {
+            "primary", "home" -> externalRoot
+            "raw" -> externalRoot
+            else -> "/storage/$root"
+        }
+        val candidate = File("$base/$relative".replace("//", "/")).absolutePath
+        // Final sanity check: never hand Dart a path that does not exist.
+        return if (File(candidate).exists()) candidate else null
+    }
+
+    private fun storageVolumes(): List<Map<String, Any>> {
+        return try {
+            val manager = getSystemService(StorageManager::class.java)
+            manager.storageVolumes.map { volume ->
+                val internal = volume.uuid == null
+                val downloadPath = if (internal) {
+                    Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS
+                    ).absolutePath
+                } else {
+                    "/storage/${volume.uuid}/Download"
+                }
+                mapOf(
+                    "id" to (volume.uuid ?: "internal"),
+                    "label" to (volume.getDescription(this)
+                        ?: if (internal) "Internal storage" else "SD card"),
+                    "downloadPath" to downloadPath
+                )
+            }
+        } catch (_: Exception) {
+            listOf(
+                mapOf(
+                    "id" to "internal",
+                    "label" to "Internal storage",
+                    "downloadPath" to Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS
+                    ).absolutePath
+                )
+            )
+        }
+    }
+
+    private fun openFolder(path: String) {
+        val target = File(path)
+        val uri = if (target.exists() && target.isDirectory) {
+            val documentId = if (path.contains("/emulated/0")) {
+                "primary:${path.substringAfter("/emulated/0/").removePrefix("/")}"
+            } else {
+                val volume = path.removePrefix("/storage/").substringBefore("/")
+                "$volume:${path.substringAfter("/storage/$volume/")}"
+            }
+            try {
+                DocumentsContract.buildTreeDocumentUri(
+                    "com.android.externalstorage.documents",
+                    documentId
+                )
+            } catch (_: Exception) {
+                FileProvider.getUriForFile(
+                    this,
+                    "$packageName.fileprovider",
+                    target
+                )
+            }
+        } else {
+            Uri.parse(path)
+        }
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "resource/folder")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            // Some file managers do not declare a folder viewer; nothing else
+            // to do — the settings screen shows the full path as text.
+        }
+    }
 
     override fun provideFlutterEngine(context: Context): FlutterEngine? =
         FlutterEngineCache.getInstance().get("main")
@@ -54,6 +200,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         vaultAuthentication?.cancel()
+        if (pendingInstallResult != null) {
+            finishUpdateInstall("INSTALL_ERROR", "The installer was interrupted. Try again.")
+        }
         super.onDestroy()
     }
     private var mediaVolumeTarget = 0.0
@@ -108,6 +257,36 @@ class MainActivity : FlutterActivity() {
                 }
             }
         CloudStreamRuntime.attach(this, flutterEngine.dartExecutor.binaryMessenger)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "snaptube_pure/storage"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "listVolumes" -> result.success(storageVolumes())
+                "pickFolder" -> {
+                    if (pendingFolderResult != null) {
+                        result.error("picker_busy", "A folder picker is already open", null)
+                    } else {
+                        pendingFolderResult = result
+                        startActivityForResult(
+                            Intent(Intent.ACTION_OPEN_DOCUMENT_TREE),
+                            REQUEST_PICK_DOWNLOAD_FOLDER
+                        )
+                    }
+                }
+                "openFolder" -> {
+                    val path = call.argument<String>("path")
+                    if (path.isNullOrBlank()) {
+                        result.error("bad_args", "path is required", null)
+                    } else {
+                        openFolder(path)
+                        result.success(null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -182,12 +361,32 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "snaptube_pure/app_update"
         ).setMethodCallHandler { call, result ->
-            if (call.method == "getInstalledVersion") {
-                @Suppress("DEPRECATION")
-                val info = packageManager.getPackageInfo(packageName, 0)
-                result.success(info.versionName)
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "getInstalledVersion" -> {
+                    @Suppress("DEPRECATION")
+                    val info = packageManager.getPackageInfo(packageName, 0)
+                    result.success(info.versionName)
+                }
+                "installUpdate" -> installAppUpdate(result)
+                "supportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                "hasUpdateWifi" -> {
+                    val connectivity = getSystemService(ConnectivityManager::class.java)
+                    val active = connectivity?.activeNetwork
+                    result.success(active != null &&
+                        connectivity?.getNetworkCapabilities(active)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true)
+                }
+                "openInstallSettings" -> try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                    result.success(null)
+                } catch (_: Exception) {
+                    result.error("INSTALL_ERROR", "Android could not open install settings.", null)
+                }
+                "restartAfterUpdate" -> {
+                    val launch = packageManager.getLaunchIntentForPackage(packageName)
+                    if (launch != null) startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK))
+                    result.success(null)
+                }
+                else -> result.notImplemented()
             }
         }
 
@@ -319,6 +518,137 @@ class MainActivity : FlutterActivity() {
                         )
                     }
                 }
+            }
+        }
+    }
+
+    private fun canInstallUpdates(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
+
+    private fun finishUpdateInstall(code: String? = null, message: String? = null) {
+        installReceiver?.let { unregisterReceiver(it) }
+        installReceiver = null
+        val result = pendingInstallResult
+        pendingInstallResult = null
+        if (code == null) result?.success(true)
+        else result?.error(code, message, null)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun installAppUpdate(result: MethodChannel.Result) {
+        if (pendingInstallResult != null) {
+            result.error("INSTALL_BUSY", "An update is already installing.", null)
+            return
+        }
+        if (!canInstallUpdates()) {
+            result.success(false)
+            return
+        }
+        pendingInstallResult = result
+        val installer = packageManager.packageInstaller
+        thread(name = "stage-app-update") {
+            var sessionId: Int? = null
+            var unpacked: File? = null
+            try {
+                val apk = File(cacheDir, "app-updates/update.apk")
+                val standalone = packageManager.getPackageArchiveInfo(apk.path, 0)
+                val files = if (standalone != null) listOf(apk) else try {
+                    val folder = File(apk.parentFile, "bundle-${java.util.UUID.randomUUID()}")
+                    check(folder.mkdir())
+                    unpacked = folder
+                    unpackUpdateApks(apk, folder)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                val archive = standalone ?: files.firstOrNull()?.let {
+                    packageManager.getPackageArchiveInfo(it.path, 0)
+                }
+                val installed = packageManager.getPackageInfo(packageName, 0)
+                if (archive == null || archive.packageName != packageName ||
+                    PackageInfoCompat.getLongVersionCode(archive) <=
+                        PackageInfoCompat.getLongVersionCode(installed)
+                ) {
+                    runOnUiThread {
+                        if (pendingInstallResult === result) {
+                            finishUpdateInstall("INVALID_UPDATE", "The APK is not a newer All in One version.")
+                        }
+                    }
+                    return@thread
+                }
+                val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+                params.setAppPackageName(packageName)
+                params.setSize(files.sumOf { it.length() })
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+                }
+                val id = installer.createSession(params)
+                sessionId = id
+                installer.openSession(id).use { session ->
+                    files.forEachIndexed { index, part ->
+                        part.inputStream().use { input ->
+                            session.openWrite(if (index == 0) "base.apk" else part.name, 0, part.length()).use { output ->
+                                input.copyTo(output)
+                                session.fsync(output)
+                            }
+                        }
+                    }
+                }
+                runOnUiThread {
+                    if (pendingInstallResult !== result) {
+                        runCatching { installer.abandonSession(id) }
+                        return@runOnUiThread
+                    }
+                    try {
+                        val action = "$packageName.INSTALL_RESULT.$id"
+                        val receiver = object : BroadcastReceiver() {
+                            override fun onReceive(context: Context, intent: Intent) {
+                                if (intent.action != action ||
+                                    intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1) != id ||
+                                    pendingInstallResult !== result
+                                ) return
+                                when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+                                    PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                                        val confirmation = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                                        try {
+                                            checkNotNull(confirmation)
+                                            startActivity(confirmation)
+                                        } catch (_: Exception) {
+                                            runCatching { installer.abandonSession(id) }
+                                            finishUpdateInstall("INSTALL_ERROR", "Android could not open the confirmation screen.")
+                                        }
+                                    }
+                                    PackageInstaller.STATUS_SUCCESS -> finishUpdateInstall()
+                                    else -> finishUpdateInstall(
+                                        "INSTALL_FAILED",
+                                        intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                                            ?: "The installation did not complete."
+                                    )
+                                }
+                            }
+                        }
+                        ContextCompat.registerReceiver(
+                            this, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED
+                        )
+                        installReceiver = receiver
+                        val pending = PendingIntent.getBroadcast(
+                            this, id, Intent(action).setPackage(packageName),
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+                        )
+                        installer.openSession(id).use { it.commit(pending.intentSender) }
+                    } catch (_: Exception) {
+                        runCatching { installer.abandonSession(id) }
+                        finishUpdateInstall("INSTALL_ERROR", "Android could not start the installation.")
+                    }
+                }
+            } catch (_: Exception) {
+                sessionId?.let { runCatching { installer.abandonSession(it) } }
+                runOnUiThread {
+                    if (pendingInstallResult === result) {
+                        finishUpdateInstall("INSTALL_ERROR", "Android could not prepare the update.")
+                    }
+                }
+            } finally {
+                unpacked?.deleteRecursively()
             }
         }
     }

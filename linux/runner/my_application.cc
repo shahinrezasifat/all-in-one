@@ -85,10 +85,10 @@ static void my_application_activate(GApplication* application) {
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
-  // Opaque clear colour. The in-app browser's WebView is a separate top-level
-  // window kept stacked directly over its placeholder rect, so Flutter never
-  // needs to punch a transparent hole here.
-  gdk_rgba_parse(&background_color, "#FF000000");
+  // Opaque clear colour (fixed dark palette #101B19). The in-app browser's
+  // WebView is a separate top-level window kept stacked directly over its
+  // placeholder rect, so Flutter never needs to punch a transparent hole here.
+  gdk_rgba_parse(&background_color, "#101B19FF");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));

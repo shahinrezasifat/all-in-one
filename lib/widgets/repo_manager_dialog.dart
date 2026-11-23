@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/movie_model.dart';
 import '../services/movie_repository_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 class RepoManagerDialog extends StatefulWidget {
-  const RepoManagerDialog({super.key});
+  RepoManagerDialog({super.key});
 
   static void show(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => const RepoManagerDialog(),
+      builder: (ctx) => RepoManagerDialog(),
     );
   }
 
@@ -110,7 +110,7 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
         SnackBar(
           content: Text(success ? 'Repository "$input" added successfully!' : 'Failed to parse repository URL or JSON.'),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: success ? AppColors.accentGreen : Colors.redAccent,
+          backgroundColor: success ? context.palette.success : context.palette.error,
         ),
       );
     }
@@ -123,9 +123,9 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.add_box_rounded, color: AppColors.primary),
+            Icon(Icons.add_box_rounded, color: context.palette.primary),
             SizedBox(width: 8),
             Text('Add Repository or Shortcode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
@@ -135,27 +135,27 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Enter SpotiFlac, Cloudstream, or Dantotsu registry URL or shortcode.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: context.palette.onPrimary),
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
 
               // Quick Presets
-              const Text(
+              Text(
                 'Top Verified Repositories:',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.palette.primary),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: _popularRepoPresets.map((preset) {
                   return ActionChip(
-                    avatar: Text(preset['icon']!, style: const TextStyle(fontSize: 12)),
+                    avatar: Text(preset['icon']!, style: TextStyle(fontSize: 12)),
                     label: Text(preset['name']!),
-                    labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                    labelStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    backgroundColor: context.palette.tint(context.palette.primary, 0.12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onPressed: () {
                       _nameCtrl.text = preset['name']!;
@@ -165,7 +165,7 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                 }).toList(),
               ),
 
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
 
               TextField(
                 controller: _nameCtrl,
@@ -173,31 +173,31 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                   labelText: 'Repository Name (Optional)',
                   hintText: 'e.g. SpotiFlac Flac Audio Repo',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.label_outline_rounded),
+                  prefixIcon: Icon(Icons.label_outline_rounded),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               TextField(
                 controller: _urlCtrl,
                 decoration: InputDecoration(
                   labelText: 'Repo URL / Registry Link *',
                   hintText: 'https://raw.githubusercontent.com/.../registry.json',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.link_rounded),
+                  prefixIcon: Icon(Icons.link_rounded),
                 ),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: context.palette.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => _processAddRepository(_nameCtrl.text, _urlCtrl.text, ctx),
-            child: const Text('Add Repository', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            child: Text('Add Repository', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary)),
           ),
         ],
       ),
@@ -212,9 +212,9 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.edit_note_rounded, color: AppColors.accentGold),
+            Icon(Icons.edit_note_rounded, color: context.palette.info),
             SizedBox(width: 8),
             Text('Edit Repository', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
@@ -230,7 +230,7 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               TextField(
                 controller: _urlCtrl,
                 decoration: InputDecoration(
@@ -238,7 +238,7 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               TextField(
                 controller: _descCtrl,
                 maxLines: 2,
@@ -251,9 +251,9 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.palette.primary),
             onPressed: () {
               MovieRepositoryService.instance.editRepository(
                 repo.id,
@@ -263,10 +263,10 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
               );
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Repository updated successfully!'), behavior: SnackBarBehavior.floating),
+                SnackBar(content: Text('Repository updated successfully!'), behavior: SnackBarBehavior.floating),
               );
             },
-            child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+            child: Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.background)),
           ),
         ],
       ),
@@ -289,10 +289,10 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.78,
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                color: context.palette.card,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,63 +306,63 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                           children: [
                             Text(
                               currentRepo.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: 2),
                             Text(
                               '${currentRepo.activeProviderCount} of ${currentRepo.actualProviderCount} Extensions Installed (মোট ${currentRepo.actualProviderCount}টি এক্সটেনশন)',
-                              style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: 12, color: context.palette.primary, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded),
+                        icon: Icon(Icons.close_rounded),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
-                  const Divider(),
-                  const SizedBox(height: 6),
+                  Divider(),
+                  SizedBox(height: 6),
                   Expanded(
                     child: currentRepo.providers.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Text('No extensions indexed for this repository yet.'),
                           )
                         : ListView.separated(
                             itemCount: currentRepo.providers.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 8),
+                            separatorBuilder: (_, _) => SizedBox(height: 8),
                             itemBuilder: (context, idx) {
                               final provider = currentRepo.providers[idx];
                               final isInstalled = provider.isInstalled && provider.isEnabled;
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF0F172A) : Colors.grey.shade100,
+                                  color: isDark ? context.palette.background : context.palette.textSecondary,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                      padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
                                       decoration: BoxDecoration(
                                         color: isInstalled
-                                            ? AppColors.primary.withValues(alpha: 0.15)
-                                            : Colors.grey.withValues(alpha: 0.2),
+                                            ? context.palette.tint(context.palette.primary, 0.15)
+                                            : context.palette.tint(context.palette.textSecondary, 0.2),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
                                         provider.language.toUpperCase(),
                                         style: TextStyle(
-                                          color: isInstalled ? AppColors.primary : Colors.grey,
+                                          color: isInstalled ? context.palette.primary : context.palette.textSecondary,
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,23 +372,23 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                                               Flexible(
                                                 child: Text(
                                                   provider.name,
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
                                               ),
-                                              const SizedBox(width: 6),
+                                              SizedBox(width: 6),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                padding: EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                                 decoration: BoxDecoration(
                                                   color: isInstalled
-                                                      ? Colors.green.withValues(alpha: 0.15)
-                                                      : Colors.grey.withValues(alpha: 0.15),
+                                                      ? context.palette.tint(context.palette.success, 0.15)
+                                                      : context.palette.tint(context.palette.textSecondary, 0.15),
                                                   borderRadius: BorderRadius.circular(4),
                                                 ),
                                                 child: Text(
                                                   isInstalled ? 'Installed' : 'Uninstalled',
                                                   style: TextStyle(
-                                                    color: isInstalled ? Colors.green : Colors.grey,
+                                                    color: isInstalled ? context.palette.success : context.palette.textSecondary,
                                                     fontSize: 9,
                                                     fontWeight: FontWeight.bold,
                                                   ),
@@ -397,28 +397,28 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                                             ],
                                           ),
                                           if (provider.description.isNotEmpty) ...[
-                                            const SizedBox(height: 2),
+                                            SizedBox(height: 2),
                                             Text(
                                               provider.description,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
+                                              style: TextStyle(fontSize: 11, color: context.palette.textSecondary),
                                             ),
                                           ],
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    SizedBox(width: 8),
                                     // Uninstall / Install Action Button
                                     ElevatedButton(
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: isInstalled
-                                            ? (isDark ? Colors.grey.shade800 : Colors.grey.shade300)
-                                            : AppColors.primary,
+                                            ? (context.palette.textSecondary)
+                                            : context.palette.primary,
                                         foregroundColor: isInstalled
-                                            ? (isDark ? Colors.redAccent.shade100 : Colors.red.shade700)
-                                            : Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            ? (context.palette.error)
+                                            : context.palette.card,
+                                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                         elevation: 0,
                                       ),
@@ -432,8 +432,8 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
                                           color: isInstalled
-                                              ? (isDark ? Colors.redAccent.shade100 : Colors.red.shade700)
-                                              : Colors.white,
+                                              ? (context.palette.error)
+                                              : context.palette.card,
                                         ),
                                       ),
                                     ),
@@ -443,30 +443,30 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                             },
                           ),
                   ),
-                  const SizedBox(height: 12),
-                  const Divider(),
+                  SizedBox(height: 12),
+                  Divider(),
                   // Delete entire repository button
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.accentRed,
+                        foregroundColor: context.palette.error,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: EdgeInsets.symmetric(vertical: 12),
                       ),
-                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                      label: const Text('Delete Repository (সম্পূর্ণ রেপোজিটরি ডিলিট)', style: TextStyle(fontWeight: FontWeight.bold)),
+                      icon: Icon(Icons.delete_outline_rounded, size: 18),
+                      label: Text('Delete Repository (সম্পূর্ণ রেপোজিটরি ডিলিট)', style: TextStyle(fontWeight: FontWeight.bold)),
                       onPressed: () {
                         showDialog(
                           context: context,
                           builder: (delCtx) => AlertDialog(
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                            title: const Text('Delete Repository?', style: TextStyle(fontWeight: FontWeight.bold)),
+                            title: Text('Delete Repository?', style: TextStyle(fontWeight: FontWeight.bold)),
                             content: Text('Are you sure you want to remove "${currentRepo.name}" and all its extensions?'),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(delCtx), child: const Text('Cancel')),
+                              TextButton(onPressed: () => Navigator.pop(delCtx), child: Text('Cancel')),
                               ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.accentRed),
+                                style: ElevatedButton.styleFrom(backgroundColor: context.palette.error),
                                 onPressed: () {
                                   Navigator.pop(delCtx);
                                   Navigator.pop(ctx);
@@ -475,7 +475,7 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                                     SnackBar(content: Text('Removed ${currentRepo.name}'), behavior: SnackBarBehavior.floating),
                                   );
                                 },
-                                child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                                child: Text('Delete', style: TextStyle(color: context.palette.onPrimary)),
                               ),
                             ],
                           ),
@@ -515,10 +515,10 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
         return Container(
           height: MediaQuery.of(context).size.height * 0.88,
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            color: context.palette.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             border: Border(
-              top: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, width: 1.5),
+              top: BorderSide(color: context.palette.border, width: 1.5),
             ),
           ),
           child: Column(
@@ -526,11 +526,11 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
               // Drag handle
               Center(
                 child: Container(
-                  margin: const EdgeInsets.only(top: 10, bottom: 6),
+                  margin: EdgeInsets.only(top: 10, bottom: 6),
                   width: 44,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.grey.shade400,
+                    color: isDark ? context.palette.tint(context.palette.onScrim, 0.24) : context.palette.textSecondary,
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -538,7 +538,7 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
 
               // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -546,9 +546,9 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             children: [
-                              Icon(Icons.hub_rounded, color: AppColors.primary, size: 22),
+                              Icon(Icons.hub_rounded, color: context.palette.primary, size: 22),
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -561,22 +561,22 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                           ),
                           Text(
                             '${service.enabledRepositories.length} of ${service.repositories.length} Active Repositories',
-                            style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
+                            style: TextStyle(fontSize: 11, color: context.palette.onPrimary),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _showAddCustomDialog,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: context.palette.primary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
-                      icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                      label: const Text('Add Repo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                      icon: Icon(Icons.add_rounded, size: 18, color: context.palette.onPrimary),
+                      label: Text('Add Repo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: context.palette.onPrimary)),
                     ),
                   ],
                 ),
@@ -584,23 +584,23 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
 
               // Search Filter Bar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkCard : Colors.grey.shade200,
+                    color: isDark ? context.palette.card : context.palette.textSecondary,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: TextField(
                     controller: _searchRepoCtrl,
                     decoration: InputDecoration(
                       hintText: 'Filter repos (e.g. SpotiFlac, Redowan, NetMirror)...',
-                      hintStyle: const TextStyle(fontSize: 12),
+                      hintStyle: TextStyle(fontSize: 12),
                       border: InputBorder.none,
-                      prefixIcon: const Icon(Icons.filter_list_rounded, size: 20),
+                      prefixIcon: Icon(Icons.filter_list_rounded, size: 20),
                       suffixIcon: _filterQuery.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 16),
+                              icon: Icon(Icons.clear_rounded, size: 16),
                               onPressed: () {
                                 _searchRepoCtrl.clear();
                                 setState(() => _filterQuery = '');
@@ -616,48 +616,48 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
               ),
 
               if (_isAdding || service.isLoading)
-                const LinearProgressIndicator(color: AppColors.primary),
+                LinearProgressIndicator(color: context.palette.primary),
 
               // Repositories List or Clean Empty State
               Expanded(
                 child: repos.isEmpty
                     ? Center(
                         child: Padding(
-                          padding: const EdgeInsets.all(32),
+                          padding: EdgeInsets.all(32),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.extension_off_rounded, size: 64, color: AppColors.primary.withValues(alpha: 0.5)),
-                              const SizedBox(height: 16),
-                              const Text(
+                              Icon(Icons.extension_off_rounded, size: 64, color: context.palette.tint(context.palette.primary, 0.5)),
+                              SizedBox(height: 16),
+                              Text(
                                 'No Repositories Currently Added',
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               ),
-                              const SizedBox(height: 8),
-                              const Text(
+                              SizedBox(height: 8),
+                              Text(
                                 'Tap "Add Repo" above or choose a preset shortcode (e.g. spotiflac, 688321, zangetsu) to add your favorite repositories.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey, fontSize: 12, height: 1.4),
+                                style: TextStyle(color: context.palette.textSecondary, fontSize: 12, height: 1.4),
                               ),
-                              const SizedBox(height: 20),
+                              SizedBox(height: 20),
                               ElevatedButton.icon(
                                 onPressed: _showAddCustomDialog,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  backgroundColor: context.palette.primary,
+                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
-                                icon: const Icon(Icons.add_rounded, color: Colors.white),
-                                label: const Text('Add Repository / Shortcode', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                icon: Icon(Icons.add_rounded, color: context.palette.onPrimary),
+                                label: Text('Add Repository / Shortcode', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary)),
                               ),
                             ],
                           ),
                         ),
                       )
                     : ListView.separated(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
                         itemCount: repos.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        separatorBuilder: (_, _) => SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final repo = repos[index];
                           return _buildRepoCard(repo, isDark, service);
@@ -668,37 +668,37 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
               // Bottom bar
               if (repos.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         '${service.enabledRepositories.length} Active (${service.repositories.length} Total)',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       TextButton.icon(
                         onPressed: () {
                           showDialog(
                             context: context,
                             builder: (confirmCtx) => AlertDialog(
-                              title: const Text('Delete All Repositories?'),
-                              content: const Text('Are you sure you want to remove all repositories?'),
+                              title: Text('Delete All Repositories?'),
+                              content: Text('Are you sure you want to remove all repositories?'),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(confirmCtx), child: const Text('Cancel')),
+                                TextButton(onPressed: () => Navigator.pop(confirmCtx), child: Text('Cancel')),
                                 ElevatedButton(
                                   onPressed: () {
                                     Navigator.pop(confirmCtx);
                                     service.clearAllRepositories();
                                   },
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                  child: const Text('Delete All', style: TextStyle(color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(backgroundColor: context.palette.error),
+                                  child: Text('Delete All', style: TextStyle(color: context.palette.onPrimary)),
                                 ),
                               ],
                             ),
                           );
                         },
-                        icon: const Icon(Icons.delete_sweep_rounded, size: 16, color: Colors.redAccent),
-                        label: const Text('Delete All Repos', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
+                        icon: Icon(Icons.delete_sweep_rounded, size: 16, color: context.palette.error),
+                        label: Text('Delete All Repos', style: TextStyle(fontSize: 12, color: context.palette.error)),
                       ),
                     ],
                   ),
@@ -711,23 +711,23 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
   }
 
   Widget _buildRepoCard(MovieRepository repo, bool isDark, MovieRepositoryService service) {
-    Color badgeColor = AppColors.primary;
+    Color badgeColor = context.palette.primary;
     IconData repoIcon = Icons.extension_rounded;
 
     if (repo.iconType == 'spotiflac' || repo.id.contains('spotiflac')) {
-      badgeColor = const Color(0xFF1DB954);
+      badgeColor = context.palette.success;
       repoIcon = Icons.music_note_rounded;
     } else if (repo.iconType == 'cloudstream') {
-      badgeColor = const Color(0xFF00ADB5);
+      badgeColor = context.palette.secondary;
       repoIcon = Icons.cloud_download_rounded;
     } else if (repo.iconType == 'dantotsu') {
-      badgeColor = const Color(0xFFFF5722);
+      badgeColor = context.palette.textSecondary;
       repoIcon = Icons.auto_awesome_motion_rounded;
     } else if (repo.iconType == 'stremio') {
-      badgeColor = const Color(0xFF673AB7);
+      badgeColor = context.palette.primary;
       repoIcon = Icons.tv_rounded;
     } else if (repo.iconType == 'bollywood') {
-      badgeColor = const Color(0xFFFF9800);
+      badgeColor = context.palette.info;
       repoIcon = Icons.movie_filter_rounded;
     }
 
@@ -735,9 +735,9 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
       onTap: () => _showProvidersDialog(repo),
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -746,14 +746,14 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: badgeColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(repoIcon, color: badgeColor, size: 20),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -763,13 +763,13 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                           Flexible(
                             child: Text(
                               repo.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                             decoration: BoxDecoration(
                               color: badgeColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(5),
@@ -785,10 +785,10 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         'By ${repo.author} • ${repo.activeProviderCount}/${repo.actualProviderCount} Extensions Installed',
-                        style: TextStyle(fontSize: 10, color: isDark ? Colors.white60 : Colors.black54),
+                        style: TextStyle(fontSize: 10, color: context.palette.textSecondary),
                       ),
                     ],
                   ),
@@ -802,14 +802,14 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               repo.description,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+              style: TextStyle(fontSize: 11, color: context.palette.textSecondary),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -817,12 +817,12 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                   spacing: 4,
                   children: repo.tags.take(3).map((tag) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : Colors.grey.shade200,
+                        color: isDark ? context.palette.tint(context.palette.onScrim, 0.10) : context.palette.textSecondary,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(tag, style: const TextStyle(fontSize: 9)),
+                      child: Text(tag, style: TextStyle(fontSize: 9)),
                     );
                   }).toList(),
                 ),
@@ -831,29 +831,29 @@ class _RepoManagerDialogState extends State<RepoManagerDialog> {
                   children: [
                     // Edit Repo Button
                     IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      icon: Icon(Icons.edit_outlined, size: 16),
                       tooltip: 'Edit Repository details',
                       onPressed: () => _showEditRepoDialog(repo),
                     ),
                     // Delete Repo Button for 100% of repositories as requested by user
                     IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 16),
+                      icon: Icon(Icons.delete_outline_rounded, color: context.palette.error, size: 16),
                       tooltip: 'Delete repository',
                       onPressed: () {
                         showDialog(
                           context: context,
                           builder: (confirmCtx) => AlertDialog(
-                            title: const Text('Delete Repository?'),
+                            title: Text('Delete Repository?'),
                             content: Text('Are you sure you want to remove "${repo.name}"?'),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(confirmCtx), child: const Text('Cancel')),
+                              TextButton(onPressed: () => Navigator.pop(confirmCtx), child: Text('Cancel')),
                               ElevatedButton(
                                 onPressed: () {
                                   Navigator.pop(confirmCtx);
                                   service.deleteRepository(repo.id);
                                 },
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                                style: ElevatedButton.styleFrom(backgroundColor: context.palette.error),
+                                child: Text('Delete', style: TextStyle(color: context.palette.onPrimary)),
                               ),
                             ],
                           ),

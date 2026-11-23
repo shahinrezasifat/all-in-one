@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_palette.dart';
 
 import '../models/movie_model.dart';
 import '../services/movie_repository_service.dart';
@@ -13,44 +14,60 @@ enum _Section {
     'CloudStream Extensions',
     'Movies, Series, BDIX, Live TV, OTT',
     Icons.movie_filter_rounded,
-    Color(0xFF22C55E),
+    0,
   ),
   zangetsu(
     'Native JS Streaming Engines',
     'QuickJS Scrapers (Zangetsu & Mewtwo)',
     Icons.flash_on_rounded,
-    Color(0xFFEAB308),
+    1,
   ),
   aniyomi(
     'Aniyomi Anime Extensions',
     'Anime Scrapers & Video Sources',
     Icons.animation_rounded,
-    Color(0xFFEC4899),
+    2,
   ),
   mihon(
     'Mihon Extensions',
     'Manga, Manhwa & Comics (Keiyoushi)',
     Icons.menu_book_rounded,
-    Color(0xFF3B82F6),
+    3,
   ),
   lnreader(
     'LNReader Plugins',
     'Light & Web Novel Chapter Readers',
     Icons.auto_stories_rounded,
-    Color(0xFF8B5CF6),
+    4,
   ),
   adult(
     '18+ Extensions (Privacy Gated)',
     'Privacy-Gated 18+ Streaming Scrapers',
     Icons.lock_rounded,
-    Color(0xFFEF4444),
+    5,
   );
 
-  const _Section(this.label, this.description, this.icon, this.accentColor);
+  _Section(this.label, this.description, this.icon, this.accentRole);
   final String label;
   final String description;
   final IconData icon;
-  final Color accentColor;
+  final int accentRole;
+
+  /// Role-based accent — resolved through the mode-aware palette, never a
+  /// hardcoded ecosystem hex.
+  Color get accentColor {
+    final p = contextlessPalette;
+    return switch (accentRole) {
+      0 => p.primary,
+      1 => p.secondary,
+      2 => p.success,
+      3 => p.textPrimary,
+      4 => p.textSecondary,
+      _ => p.border,
+    };
+  }
+
+  static AppPalette get contextlessPalette => AppPalette.current;
 
   bool includes(MovieRepository repo) {
     if (this == adult) {
@@ -64,14 +81,14 @@ enum _Section {
 }
 
 class ZangetsuProvidersHubScreen extends StatelessWidget {
-  const ZangetsuProvidersHubScreen({super.key});
+  ZangetsuProvidersHubScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final service = MovieRepositoryService.instance;
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Provider Hub',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -80,22 +97,22 @@ class ZangetsuProvidersHubScreen extends StatelessWidget {
         future: service.ready,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(child: Text('Could not load repositories.'));
+            return Center(child: Text('Could not load repositories.'));
           }
           if (snapshot.connectionState != ConnectionState.done &&
               service.repositories.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(child: CircularProgressIndicator());
           }
           return ListenableBuilder(
             listenable: Listenable.merge([service, SettingsService.instance]),
             builder: (context, _) => ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: [
                 for (final section in _Section.values)
                   if (section != _Section.adult ||
                       SettingsService.instance.showAdultRepositories)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
+                      padding: EdgeInsets.only(bottom: 10),
                       child: _SectionCard(
                         section: section,
                         count: service.repositories
@@ -113,7 +130,7 @@ class ZangetsuProvidersHubScreen extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.section, required this.count});
+  _SectionCard({required this.section, required this.count});
 
   final _Section section;
   final int count;
@@ -123,7 +140,7 @@ class _SectionCard extends StatelessWidget {
     final theme = Theme.of(context);
     return _HubCard(
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 5),
         leading: _HubIcon(icon: section.icon, color: section.accentColor),
         title: Text(
           section.label,
@@ -138,7 +155,7 @@ class _SectionCard extends StatelessWidget {
             height: 1.4,
           ),
         ),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        trailing: Icon(Icons.chevron_right_rounded),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => _RepositoryList(section: section)),
         ),
@@ -148,7 +165,7 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _HubCard extends StatelessWidget {
-  const _HubCard({required this.child});
+  _HubCard({required this.child});
 
   final Widget child;
 
@@ -162,9 +179,9 @@ class _HubCard extends StatelessWidget {
         borderRadius: radius,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? .16 : .05),
+            color: context.palette.shadowAt(isDark ? .16 : .05),
             blurRadius: 14,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -189,7 +206,7 @@ class _HubCard extends StatelessWidget {
 }
 
 class _HubIcon extends StatelessWidget {
-  const _HubIcon({required this.icon, this.color});
+  _HubIcon({required this.icon, this.color});
   final IconData icon;
   final Color? color;
 
@@ -209,7 +226,7 @@ class _HubIcon extends StatelessWidget {
 }
 
 class _RepositoryList extends StatefulWidget {
-  const _RepositoryList({required this.section});
+  _RepositoryList({required this.section});
   final _Section section;
 
   @override
@@ -243,11 +260,11 @@ class _RepositoryListState extends State<_RepositoryList> {
     final url = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Add repository'),
+        title: Text('Add repository'),
         content: TextField(
           autofocus: true,
           keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Manifest URL or shortcode',
           ),
           onChanged: (value) => input = value.trim(),
@@ -256,11 +273,11 @@ class _RepositoryListState extends State<_RepositoryList> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, input),
-            child: const Text('Add'),
+            child: Text('Add'),
           ),
         ],
       ),
@@ -273,7 +290,7 @@ class _RepositoryListState extends State<_RepositoryList> {
     );
     if (context.mounted && !added) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not add the repository.')),
+        SnackBar(content: Text('Could not add the repository.')),
       );
     }
   }
@@ -289,14 +306,14 @@ class _RepositoryListState extends State<_RepositoryList> {
           IconButton(
             onPressed: () => _add(context),
             tooltip: 'Add repository',
-            icon: const Icon(Icons.add_rounded),
+            icon: Icon(Icons.add_rounded),
           ),
         ],
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
               controller: _search,
               textInputAction: TextInputAction.search,
@@ -304,27 +321,27 @@ class _RepositoryListState extends State<_RepositoryList> {
                 hintText: 'Search extensions',
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainer,
-                border: const OutlineInputBorder(
+                border: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(16)),
                   borderSide: BorderSide.none,
                 ),
-                enabledBorder: const OutlineInputBorder(
+                enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(16)),
                   borderSide: BorderSide.none,
                 ),
-                focusedBorder: const OutlineInputBorder(
+                focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(16)),
                   borderSide: BorderSide.none,
                 ),
-                prefixIcon: const Icon(Icons.search_rounded),
+                prefixIcon: Icon(Icons.search_rounded),
                 suffixIcon: ValueListenableBuilder(
                   valueListenable: _search,
                   builder: (context, value, _) => value.text.isEmpty
-                      ? const SizedBox.shrink()
+                      ? SizedBox.shrink()
                       : IconButton(
                           tooltip: 'Clear search',
                           onPressed: _search.clear,
-                          icon: const Icon(Icons.close_rounded),
+                          icon: Icon(Icons.close_rounded),
                         ),
                 ),
               ),
@@ -342,7 +359,7 @@ class _RepositoryListState extends State<_RepositoryList> {
                   final query = value.text.trim().toLowerCase();
                   if (query.isNotEmpty) return _searchResults(repos, query);
                   if (repos.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Text('No repositories in this section.'),
                     );
                   }
@@ -366,13 +383,13 @@ class _RepositoryListState extends State<_RepositoryList> {
             (repo: repo, provider: provider),
     ];
     if (results.isEmpty) {
-      return const Center(child: Text('No extensions found.'));
+      return Center(child: Text('No extensions found.'));
     }
     return ListView.separated(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
       itemCount: results.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => SizedBox(height: 8),
       itemBuilder: (context, index) {
         final result = results[index];
         return _HubCard(
@@ -380,7 +397,7 @@ class _RepositoryListState extends State<_RepositoryList> {
             leading: ProviderLogo(provider: result.provider),
             title: Text(result.provider.name),
             subtitle: Text(result.repo.name),
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: Icon(Icons.chevron_right_rounded),
             onTap: () =>
                 _openRepository(result.repo, providerId: result.provider.id),
           ),
@@ -392,14 +409,14 @@ class _RepositoryListState extends State<_RepositoryList> {
   Widget _repositoryList(List<MovieRepository> repos) {
     final section = widget.section;
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
       itemCount: repos.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => SizedBox(height: 8),
       itemBuilder: (context, index) {
         final repo = repos[index];
         return _HubCard(
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
+            contentPadding: EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 4,
             ),
@@ -409,13 +426,13 @@ class _RepositoryListState extends State<_RepositoryList> {
                 Expanded(
                   child: Text(
                     repo.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
                 if (repo.shortcode.isNotEmpty)
                   Container(
-                    margin: const EdgeInsets.only(left: 6),
-                    padding: const EdgeInsets.symmetric(
+                    margin: EdgeInsets.only(left: 6),
+                    padding: EdgeInsets.symmetric(
                       horizontal: 6,
                       vertical: 2,
                     ),
@@ -435,15 +452,15 @@ class _RepositoryListState extends State<_RepositoryList> {
               ],
             ),
             subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: EdgeInsets.only(top: 4),
               child: Text(
                 '${repo.author}${repo.tags.isNotEmpty ? " • " + repo.tags.first : ""} • ${repo.actualProviderCount} extensions',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12),
+                style: TextStyle(fontSize: 12),
               ),
             ),
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: Icon(Icons.chevron_right_rounded),
             onTap: () => _openRepository(repo),
           ),
         );
@@ -453,7 +470,7 @@ class _RepositoryListState extends State<_RepositoryList> {
 }
 
 class _Extensions extends StatefulWidget {
-  const _Extensions({
+  _Extensions({
     required this.repoId,
     required this.adult,
     this.highlightedProviderId,
@@ -501,18 +518,18 @@ class _ExtensionsState extends State<_Extensions> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete repository?'),
+        title: Text('Delete repository?'),
         content: Text(
           'Remove ${repo.name} and its extensions from Provider Hub?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
+            child: Text('Delete'),
           ),
         ],
       ),
@@ -526,7 +543,7 @@ class _ExtensionsState extends State<_Extensions> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not delete the repository.')),
+          SnackBar(content: Text('Could not delete the repository.')),
         );
       }
     }
@@ -565,7 +582,7 @@ class _ExtensionsState extends State<_Extensions> {
       if (repo == null) {
         return Scaffold(
           appBar: AppBar(),
-          body: const Center(child: Text('Repository unavailable.')),
+          body: Center(child: Text('Repository unavailable.')),
         );
       }
       final providers = repo.providers
@@ -584,7 +601,7 @@ class _ExtensionsState extends State<_Extensions> {
             IconButton(
               onPressed: _loading ? null : _refresh,
               tooltip: 'Refresh extensions',
-              icon: const Icon(Icons.refresh_rounded),
+              icon: Icon(Icons.refresh_rounded),
             ),
             PopupMenuButton<String>(
               tooltip: 'Manage repository',
@@ -602,7 +619,7 @@ class _ExtensionsState extends State<_Extensions> {
                     repo.isEnabled ? 'Disable repository' : 'Enable repository',
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete',
                   child: Text('Delete repository'),
                 ),
@@ -612,14 +629,14 @@ class _ExtensionsState extends State<_Extensions> {
         ),
         body: Column(
           children: [
-            if (_loading) const LinearProgressIndicator(),
+            if (_loading) LinearProgressIndicator(),
             if (_failed)
               ListTile(
-                leading: const Icon(Icons.cloud_off_outlined),
-                title: const Text('Could not refresh extensions'),
+                leading: Icon(Icons.cloud_off_outlined),
+                title: Text('Could not refresh extensions'),
                 trailing: TextButton(
                   onPressed: _refresh,
-                  child: const Text('Retry'),
+                  child: Text('Retry'),
                 ),
               ),
             Expanded(
@@ -630,11 +647,11 @@ class _ExtensionsState extends State<_Extensions> {
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: providers.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final p = providers[index];
                         final supported = CloudStreamRuntime.canRun(p);
@@ -663,7 +680,7 @@ class _ExtensionsState extends State<_Extensions> {
                             leading: ProviderLogo(provider: p),
                             title: Text(
                               p.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -679,7 +696,7 @@ class _ExtensionsState extends State<_Extensions> {
                                         ),
                                   ),
                             trailing: pending
-                                ? const SizedBox.square(
+                                ? SizedBox.square(
                                     dimension: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
@@ -693,7 +710,7 @@ class _ExtensionsState extends State<_Extensions> {
                                           .colorScheme
                                           .error,
                                     ),
-                                    child: const Text('Delete'),
+                                    child: Text('Delete'),
                                   )
                                 : Tooltip(
                                     message: supported
@@ -703,7 +720,7 @@ class _ExtensionsState extends State<_Extensions> {
                                       onPressed: supported
                                           ? () => _changeInstallation(p)
                                           : null,
-                                      child: const Text('Install'),
+                                      child: Text('Install'),
                                     ),
                                   ),
                           ),
@@ -719,7 +736,7 @@ class _ExtensionsState extends State<_Extensions> {
 }
 
 class ProviderLogo extends StatelessWidget {
-  const ProviderLogo({super.key, required this.provider});
+  ProviderLogo({super.key, required this.provider});
   final MovieProvider provider;
 
   @override

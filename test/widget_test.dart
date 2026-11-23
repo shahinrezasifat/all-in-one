@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snaptube_pure/main.dart';
+import 'package:snaptube_pure/models/video_item.dart';
+import 'package:snaptube_pure/widgets/remote_image.dart';
+import 'package:snaptube_pure/widgets/video_card.dart';
 import 'package:snaptube_pure/screens/home_screen.dart';
 import 'package:snaptube_pure/services/bookmark_service.dart';
 
@@ -13,6 +16,39 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await BookmarkService.instance.init();
   });
+
+  testWidgets(
+    'Feed cards use the provided channel avatar and keep the initial fallback',
+    (tester) async {
+      const avatar = 'https://example.test/channel.png';
+      final video = VideoItem.fromJson(
+        const VideoItem(
+          id: 'video',
+          title: 'Video',
+          author: 'Creator',
+          thumbnailUrl: '',
+          videoUrl: 'https://example.test/video',
+          channelAvatarUrl: avatar,
+        ).toJson(),
+      );
+      for (final compact in [false, true]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: VideoCard(video: video, isCompact: compact),
+            ),
+          ),
+        );
+        expect(
+          find.byWidgetPredicate(
+            (widget) => widget is SmartNetworkImage && widget.url == avatar,
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('C'), findsOneWidget);
+      }
+    },
+  );
 
   testWidgets('Tub Pure smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(const TubPureApp());

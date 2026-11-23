@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../theme/app_palette.dart';
 import '../services/image_cache_service.dart';
 
 /// Robust network image backed by the persistent 50 MB [ImageCacheService].
@@ -23,10 +24,10 @@ class SmartNetworkImage extends StatefulWidget {
   final IconData placeholderIcon;
   final String? fallbackInitials;
   final BorderRadius? borderRadius;
-  final Color placeholderColor;
-  final Color accentColor;
+  final Color? placeholderColor;
+  final Color? accentColor;
 
-  const SmartNetworkImage({
+  SmartNetworkImage({
     super.key,
     required this.url,
     this.fallbackUrl,
@@ -37,8 +38,8 @@ class SmartNetworkImage extends StatefulWidget {
     this.placeholderIcon = Icons.image_rounded,
     this.fallbackInitials,
     this.borderRadius,
-    this.placeholderColor = const Color(0xFF151C22),
-    this.accentColor = const Color(0xFF1DB954),
+    this.placeholderColor,
+    this.accentColor,
   });
 
   static String initialsFor(String text) {
@@ -118,11 +119,14 @@ class _SmartNetworkImageState extends State<SmartNetworkImage> {
 
   Widget _buildPlaceholder() {
     if (widget.placeholder != null) return widget.placeholder!;
+    final p = context.palette;
+    final placeholder = widget.placeholderColor ?? p.background;
+    final accent = widget.accentColor ?? p.success;
     return Container(
       width: widget.width,
       height: widget.height,
       decoration: BoxDecoration(
-        color: widget.placeholderColor,
+        color: placeholder,
         borderRadius: widget.borderRadius,
       ),
       child: Center(
@@ -130,13 +134,13 @@ class _SmartNetworkImageState extends State<SmartNetworkImage> {
             ? Text(
                 widget.fallbackInitials!,
                 style: TextStyle(
-                  color: widget.accentColor,
+                  color: accent,
                   fontWeight: FontWeight.w900,
                   fontSize: (widget.height ?? 24) * 0.4,
                 ),
               )
             : Icon(widget.placeholderIcon,
-                color: widget.accentColor, size: (widget.height ?? 24) * 0.5),
+                color: accent, size: (widget.height ?? 24) * 0.5),
       ),
     );
   }

@@ -226,6 +226,21 @@ class DownloadManager extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Rewrites persisted task paths after the download root changes, so a
+  /// storage migration never leaves completed downloads pointing at the old
+  /// folder. Exposed as a tear-off for [StorageService.migrateLegacyFolder].
+  Future<void> Function(String oldRoot, String newRoot) get relocateTasks =>
+      (oldRoot, newRoot) async {
+        for (final task in _tasks) {
+          final path = task.savePath;
+          if (path != null && path.startsWith(oldRoot)) {
+            task.savePath = newRoot + path.substring(oldRoot.length);
+          }
+        }
+        await _persistTasks();
+        notifyListeners();
+      };
+
   Future<void> setDownloadDirectory(String path) async {
     await ready;
     _downloadDirectory = path;

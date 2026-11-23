@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import '../theme/app_palette.dart';
 
 import '../models/movie_model.dart';
-import '../services/image_cache_service.dart';
 import 'looping_control_content.dart';
 import 'remote_image.dart';
 
 class HomeBanner extends StatefulWidget {
-  const HomeBanner({
+  HomeBanner({
     super.key,
     required this.movies,
     required this.style,
@@ -28,12 +28,11 @@ class HomeBanner extends StatefulWidget {
 
 class _HomeBannerState extends State<HomeBanner> {
   // A virtual middle page keeps the carousel swipeable in both directions.
-  static const _origin = 10000;
+  static final _origin = 10000;
   final _page = PageController(initialPage: _origin, viewportFraction: .34);
   Timer? _timer;
   int _index = _origin;
   int _settledIndex = _origin;
-  final _palette = <String, Future<Color?>>{};
   bool _visible = false;
 
   @override
@@ -64,7 +63,7 @@ class _HomeBannerState extends State<HomeBanner> {
   void _schedule() {
     _timer?.cancel();
     if (!_visible || !widget.autoPlay || widget.movies.length < 2) return;
-    _timer = Timer(const Duration(seconds: 5), () {
+    _timer = Timer(Duration(seconds: 5), () {
       if (_page.hasClients && ModalRoute.of(context)?.isCurrent != false) {
         _slideTo(_index + 1);
       }
@@ -88,12 +87,12 @@ class _HomeBannerState extends State<HomeBanner> {
     final colors = Theme.of(context).colorScheme;
     final movies = widget.movies;
     if (movies.isEmpty) {
-      return const SizedBox.shrink();
+      return SizedBox.shrink();
     }
     final current = movies[(_index - _origin) % movies.length];
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
+        constraints: BoxConstraints(maxWidth: 720),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
@@ -199,7 +198,7 @@ class _HomeBannerState extends State<HomeBanner> {
                                           _slideTo(index);
                                         }
                                       },
-                                      child: const SizedBox.expand(),
+                                      child: SizedBox.expand(),
                                     );
                                   },
                                 ),
@@ -219,7 +218,7 @@ class _HomeBannerState extends State<HomeBanner> {
                       onPressed: () => widget.onOpen(current),
                       child: LoopingControlContent(
                         trigger: _settledIndex,
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.play_arrow_rounded, size: 18),
@@ -234,15 +233,15 @@ class _HomeBannerState extends State<HomeBanner> {
                       onPressed: () => widget.onOpen(current),
                       icon: LoopingControlContent(
                         trigger: _settledIndex,
-                        delay: const Duration(milliseconds: 900),
-                        child: const Icon(Icons.info_outline_rounded),
+                        delay: Duration(milliseconds: 900),
+                        child: Icon(Icons.info_outline_rounded),
                       ),
                     ),
                   ],
                 ),
                 if (movies.length > 1)
                   Padding(
-                    padding: const EdgeInsets.only(top: 10, bottom: 6),
+                    padding: EdgeInsets.only(top: 10, bottom: 6),
                     child: Wrap(
                       spacing: 5,
                       children: [
@@ -252,9 +251,9 @@ class _HomeBannerState extends State<HomeBanner> {
                               _index + i - ((_index - _origin) % movies.length),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 7),
+                              padding: EdgeInsets.symmetric(vertical: 7),
                               child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 220),
+                                duration: Duration(milliseconds: 220),
                                 width: i == (_index - _origin) % movies.length
                                     ? 20
                                     : 6,
@@ -280,93 +279,25 @@ class _HomeBannerState extends State<HomeBanner> {
   }
 
   Widget _posterGlow(MovieItem movie) {
-    final key = '${movie.posterUrl}|${movie.backdropUrl}';
-    if (!_palette.containsKey(key) && _palette.length >= 32) {
-      _palette.remove(_palette.keys.first);
-    }
-    return FutureBuilder<Color?>(
-      key: ValueKey(key),
-      future: _palette.putIfAbsent(key, () => _posterColor(movie)),
-      builder: (context, snapshot) => TweenAnimationBuilder<Color?>(
-        tween: ColorTween(
-          begin: Colors.transparent,
-          end: snapshot.data?.withValues(alpha: .19) ?? Colors.transparent,
-        ),
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 360),
-        builder: (_, tint, _) => IgnorePointer(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                radius: .62,
-                colors: [tint ?? Colors.transparent, Colors.transparent],
-              ),
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(
+        begin: Colors.transparent,
+        end: context.palette.tint(context.palette.primary, .19),
+      ),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : Duration(milliseconds: 360),
+      builder: (_, tint, _) => IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              radius: .62,
+              colors: [tint ?? Colors.transparent, Colors.transparent],
             ),
           ),
         ),
       ),
     );
-  }
-
-  Future<Color?> _posterColor(MovieItem movie) async {
-    final cache = ImageCacheService.instance;
-    try {
-      for (final url in {movie.posterUrl, movie.backdropUrl}) {
-        if (url.trim().isEmpty) continue;
-        final bytes = await cache.getBytes(url.trim());
-        if (bytes == null || bytes.isEmpty) continue;
-        final codec = await ui.instantiateImageCodec(
-          bytes,
-          targetWidth: 24,
-          targetHeight: 24,
-        );
-        try {
-          final image = (await codec.getNextFrame()).image;
-          try {
-            final pixels = await image.toByteData(
-              format: ui.ImageByteFormat.rawRgba,
-            );
-            if (pixels == null) continue;
-            final buckets = <int, double>{};
-            for (var offset = 0; offset < pixels.lengthInBytes; offset += 4) {
-              if (pixels.getUint8(offset + 3) < 200) continue;
-              final r = pixels.getUint8(offset);
-              final g = pixels.getUint8(offset + 1);
-              final b = pixels.getUint8(offset + 2);
-              final tone = HSLColor.fromColor(Color.fromARGB(255, r, g, b));
-              if (tone.lightness < .12 ||
-                  tone.lightness > .88 ||
-                  tone.saturation < .16)
-                continue;
-              final key = (r >> 5) << 6 | (g >> 5) << 3 | (b >> 5);
-              buckets.update(
-                key,
-                (weight) => weight + tone.saturation,
-                ifAbsent: () => tone.saturation,
-              );
-            }
-            if (buckets.isEmpty) return null;
-            final key = buckets.entries
-                .reduce((a, b) => a.value >= b.value ? a : b)
-                .key;
-            return Color.fromARGB(
-              255,
-              ((key >> 6) & 7) * 32 + 16,
-              ((key >> 3) & 7) * 32 + 16,
-              (key & 7) * 32 + 16,
-            );
-          } finally {
-            image.dispose();
-          }
-        } finally {
-          codec.dispose();
-        }
-      }
-    } catch (_) {
-      // Artwork can be unavailable or undecodable.
-    }
-    return null;
   }
 
   Widget _layeredPoster(
@@ -418,11 +349,9 @@ class _HomeBannerState extends State<HomeBanner> {
         borderRadius: radius,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: theme.brightness == Brightness.dark ? .45 : .20,
-            ),
+            color: context.palette.shadowAt(theme.brightness == Brightness.dark ? .45 : .20,),
             blurRadius: 18,
-            offset: const Offset(0, 9),
+            offset: Offset(0, 9),
           ),
         ],
       ),
@@ -460,7 +389,7 @@ class _HomeBannerState extends State<HomeBanner> {
                       ),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.all(12),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -469,7 +398,7 @@ class _HomeBannerState extends State<HomeBanner> {
                             size: 27,
                             color: colors.primary,
                           ),
-                          const SizedBox(height: 9),
+                          SizedBox(height: 9),
                           Text(
                             movie.title,
                             textAlign: TextAlign.center,
@@ -489,7 +418,7 @@ class _HomeBannerState extends State<HomeBanner> {
                         child: TweenAnimationBuilder<double>(
                           key: ValueKey((movie.id, _settledIndex)),
                           tween: Tween(begin: 0, end: 1),
-                          duration: const Duration(milliseconds: 720),
+                          duration: Duration(milliseconds: 720),
                           curve: Curves.easeInOutCubic,
                           builder: (_, progress, _) => CustomPaint(
                             painter: _PosterSweep(
@@ -511,11 +440,11 @@ class _HomeBannerState extends State<HomeBanner> {
                         end: right
                             ? Alignment.centerLeft
                             : Alignment.centerRight,
-                        stops: const [0, .46, 1],
+                        stops: [0, .46, 1],
                         colors: [
-                          Colors.black.withValues(alpha: .12 * shade),
-                          Colors.black.withValues(alpha: .31 * shade),
-                          Colors.black.withValues(alpha: .82 * shade),
+                          context.palette.shadowAt(.12 * shade),
+                          context.palette.shadowAt(.31 * shade),
+                          context.palette.shadowAt(.82 * shade),
                         ],
                       ),
                     ),
@@ -531,7 +460,7 @@ class _HomeBannerState extends State<HomeBanner> {
                             Colors.transparent,
                             widget.style == 'spotlight'
                                 ? colors.primary.withValues(alpha: .30)
-                                : Colors.black.withValues(alpha: .20),
+                                : context.palette.shadowAt(.20),
                           ],
                         ),
                       ),
@@ -547,7 +476,7 @@ class _HomeBannerState extends State<HomeBanner> {
 }
 
 class _PosterSweep extends CustomPainter {
-  const _PosterSweep(this.progress, this.opacity);
+  _PosterSweep(this.progress, this.opacity);
   final double progress;
   final double opacity;
 
@@ -562,12 +491,12 @@ class _PosterSweep extends CustomPainter {
         Offset(center + width, size.height * .68),
         [
           Colors.transparent,
-          Colors.white.withValues(alpha: .07 * opacity),
-          Colors.white.withValues(alpha: .35 * opacity),
-          Colors.white.withValues(alpha: .07 * opacity),
+          AppPalette.current.tint(AppPalette.current.card, .07 * opacity),
+          AppPalette.current.tint(AppPalette.current.card, .35 * opacity),
+          AppPalette.current.tint(AppPalette.current.card, .07 * opacity),
           Colors.transparent,
         ],
-        const [0, .30, .50, .70, 1],
+        [0, .30, .50, .70, 1],
       );
     canvas.drawRect(Offset.zero & size, paint);
   }

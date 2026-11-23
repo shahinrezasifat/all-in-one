@@ -1,23 +1,24 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import '../theme/app_palette.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/github_profile_service.dart';
 
-const _githubUsername = GithubProfileService.username;
-const _githubProfile = GithubProfileService.profileUrl;
+final _githubUsername = GithubProfileService.username;
+final _githubProfile = GithubProfileService.profileUrl;
 
 /// Neon palette used across the cyberpunk developer terminal.
-const _neonCyan = Color(0xFF22D3EE);
-const _neonMagenta = Color(0xFFF0348B);
-const _neonLime = Color(0xFFA3E635);
-const _void = Color(0xFF080B14);
-const _panel = Color(0xFF0E1320);
+final _neonCyan = AppPalette.current.primary;
+final _neonMagenta = AppPalette.current.secondary;
+final _neonLime = AppPalette.current.success;
+final _void = AppPalette.current.background;
+final _panel = AppPalette.current.card;
 
 class DeveloperScreen extends StatefulWidget {
-  const DeveloperScreen({super.key});
+  DeveloperScreen({super.key});
 
   @override
   State<DeveloperScreen> createState() => _DeveloperScreenState();
@@ -32,11 +33,11 @@ class _DeveloperScreenState extends State<DeveloperScreen>
   /// neon glow / scanline pulse so the terminal feels alive.
   late final AnimationController _boot = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: Duration(milliseconds: 2600),
   )..forward();
   late final AnimationController _pulse = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2400),
+    duration: Duration(milliseconds: 2400),
   )..repeat(reverse: true);
 
   @override
@@ -89,7 +90,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
     );
   }
 
-  static const _expertise = [
+  static final _expertise = [
     (
       icon: Icons.code_rounded,
       code: '01',
@@ -126,7 +127,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
     ),
   ];
 
-  static const _contacts = [
+  static final _contacts = [
     (
       icon: Icons.mail_outline,
       title: 'Email',
@@ -179,7 +180,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Could not open this link.')));
+    ).showSnackBar(SnackBar(content: Text('Could not open this link.')));
   }
 
   // ---------------------------------------------------------------------------
@@ -189,12 +190,12 @@ class _DeveloperScreenState extends State<DeveloperScreen>
     child: Stack(
       fit: StackFit.expand,
       children: [
-        const DecoratedBox(
+        DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [_void, Color(0xFF0A0E1A), Color(0xFF060810)],
+              colors: [_void, context.palette.textSecondary, context.palette.tint(context.palette.primary, 0.05)],
             ),
           ),
         ),
@@ -239,21 +240,23 @@ class _DeveloperScreenState extends State<DeveloperScreen>
 
   Widget _neonPanel({
     required Widget child,
-    Color accent = _neonCyan,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(18),
+    Color? accent,
+    EdgeInsetsGeometry? padding,
   }) {
+    final panelAccent = accent ?? AppPalette.current.primary;
+    final contentPadding = padding ?? const EdgeInsets.all(18);
     return Container(
-      margin: const EdgeInsets.only(bottom: 18),
+      margin: EdgeInsets.only(bottom: 18),
       decoration: BoxDecoration(
         color: _panel.withValues(alpha: .72),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withValues(alpha: .28)),
+        border: Border.all(color: panelAccent.withValues(alpha: .28)),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: .10),
+            color: panelAccent.withValues(alpha: .10),
             blurRadius: 24,
             spreadRadius: -6,
-            offset: const Offset(0, 6),
+            offset: Offset(0, 6),
           ),
         ],
       ),
@@ -261,7 +264,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
         borderRadius: BorderRadius.circular(18),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Padding(padding: padding, child: child),
+          child: Padding(padding: contentPadding, child: child),
         ),
       ),
     );
@@ -269,11 +272,11 @@ class _DeveloperScreenState extends State<DeveloperScreen>
 
   Widget _sectionLabel(String code, String label, Color accent) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
             decoration: BoxDecoration(
               color: accent.withValues(alpha: .14),
               borderRadius: BorderRadius.circular(6),
@@ -289,7 +292,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Text(
             label.toUpperCase(),
             style: TextStyle(
@@ -299,7 +302,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
               letterSpacing: 1.6,
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Container(height: 1, color: accent.withValues(alpha: .25)),
           ),
@@ -320,9 +323,9 @@ class _DeveloperScreenState extends State<DeveloperScreen>
         foregroundColor: _neonCyan,
         title: Row(
           children: [
-            const Icon(Icons.terminal_rounded, size: 18, color: _neonCyan),
-            const SizedBox(width: 10),
-            const Text(
+            Icon(Icons.terminal_rounded, size: 18, color: _neonCyan),
+            SizedBox(width: 10),
+            Text(
               'DEV_PROFILE',
               style: TextStyle(
                 fontFamily: 'monospace',
@@ -331,18 +334,18 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                 letterSpacing: 1.2,
               ),
             ),
-            const Spacer(),
+            Spacer(),
             Container(
               width: 8,
               height: 8,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: _neonLime,
                 shape: BoxShape.circle,
                 boxShadow: [BoxShadow(color: _neonLime, blurRadius: 8)],
               ),
             ),
-            const SizedBox(width: 6),
-            const Text(
+            SizedBox(width: 6),
+            Text(
               'ONLINE',
               style: TextStyle(
                 fontFamily: 'monospace',
@@ -357,7 +360,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
         flexibleSpace: ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: const SizedBox.expand(),
+            child: SizedBox.expand(),
           ),
         ),
       ),
@@ -367,9 +370,9 @@ class _DeveloperScreenState extends State<DeveloperScreen>
           SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
+                constraints: BoxConstraints(maxWidth: 720),
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 32),
                   children: [
                     // Boot sequence — types in one line after another.
                     _reveal(
@@ -378,27 +381,27 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                         children: [
                           _bootLine(
                             '> INITIALIZING DEV_PROFILE v2.0 ...',
-                            const Interval(0.00, 0.14),
+                            Interval(0.00, 0.14),
                             _neonCyan,
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           _bootLine(
                             '> ESTABLISHING GITHUB UPLINK ...',
-                            const Interval(0.10, 0.24),
+                            Interval(0.10, 0.24),
                             _neonLime,
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           _bootLine(
                             '> IDENTITY VERIFIED — ACCESS GRANTED',
-                            const Interval(0.20, 0.34),
+                            Interval(0.20, 0.34),
                             _neonMagenta,
                           ),
                         ],
                       ),
-                      const Interval(0.0, 0.12),
+                      Interval(0.0, 0.12),
                       offset: 12,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     _reveal(
                       FutureBuilder<GithubProfile?>(
                         future: _profile,
@@ -411,12 +414,12 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                           );
                         },
                       ),
-                      const Interval(0.18, 0.42),
+                      Interval(0.18, 0.42),
                     ),
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20),
                     _reveal(
                       _sectionLabel('01', 'About Me', _neonCyan),
-                      const Interval(0.30, 0.46),
+                      Interval(0.30, 0.46),
                     ),
                     _reveal(
                       _neonPanel(
@@ -427,26 +430,26 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                             _terminalLine(
                               '> I have over 12 years of multidisciplinary experience in software development, multimedia production, and digital media.',
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             _terminalLine(
                               '> Previously Senior Video Editor at GTV (Gazi TV).',
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             _terminalLine(
                               '> Founder, CEO & Director of Motion Work (Production House & Digital Agency), Founder of Bee Creation and Sound Place.',
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             _terminalLine(
                               '> Leading tech and creative operations at Guardian Event Management & Media Corporation.',
                             ),
                           ],
                         ),
                       ),
-                      const Interval(0.36, 0.56),
+                      Interval(0.36, 0.56),
                     ),
                     _reveal(
                       _sectionLabel('02', 'What I Do', _neonMagenta),
-                      const Interval(0.48, 0.62),
+                      Interval(0.48, 0.62),
                     ),
                     for (var i = 0; i < _expertise.length; i++)
                       _reveal(
@@ -456,15 +459,15 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                         ),
                         Interval(0.52 + i * 0.07, 0.68 + i * 0.07),
                       ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     _reveal(
                       _sectionLabel('03', 'Contact & Social', _neonLime),
-                      const Interval(0.78, 0.88),
+                      Interval(0.78, 0.88),
                     ),
                     _reveal(
                       _neonPanel(
                         accent: _neonLime,
-                        padding: const EdgeInsets.all(8),
+                        padding: EdgeInsets.all(8),
                         child: Column(
                           children: [
                             for (final contact in _contacts)
@@ -472,9 +475,9 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                           ],
                         ),
                       ),
-                      const Interval(0.82, 0.96),
+                      Interval(0.82, 0.96),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     _reveal(
                       Center(
                         child: Text(
@@ -487,7 +490,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                           ),
                         ),
                       ),
-                      const Interval(0.92, 1.0),
+                      Interval(0.92, 1.0),
                     ),
                   ],
                 ),
@@ -504,20 +507,20 @@ class _DeveloperScreenState extends State<DeveloperScreen>
     children: [
       Text(
         '›',
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'monospace',
           color: _neonLime,
           fontSize: 13,
           fontWeight: FontWeight.w900,
         ),
       ),
-      const SizedBox(width: 10),
+      SizedBox(width: 10),
       Expanded(
         child: Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'monospace',
-            color: Color(0xFFC7D2E0),
+            color: context.palette.textSecondary,
             fontSize: 12,
             height: 1.5,
           ),
@@ -552,7 +555,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
             color: _neonCyan.withValues(alpha: .16),
             blurRadius: 30,
             spreadRadius: -8,
-            offset: const Offset(0, 8),
+            offset: Offset(0, 8),
           ),
         ],
       ),
@@ -561,15 +564,15 @@ class _DeveloperScreenState extends State<DeveloperScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+            padding: EdgeInsets.fromLTRB(18, 22, 18, 20),
             child: Column(
               children: [
                 // Profile ring
                 Container(
-                  padding: const EdgeInsets.all(3),
+                  padding: EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [_neonCyan, _neonMagenta],
                     ),
                     boxShadow: [
@@ -581,7 +584,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                   ),
                   child: CircleAvatar(
                     radius: 48,
-                    backgroundColor: const Color(0xFF111827),
+                    backgroundColor: context.palette.background,
                     child: ClipOval(
                       child: Image.network(
                         freshAvatar.toString(),
@@ -589,7 +592,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                         height: 92,
                         fit: BoxFit.cover,
                         semanticLabel: 'Developer profile photo',
-                        errorBuilder: (context, error, stack) => const Icon(
+                        errorBuilder: (context, error, stack) => Icon(
                           Icons.person_outline_rounded,
                           size: 44,
                           color: _neonCyan,
@@ -598,18 +601,18 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 Text(
                   'S. M. Shahin Reza Sifat',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.palette.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -.4,
                   ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 Text(
                   'FULL-STACK DEVELOPER // CREATIVE DIRECTOR // FOUNDER, MOTION WORK',
                   textAlign: TextAlign.center,
@@ -621,12 +624,12 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                     letterSpacing: .6,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                SizedBox(height: 8),
+                Text(
                   'Gazipur, Bangladesh',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  style: TextStyle(color: context.palette.textSecondary, fontSize: 12),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -644,7 +647,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                     _statChip('12+ YEARS', _neonMagenta),
                   ],
                 ),
-                const SizedBox(height: 18),
+                SizedBox(height: 18),
                 // GitHub CTA — explicit LTR URL so it never looks reversed.
                 Directionality(
                   textDirection: TextDirection.ltr,
@@ -656,35 +659,39 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                         onTap: () => _openLink(_githubProfile),
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [_neonCyan, Color(0xFF0891B2)],
+                            gradient: LinearGradient(
+                              colors: [_neonCyan, context.palette.secondary],
                             ),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
                                 color: _neonCyan.withValues(alpha: .35),
                                 blurRadius: 16,
-                                offset: const Offset(0, 4),
+                                offset: Offset(0, 4),
                               ),
                             ],
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.code_rounded, size: 17, color: _void),
                               SizedBox(width: 9),
-                              Text(
-                                'github.com/$_githubUsername',
-                                style: TextStyle(
-                                  fontFamily: 'monospace',
-                                  color: _void,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
+                              Flexible(
+                                child: Text(
+                                  'github.com/$_githubUsername',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    color: _void,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ),
                               SizedBox(width: 6),
@@ -709,7 +716,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
   }
 
   Widget _statChip(String label, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(
       color: color.withValues(alpha: .12),
       borderRadius: BorderRadius.circular(8),
@@ -732,7 +739,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
     Color accent,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: _panel.withValues(alpha: .70),
         borderRadius: BorderRadius.circular(14),
@@ -742,7 +749,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
             color: accent.withValues(alpha: .08),
             blurRadius: 16,
             spreadRadius: -6,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -751,7 +758,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: EdgeInsets.all(14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -765,7 +772,7 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                   ),
                   child: Icon(item.icon, color: accent, size: 20),
                 ),
-                const SizedBox(width: 14),
+                SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -781,12 +788,12 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               item.title.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: context.palette.textPrimary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: .4,
@@ -795,12 +802,12 @@ class _DeveloperScreenState extends State<DeveloperScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 7),
+                      SizedBox(height: 7),
                       Text(
                         item.description,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'monospace',
-                          color: Color(0xFFA9B6C8),
+                          color: context.palette.textPrimary,
                           fontSize: 11,
                           height: 1.45,
                         ),
@@ -824,33 +831,33 @@ class _DeveloperScreenState extends State<DeveloperScreen>
       child: InkWell(
         onTap: () => _openLink(contact.url),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           child: Row(
             children: [
               Icon(contact.icon, size: 18, color: _neonLime),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       contact.title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.palette.textPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Directionality(
                       textDirection: TextDirection.ltr,
                       child: Text(
                         contact.value,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'monospace',
-                          color: Color(0xFF94A3B8),
+                          color: context.palette.textPrimary,
                           fontSize: 11,
                         ),
                       ),
@@ -877,7 +884,7 @@ class _GridPainter extends CustomPainter {
     final paint = Paint()
       ..color = _neonCyan
       ..strokeWidth = 1;
-    const spacing = 26.0;
+    final spacing = 26.0;
     for (double x = 0; x <= size.width; x += spacing) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }

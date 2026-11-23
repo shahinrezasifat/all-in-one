@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/extract_result.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// A compact, modern "quality box" used inside the download bottom sheets.
 ///
@@ -13,7 +13,7 @@ class FormatGridBox extends StatelessWidget {
   final bool isAudio;
   final VoidCallback onTap;
 
-  const FormatGridBox({
+  FormatGridBox({
     super.key,
     required this.format,
     required this.isSelected,
@@ -21,7 +21,7 @@ class FormatGridBox extends StatelessWidget {
     required this.onTap,
   });
 
-  Color get _accent => AppColors.primary;
+  Color get _accent => AppPalette.current.primary;
 
   List<String> get _labelParts =>
       format.label.trim().split(RegExp(r'\s+'));
@@ -57,12 +57,12 @@ class FormatGridBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final cardColor = context.palette.card;
     final dimText =
-        isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary;
+        context.palette.textSecondary;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+      duration: Duration(milliseconds: 180),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         color: isSelected
@@ -76,7 +76,7 @@ class FormatGridBox extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -96,18 +96,16 @@ class FormatGridBox extends StatelessWidget {
                           letterSpacing: 0.2,
                           color: isSelected
                               ? _accent
-                              : (isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary),
+                              : (context.palette.textPrimary),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     _SelectionDot(isSelected: isSelected, accent: _accent),
                   ],
                 ),
                 if (_subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     _subtitle,
                     maxLines: 1,
@@ -115,7 +113,7 @@ class FormatGridBox extends StatelessWidget {
                     style: TextStyle(fontSize: 10.5, color: dimText),
                   ),
                 ],
-                const Spacer(),
+                Spacer(),
                 // Container + merge hint + size
                 Row(
                   children: [
@@ -124,19 +122,19 @@ class FormatGridBox extends StatelessWidget {
                       color: _accent,
                     ),
                     if (_is4k) ...[
-                      const SizedBox(width: 4),
-                      const _MiniChip(text: '4K', color: AppColors.accentGold),
+                      SizedBox(width: 4),
+                      _MiniChip(text: '4K', color: context.palette.info),
                     ] else if (_is2k) ...[
-                      const SizedBox(width: 4),
-                      const _MiniChip(text: '2K', color: AppColors.accentBlue),
+                      SizedBox(width: 4),
+                      _MiniChip(text: '2K', color: context.palette.info),
                     ] else if (format.needsAudioMerge) ...[
-                      const SizedBox(width: 4),
-                      const _MiniChip(
+                      SizedBox(width: 4),
+                      _MiniChip(
                         text: '+ AUDIO',
-                        color: AppColors.accentGreen,
+                        color: context.palette.success,
                       ),
                     ],
-                    const Spacer(),
+                    Spacer(),
                     Flexible(
                       child: Text(
                         _size,
@@ -164,12 +162,12 @@ class _SelectionDot extends StatelessWidget {
   final bool isSelected;
   final Color accent;
 
-  const _SelectionDot({required this.isSelected, required this.accent});
+  _SelectionDot({required this.isSelected, required this.accent});
 
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+      duration: Duration(milliseconds: 180),
       width: 20,
       height: 20,
       decoration: BoxDecoration(
@@ -180,7 +178,7 @@ class _SelectionDot extends StatelessWidget {
         color: isSelected ? null : Colors.transparent,
       ),
       child: isSelected
-          ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+          ? Icon(Icons.check_rounded, size: 14, color: context.palette.textPrimary)
           : null,
     );
   }
@@ -190,12 +188,12 @@ class _MiniChip extends StatelessWidget {
   final String text;
   final Color color;
 
-  const _MiniChip({required this.text, required this.color});
+  _MiniChip({required this.text, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),

@@ -17,11 +17,12 @@ import 'services/movie_repository_service.dart';
 import 'services/settings_service.dart';
 import 'services/preference_service.dart';
 import 'services/trending_engine_service.dart';
+import 'services/storage_service.dart';
 import 'services/system_ui_service.dart';
 import 'services/yt_dlp_service.dart';
 import 'services/vault_service.dart';
 import 'services/virtual_folder_service.dart';
-import 'theme/app_colors.dart';
+import 'theme/app_palette.dart';
 import 'theme/app_theme.dart';
 import 'widgets/storage_permission_gate.dart';
 import 'widgets/startup_update_gate.dart';
@@ -81,13 +82,14 @@ void main() {
   SettingsService.instance.ready.then((_) {});
   VaultService.instance.ready.then((_) {});
   PreferenceService.instance.ready.then((_) {});
+  StorageService.instance.ensureLoaded().then((_) {});
   // Always-on personalized trending engine: remembers searched channels, keeps
   // a non-repeating candidate pool warm and refreshes it on a timer/lifecycle.
   TrendingEngineService.instance.startBackground();
   // Warm the on-device yt-dlp engine early. Idempotent + non-blocking; the
   // first call may extract/download binaries, so never await it on the UI path.
   YtDlpService.instance.ensureInit();
-  runApp(const TubPureApp());
+  runApp(TubPureApp());
 }
 
 class TubPureApp extends StatelessWidget {
@@ -99,13 +101,25 @@ class TubPureApp extends StatelessWidget {
       animation: SettingsService.instance,
       builder: (context, _) {
         final settings = SettingsService.instance;
+        // Keep palette-only helpers in sync with the resolved theme mode.
+        final resolvedBrightness = switch (settings.themeMode) {
+          ThemeMode.light => Brightness.light,
+          ThemeMode.dark => Brightness.dark,
+          ThemeMode.system =>
+            WidgetsBinding.instance.platformDispatcher.platformBrightness,
+        };
+        AppPalette.sync(
+          resolvedBrightness == Brightness.dark
+              ? AppPalette.dark
+              : AppPalette.light,
+        );
         return MaterialApp(
           title: 'All in One',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: settings.themeMode,
-          scrollBehavior: const MaterialScrollBehavior().copyWith(
+          scrollBehavior: MaterialScrollBehavior().copyWith(
             dragDevices: {
               PointerDeviceKind.mouse,
               PointerDeviceKind.touch,
@@ -114,7 +128,7 @@ class TubPureApp extends StatelessWidget {
             },
           ),
           builder: (context, child) => StartupUpdateGate(child: child!),
-          home: const StoragePermissionGate(child: MainNavigationScreen()),
+          home: StoragePermissionGate(child: MainNavigationScreen()),
         );
       },
     );
@@ -131,10 +145,10 @@ class MainNavigationScreen extends StatefulWidget {
 /// One entry in the app's section back-stack. Browsers carry their own site so
 /// a system back can land on the exact browser the user previously visited.
 class _AppSection {
-  const _AppSection(this.index, {this.site});
+  _AppSection(this.index, {this.site});
 
   /// -1 represents the in-app browser; 0..4 are the bottom navigation tabs.
-  static const int browser = -1;
+  static int browser = -1;
 
   final int index;
   final SiteModel? site;
@@ -150,7 +164,30 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     super.initState();
     // Hide the OS bottom gesture pill; only our floating nav pill remains.
     SystemUiService.instance.start();
+    _lastDownloadCount = DownloadManager.instance.activeTasks.length;
+    DownloadManager.instance.addListener(_onDownloadCountChanged);
   }
+
+  @override
+  void dispose() {
+    DownloadManager.instance.removeListener(_onDownloadCountChanged);
+    super.dispose();
+  }
+
+  /// A new download pulse makes the Downloads tab arrow dip and bounce back,
+  /// while the badge count grows with the live active-task count.
+  void _onDownloadCountChanged() {
+    final count = DownloadManager.instance.activeTasks.length;
+    if (count > _lastDownloadCount && mounted) {
+      setState(() => _downloadPulseTick++);
+    }
+    _lastDownloadCount = count;
+  }
+
+  /// One-shot scale key per tab, replayed only when that tab is tapped.
+  final List<int> _navTapTicks = List<int>.filled(5, 0);
+  int _downloadPulseTick = 0;
+  int _lastDownloadCount = 0;
 
   int _currentIndex = 0;
   String? _searchQuery;
@@ -160,7 +197,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   /// Top of this list is the section currently on screen.
   final List<_AppSection> _sectionHistory = [
-    const _AppSection(0), // Home
+    _AppSection(0), // Home
   ];
 
   bool get _isBrowserActive => _activeBrowserSite != null;
@@ -197,13 +234,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _sectionHistory.removeLast();
     }
     if (_sectionHistory.isEmpty || !_sectionHistory.last.isHome) {
-      _sectionHistory.add(const _AppSection(0));
+      _sectionHistory.add(_AppSection(0));
     }
     _applySection(_sectionHistory.last);
   }
 
   void _selectTab(int index) {
     HapticFeedback.selectionClick();
+    setState(() => _navTapTicks[index]++);
     if (!_isBrowserActive && _currentIndex == index) return;
     _pushSection(_AppSection(index));
     _applySection(_sectionHistory.last);
@@ -228,11 +266,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final now = DateTime.now();
     final previous = _lastBackAt;
     if (previous == null ||
-        now.difference(previous) > const Duration(seconds: 2)) {
+        now.difference(previous) > Duration(seconds: 2)) {
       _lastBackAt = now;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Press back again to exit'),
             behavior: SnackBarBehavior.floating,
             duration: Duration(seconds: 2),
@@ -252,6 +290,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         defaultTargetPlatform != TargetPlatform.android &&
         defaultTargetPlatform != TargetPlatform.iOS;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = context.palette;
 
     final Widget mainTabContent = _activeBrowserSite != null
         ? BrowserScreen(
@@ -269,10 +308,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     final screens = [
       mainTabContent,
-      const VaultScreen(),
-      const MovieScreen(),
-      const DownloadsScreen(),
-      const SettingsScreen(),
+      VaultScreen(),
+      MovieScreen(),
+      DownloadsScreen(),
+      SettingsScreen(),
     ];
 
     final content = IndexedStack(
@@ -289,10 +328,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body = Scaffold(
         body: Row(
           children: [
-            _buildSideRail(isDark),
-            const VerticalDivider(thickness: 1, width: 1),
+            _buildSideRail(),
+            VerticalDivider(thickness: 1, width: 1),
             Expanded(
-              child: Stack(children: [content, const YouTubePopupPlayer()]),
+              child: Stack(children: [content, YouTubePopupPlayer()]),
             ),
           ],
         ),
@@ -320,49 +359,34 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             fit: StackFit.expand,
             children: [
               content,
-              const YouTubePopupPlayer(miniPlayerBottom: 104),
+              YouTubePopupPlayer(miniPlayerBottom: 104),
             ],
           ),
           bottomNavigationBar: ListenableBuilder(
             listenable: PlayerService.instance,
             builder: (context, child) => PlayerService.instance.isExpanded
-                ? const SizedBox.shrink()
+                ? SizedBox.shrink()
                 : child!,
             child: SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Center(
                   heightFactor: 1,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
+                    constraints: BoxConstraints(maxWidth: 440),
                     child: Container(
                       height: 68,
                       decoration: BoxDecoration(
-                        // Solid, opaque surface — a crisp bar reads cleaner than
-                        // a blurred/translucent one over a busy video feed.
-                        color: isDark ? AppColors.darkCard : Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                          width: 1,
-                        ),
+                        // One clean floating bar — no border, no inner boxes.
+                        color: p.card,
+                        borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: isDark ? 0.50 : 0.12,
-                            ),
+                            color: p.shadowAt(isDark ? 0.42 : 0.16),
                             blurRadius: 24,
-                            spreadRadius: -10,
-                            offset: const Offset(0, 8),
-                          ),
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.07),
-                            blurRadius: 18,
-                            spreadRadius: -12,
-                            offset: const Offset(0, 2),
+                            spreadRadius: -8,
+                            offset: Offset(0, 10),
                           ),
                         ],
                       ),
@@ -425,13 +449,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   // ---------------------------------------------------------------------------
   // Desktop side rail
   // ---------------------------------------------------------------------------
-  Widget _buildSideRail(bool isDark) {
+  Widget _buildSideRail() {
+    final p = context.palette;
     return Container(
       width: 96,
-      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+      color: p.card,
       child: Column(
         children: [
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           ClipRRect(
             borderRadius: BorderRadius.circular(13),
             child: Image.asset(
@@ -440,19 +465,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               height: 40,
             ),
           ),
-          const SizedBox(height: 6),
-          const Text(
+          SizedBox(height: 6),
+          Text(
             'All in One',
             style: TextStyle(
-              color: AppColors.primary,
+              color: p.primary,
               fontWeight: FontWeight.w800,
               fontSize: 11,
               letterSpacing: 0.6,
             ),
           ),
-          const SizedBox(height: 18),
-          const Divider(height: 1, indent: 16, endIndent: 16),
-          const SizedBox(height: 10),
+          SizedBox(height: 18),
+          Divider(height: 1, indent: 16, endIndent: 16),
+          SizedBox(height: 10),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -500,40 +525,32 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     bool showBadge = false,
   }) {
     final selected = _currentIndex == index;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final muted = isDark ? Colors.white54 : Colors.black45;
+    final p = context.palette;
+    final muted = p.textSecondary;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _selectTab(index),
           borderRadius: BorderRadius.circular(14),
-          splashColor: AppColors.primary.withValues(alpha: 0.10),
-          highlightColor: AppColors.primary.withValues(alpha: 0.05),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            decoration: BoxDecoration(
-              color: selected
-                  ? AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.10)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-            ),
+          splashColor: p.primary.withValues(alpha: 0.10),
+          highlightColor: p.primary.withValues(alpha: 0.05),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _navIcon(icon, activeIcon, selected, muted, showBadge, isDark),
-                const SizedBox(height: 4),
+                _navIcon(icon, activeIcon, selected, muted, showBadge),
+                SizedBox(height: 4),
                 Text(
                   label,
                   maxLines: 1,
                   style: TextStyle(
-                    color: selected ? AppColors.primary : muted,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 10,
+                    color: selected ? p.primary : muted,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    fontSize: 10.5,
                   ),
                 ),
               ],
@@ -555,53 +572,82 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     bool showBadge = false,
   }) {
     final selected = _currentIndex == index;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final muted = isDark ? Colors.white54 : Colors.black45;
+    final p = context.palette;
 
     return Expanded(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _selectTab(index),
-          splashColor: AppColors.primary.withValues(alpha: 0.10),
-          highlightColor: AppColors.primary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(18),
+          splashColor: p.tint(p.primary, 0.08),
+          highlightColor: p.tint(p.primary, 0.04),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  width: 50,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.primary.withValues(
-                            alpha: isDark ? 0.24 : 0.15,
-                          )
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: _navIcon(
-                    icon,
-                    activeIcon,
-                    selected,
-                    muted,
-                    showBadge,
-                    isDark,
-                  ),
+                Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      key: ValueKey<int>(_navTapTicks[index]),
+                      tween: Tween<double>(begin: 0.72, end: 1.0),
+                      duration: const Duration(milliseconds: 460),
+                      curve: Curves.easeOutBack,
+                      builder: (context, scale, child) =>
+                          _navTapTicks[index] == 0
+                              ? child!
+                              : Transform.scale(scale: scale, child: child),
+                      child: _navIcon(
+                        icon,
+                        activeIcon,
+                        selected,
+                        p.textSecondary,
+                        showBadge,
+                      ),
+                    ),
+                    if (index == 3 && _downloadPulseTick > 0)
+                      TweenAnimationBuilder<double>(
+                        key: ValueKey<int>(_downloadPulseTick),
+                        tween: Tween<double>(begin: 0, end: 1),
+                        duration: const Duration(milliseconds: 850),
+                        builder: (context, t, _) {
+                          // Down during the first half, then spring back up.
+                          final down = t < 0.5
+                              ? Curves.easeIn.transform(t * 2) * 14.0
+                              : Curves.easeOut.transform((1 - t) * 2) * 14.0;
+                          final fade = t < 0.5 ? 1.0 : (1 - t) * 2;
+                          return Opacity(
+                            opacity: fade.clamp(0.0, 1.0),
+                            child: Transform.translate(
+                              offset: Offset(0, down),
+                              child: Icon(
+                                Icons.arrow_downward_rounded,
+                                size: 16,
+                                color: p.primary,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
                   style: TextStyle(
-                    color: selected ? AppColors.primary : muted,
+                    color: selected ? p.textPrimary : p.textSecondary,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 10,
+                    fontSize: 11,
                     letterSpacing: 0.1,
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -618,21 +664,32 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     IconData activeIcon,
     bool selected,
     Color muted,
-    bool showBadge,
-    bool isDark,
-  ) {
+    bool showBadge, {
+    Color? activeColor,
+  }) {
+    final p = context.palette;
     return Stack(
       alignment: Alignment.center,
       clipBehavior: Clip.none,
       children: [
         AnimatedScale(
-          duration: const Duration(milliseconds: 280),
+          duration: Duration(milliseconds: 280),
           curve: Curves.easeOutBack,
-          scale: selected ? 1.08 : 1.0,
-          child: Icon(
-            selected ? activeIcon : icon,
-            size: 21,
-            color: selected ? AppColors.primary : muted,
+          scale: selected ? 1.12 : 1.0,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(scale: animation, child: child),
+            ),
+            child: Icon(
+              selected ? activeIcon : icon,
+              key: ValueKey<bool>(selected),
+              size: 23,
+              color: selected ? (activeColor ?? p.primary) : muted,
+            ),
           ),
         ),
         if (showBadge)
@@ -640,31 +697,40 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             animation: DownloadManager.instance,
             builder: (context, _) {
               final count = DownloadManager.instance.activeTasks.length;
-              if (count <= 0) return const SizedBox.shrink();
+              if (count <= 0) return SizedBox.shrink();
               return Positioned(
                 right: -3,
                 top: -4,
                 child: Container(
-                  constraints: const BoxConstraints(
+                  constraints: BoxConstraints(
                     minWidth: 16,
                     minHeight: 16,
                   ),
-                  padding: const EdgeInsets.symmetric(
+                  padding: EdgeInsets.symmetric(
                     horizontal: 3,
                     vertical: 1,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.accentRed,
+                    color: p.secondary,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    count > 9 ? '9+' : '$count',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      height: 1.1,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutBack,
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: Text(
+                      count > 9 ? '9+' : '$count',
+                      key: ValueKey<int>(count),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: p.onSecondary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
                     ),
                   ),
                 ),

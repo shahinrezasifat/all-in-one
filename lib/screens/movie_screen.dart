@@ -10,7 +10,7 @@ import '../services/provider_engine/cloudstream_runtime.dart';
 import '../services/provider_engine/provider_engine_service.dart';
 import '../services/settings_service.dart';
 import '../services/watch_history_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../widgets/home_banner.dart';
 import '../widgets/looping_control_content.dart';
 import '../widgets/movie_card.dart';
@@ -277,20 +277,20 @@ class _MovieScreenState extends State<MovieScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Choose source type'),
+        title: Text('Choose source type'),
         content: Text(
           'Open ${source.provider.name} as a movie catalog or as IPTV channels?',
         ),
         actions: [
           TextButton.icon(
             onPressed: () => Navigator.pop(dialogContext, _SourceMode.movies),
-            icon: const Icon(Icons.movie_outlined),
-            label: const Text('Movies'),
+            icon: Icon(Icons.movie_outlined),
+            label: Text('Movies'),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.pop(dialogContext, _SourceMode.iptv),
-            icon: const Icon(Icons.live_tv_outlined),
-            label: const Text('IPTV'),
+            icon: Icon(Icons.live_tv_outlined),
+            label: Text('IPTV'),
           ),
         ],
       ),
@@ -396,7 +396,7 @@ class _MovieScreenState extends State<MovieScreen> {
     final uri = Uri.tryParse(channel.detailUrl);
     final path = uri?.path.toLowerCase() ?? '';
     final extension = path.split('.').last;
-    const formats = ['m3u8', 'mpd', 'ts'];
+    final formats = ['m3u8', 'mpd', 'ts'];
     if (uri != null &&
         uri.host.isNotEmpty &&
         (formats.contains(extension) ||
@@ -451,7 +451,7 @@ class _MovieScreenState extends State<MovieScreen> {
     return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+          padding: EdgeInsets.fromLTRB(20, 14, 20, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -459,7 +459,7 @@ class _MovieScreenState extends State<MovieScreen> {
                 _source?.provider.name ?? '',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 3),
+              SizedBox(height: 3),
               Text(
                 'IPTV · $count channels loaded',
                 style: TextStyle(color: _colors.onSurfaceVariant),
@@ -487,9 +487,9 @@ class _MovieScreenState extends State<MovieScreen> {
           ),
         ),
       SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
         sliver: SliverGrid.builder(
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 156,
             childAspectRatio: .78,
             crossAxisSpacing: 12,
@@ -501,10 +501,10 @@ class _MovieScreenState extends State<MovieScreen> {
       ),
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
           child: Center(
             child: _loading
-                ? const CircularProgressIndicator()
+                ? CircularProgressIndicator()
                 : _failed
                 ? _retry()
                 : Column(
@@ -518,7 +518,7 @@ class _MovieScreenState extends State<MovieScreen> {
                       if (_hasMore && groups.isNotEmpty)
                         FilledButton.tonal(
                           onPressed: _load,
-                          child: const Text('Load more channels'),
+                          child: Text('Load more channels'),
                         ),
                     ],
                   ),
@@ -535,22 +535,22 @@ class _MovieScreenState extends State<MovieScreen> {
     ValueChanged<String?> onSelect,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: EdgeInsets.only(top: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: 20),
             child: Text(heading, style: Theme.of(context).textTheme.labelLarge),
           ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
                 for (final label in <String?>[null, ...values])
                   Padding(
-                    padding: const EdgeInsets.only(right: 7),
+                    padding: EdgeInsets.only(right: 7),
                     child: ChoiceChip(
                       label: Text(label ?? 'All'),
                       selected: selected == label,
@@ -578,9 +578,9 @@ class _MovieScreenState extends State<MovieScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: ColoredBox(
-                  color: _isDark ? AppColors.darkCard : AppColors.lightCard,
+                  color: context.palette.card,
                   child: Padding(
-                    padding: const EdgeInsets.all(13),
+                    padding: EdgeInsets.all(13),
                     child: SmartNetworkImage(
                       url: channel.posterUrl,
                       fallbackUrl: channel.backdropUrl,
@@ -595,7 +595,7 @@ class _MovieScreenState extends State<MovieScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 5),
+            SizedBox(height: 5),
             Expanded(
               child: Center(
                 child: Text(
@@ -620,7 +620,7 @@ class _MovieScreenState extends State<MovieScreen> {
 
   void _openProviderHub() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ZangetsuProvidersHubScreen()),
+      MaterialPageRoute(builder: (_) => ZangetsuProvidersHubScreen()),
     );
   }
 
@@ -632,14 +632,14 @@ class _MovieScreenState extends State<MovieScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: _colors.surface,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (context) {
         return SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -663,7 +663,7 @@ class _MovieScreenState extends State<MovieScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   'Movies and the home banner follow the source you pick.',
                   style: TextStyle(
@@ -671,7 +671,7 @@ class _MovieScreenState extends State<MovieScreen> {
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 if (sources.isEmpty)
                   Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
@@ -689,7 +689,7 @@ class _MovieScreenState extends State<MovieScreen> {
                       shrinkWrap: true,
                       padding: EdgeInsets.zero,
                       itemCount: sources.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final source = sources[index];
                         final active =
@@ -697,14 +697,14 @@ class _MovieScreenState extends State<MovieScreen> {
                             source.provider.id == _source?.provider.id;
                         return Material(
                           color: active
-                              ? AppColors.primary.withValues(alpha: .18)
+                              ? context.palette.tint(context.palette.primary, .18)
                               : _colors.surfaceContainerHigh,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 5,
                             ),
@@ -741,7 +741,7 @@ class _MovieScreenState extends State<MovieScreen> {
                       },
                     ),
                   ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
                     Navigator.pop(context);
@@ -750,8 +750,8 @@ class _MovieScreenState extends State<MovieScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _colors.onSurface,
                   ),
-                  icon: const Icon(Icons.extension_outlined, size: 18),
-                  label: const Text('Manage sources in Provider Hub'),
+                  icon: Icon(Icons.extension_outlined, size: 18),
+                  label: Text('Manage sources in Provider Hub'),
                 ),
               ],
             ),
@@ -819,7 +819,7 @@ class _MovieScreenState extends State<MovieScreen> {
             await CloudStreamRuntime.genresFor(movie),
           );
         } catch (_) {
-          return MapEntry(movie.detailUrl, const <String>[]);
+          return MapEntry(movie.detailUrl, <String>[]);
         }
       }),
     );
@@ -897,13 +897,11 @@ class _MovieScreenState extends State<MovieScreen> {
   Widget _genreSheet(List<String> list, {required bool canDiscover}) {
     final theme = Theme.of(context);
     final accent = _colors.primary;
-    final secondary = _isDark
-        ? AppColors.darkTextSecondary
-        : AppColors.lightTextSecondary;
+    final secondary = context.palette.textSecondary;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
           child: BackdropFilter(
@@ -914,25 +912,25 @@ class _MovieScreenState extends State<MovieScreen> {
               ),
               decoration: BoxDecoration(
                 color: _isDark
-                    ? const Color(0xE61E1928)
-                    : const Color(0xE8FFFFFF),
+                    ? context.palette.tint(context.palette.card, 0.902)
+                    : context.palette.tint(context.palette.card, 0.910),
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(
                   color: _isDark
-                      ? const Color(0x2AFFFFFF)
-                      : const Color(0x99FFFFFF),
+                      ? context.palette.tint(context.palette.card, 0.165)
+                      : context.palette.tint(context.palette.card, 0.600),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: _isDark ? .5 : .18),
+                    color: context.palette.shadowAt(_isDark ? .5 : .18),
                     blurRadius: 40,
                     spreadRadius: -10,
-                    offset: const Offset(0, 8),
+                    offset: Offset(0, 8),
                   ),
                 ],
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 22),
+                padding: EdgeInsets.fromLTRB(20, 10, 20, 22),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -942,13 +940,13 @@ class _MovieScreenState extends State<MovieScreen> {
                         height: 4,
                         decoration: BoxDecoration(
                           color: _isDark
-                              ? Colors.white.withValues(alpha: .26)
-                              : Colors.black.withValues(alpha: .18),
+                              ? context.palette.tint(context.palette.card, .26)
+                              : context.palette.shadowAt(.18),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: 18),
                     Row(
                       children: [
                         Container(
@@ -972,7 +970,7 @@ class _MovieScreenState extends State<MovieScreen> {
                             size: 21,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -984,7 +982,7 @@ class _MovieScreenState extends State<MovieScreen> {
                                   letterSpacing: -.4,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: 2),
                               Text(
                                 list.isEmpty
                                     ? 'Pick a category to explore'
@@ -999,7 +997,7 @@ class _MovieScreenState extends State<MovieScreen> {
                         IconButton(
                           tooltip: 'Close',
                           onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close_rounded),
+                          icon: Icon(Icons.close_rounded),
                           style: IconButton.styleFrom(
                             backgroundColor: accent.withValues(alpha: .09),
                             foregroundColor: secondary,
@@ -1007,7 +1005,7 @@ class _MovieScreenState extends State<MovieScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: 18),
                     if (canDiscover)
                       _genreActionCard(
                         icon: Icons.auto_awesome_rounded,
@@ -1017,7 +1015,7 @@ class _MovieScreenState extends State<MovieScreen> {
                         secondary: secondary,
                         onTap: () => Navigator.pop(context, '?'),
                       ),
-                    if (canDiscover) const SizedBox(height: 12),
+                    if (canDiscover) SizedBox(height: 12),
                     if (list.isEmpty)
                       _genreNote(
                         icon: _loading
@@ -1033,7 +1031,7 @@ class _MovieScreenState extends State<MovieScreen> {
                         _hasMore &&
                         !_loading &&
                         _source != null) ...[
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                       _genreActionCard(
                         icon: Icons.expand_more_rounded,
                         title: 'Load more titles',
@@ -1044,7 +1042,7 @@ class _MovieScreenState extends State<MovieScreen> {
                       ),
                     ],
                     if (list.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
@@ -1078,7 +1076,7 @@ class _MovieScreenState extends State<MovieScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -1098,9 +1096,9 @@ class _MovieScreenState extends State<MovieScreen> {
                   color: accent,
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(icon, size: 17, color: Colors.white),
+                child: Icon(icon, size: 17, color: context.palette.textPrimary),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1110,7 +1108,7 @@ class _MovieScreenState extends State<MovieScreen> {
                       style: Theme.of(context).textTheme.labelLarge
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall
@@ -1134,18 +1132,18 @@ class _MovieScreenState extends State<MovieScreen> {
     required Color secondary,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _isDark
-            ? Colors.white.withValues(alpha: .05)
-            : Colors.white.withValues(alpha: .7),
+            ? context.palette.tint(context.palette.card, .05)
+            : context.palette.tint(context.palette.card, .7),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: accent.withValues(alpha: .14)),
       ),
       child: Row(
         children: [
           Icon(icon, size: 20, color: accent),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
@@ -1162,17 +1160,17 @@ class _MovieScreenState extends State<MovieScreen> {
     final theme = Theme.of(context);
     final selected = _genre?.toLowerCase() == genre.toLowerCase();
     final text = selected
-        ? Colors.white
-        : (_isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary);
+        ? context.palette.onPrimary
+        : (context.palette.textPrimary);
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         color: selected
             ? accent
             : (_isDark
-                  ? Colors.white.withValues(alpha: .06)
-                  : Colors.white.withValues(alpha: .82)),
+                  ? context.palette.tint(context.palette.card, .06)
+                  : context.palette.tint(context.palette.card, .82)),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: selected ? accent : accent.withValues(alpha: .20),
@@ -1180,9 +1178,9 @@ class _MovieScreenState extends State<MovieScreen> {
         boxShadow: selected
             ? [
                 BoxShadow(
-                  color: accent.withValues(alpha: .32),
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
+                  color: accent.withValues(alpha: .18),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
                 ),
               ]
             : null,
@@ -1193,13 +1191,13 @@ class _MovieScreenState extends State<MovieScreen> {
           borderRadius: BorderRadius.circular(14),
           onTap: () => Navigator.pop(context, selected ? '' : genre),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (selected) ...[
                   Icon(Icons.check_rounded, size: 14, color: text),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6),
                 ],
                 Text(
                   genre,
@@ -1224,13 +1222,13 @@ class _MovieScreenState extends State<MovieScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
-    final bannerMovies = _isLiveTvMode ? const <MovieItem>[] : _bannerMovies();
+    final bannerMovies = _isLiveTvMode ? <MovieItem>[] : _bannerMovies();
     final history = WatchHistoryService.instance.history;
     final visible = _visibleItems;
     final filtered = _category != null || _genre != null;
 
     return Scaffold(
-      backgroundColor: _isDark ? AppColors.darkBg : AppColors.lightBg,
+      backgroundColor: context.palette.background,
       body: Stack(
         children: [
           Positioned.fill(
@@ -1238,7 +1236,7 @@ class _MovieScreenState extends State<MovieScreen> {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
-                    center: const Alignment(0, -.88),
+                    center: Alignment(0, -.88),
                     radius: .75,
                     colors: [
                       _colors.primary.withValues(alpha: _isDark ? .19 : .10),
@@ -1261,7 +1259,7 @@ class _MovieScreenState extends State<MovieScreen> {
                       onPressed: _repository.selectedSource == null
                           ? _openProviderHub
                           : _pickSource,
-                      icon: const Icon(Icons.extension_outlined),
+                      icon: Icon(Icons.extension_outlined),
                       label: Text(
                         _repository.selectedSource == null
                             ? 'Install a source in Provider Hub'
@@ -1305,7 +1303,7 @@ class _MovieScreenState extends State<MovieScreen> {
                   SliverToBoxAdapter(child: _emptyState(filtered: filtered)),
                 if (visible.isNotEmpty)
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
                     sliver: SliverGrid.builder(
                       gridDelegate: MovieCard.catalogGrid,
                       itemCount: visible.length,
@@ -1325,22 +1323,22 @@ class _MovieScreenState extends State<MovieScreen> {
                         (_hasMore && (visible.isNotEmpty || filtered))))
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      padding: EdgeInsets.symmetric(vertical: 18),
                       child: Center(
                         child: _loading
-                            ? const CircularProgressIndicator()
+                            ? CircularProgressIndicator()
                             : _failed
                             ? _retry()
                             : FilledButton.tonalIcon(
                                 onPressed: filtered ? _loadMoreMatches : _load,
-                                icon: const Icon(Icons.expand_more_rounded),
-                                label: const Text('Load more'),
+                                icon: Icon(Icons.expand_more_rounded),
+                                label: Text('Load more'),
                               ),
                       ),
                     ),
                   )
                 else
-                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                  SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
               SliverToBoxAdapter(
                 child: SizedBox(height: MediaQuery.paddingOf(context).bottom),
@@ -1356,7 +1354,7 @@ class _MovieScreenState extends State<MovieScreen> {
   Widget _movieHeader() => SafeArea(
     bottom: false,
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 0),
+      padding: EdgeInsets.fromLTRB(20, 12, 16, 0),
       child: Row(
         children: [
           Expanded(
@@ -1369,15 +1367,15 @@ class _MovieScreenState extends State<MovieScreen> {
           IconButton(
             tooltip: _isLiveTvMode ? 'Search channels' : 'Search movies',
             iconSize: 16,
-            color: _isDark ? AppColors.primaryLight : AppColors.primaryDark,
-            icon: const Icon(Icons.search_rounded),
+            color: context.palette.primary,
+            icon: Icon(Icons.search_rounded),
             onPressed: () => setState(() => _searchOpen = true),
           ),
           IconButton(
             tooltip: 'Change movie source',
             iconSize: 16,
-            color: _isDark ? AppColors.primaryLight : AppColors.primaryDark,
-            icon: const Icon(Icons.layers_outlined),
+            color: context.palette.primary,
+            icon: Icon(Icons.layers_outlined),
             onPressed: _pickSource,
           ),
         ],
@@ -1390,15 +1388,15 @@ class _MovieScreenState extends State<MovieScreen> {
     left: 14,
     right: 14,
     child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: _colors.surface.withValues(alpha: .97),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: .5),
+            color: context.palette.shadowAt(.5),
             blurRadius: 24,
-            offset: const Offset(0, 10),
+            offset: Offset(0, 10),
           ),
         ],
       ),
@@ -1412,8 +1410,8 @@ class _MovieScreenState extends State<MovieScreen> {
                 height: 38,
                 decoration: BoxDecoration(
                   gradient: _searchAll
-                      ? AppColors.primaryGradient
-                      : AppColors.crimsonGradient,
+                      ? context.palette.primaryGradient
+                      : context.palette.primaryGradient,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -1425,13 +1423,13 @@ class _MovieScreenState extends State<MovieScreen> {
                 ),
               ),
             ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _search,
               focusNode: _focus,
               autofocus: true,
-              cursorColor: AppColors.primaryLight,
+              cursorColor: context.palette.primary,
               style: TextStyle(color: _colors.onSurface, fontSize: 14),
               decoration: InputDecoration(
                 hintText: _isLiveTvMode
@@ -1448,7 +1446,7 @@ class _MovieScreenState extends State<MovieScreen> {
               ),
               onChanged: (value) {
                 _debounce?.cancel();
-                _debounce = Timer(const Duration(milliseconds: 320), () {
+                _debounce = Timer(Duration(milliseconds: 320), () {
                   if (value.trim() != _query) _reset(_source, value.trim());
                 });
               },
@@ -1500,22 +1498,22 @@ class _MovieScreenState extends State<MovieScreen> {
       ('Genres', Icons.category_outlined, 'genres'),
     ];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
+          constraints: BoxConstraints(maxWidth: 720),
           child: Row(
             children: [
               for (final (label, icon, key) in tiles)
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    padding: EdgeInsets.symmetric(horizontal: 3),
                     child: Material(
                       color:
                           _category == key ||
                               (key == 'genres' && _genre != null)
                           ? _colors.primary.withValues(alpha: .15)
-                          : (_isDark ? AppColors.darkCard : Colors.white),
+                          : (context.palette.card),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -1535,9 +1533,9 @@ class _MovieScreenState extends State<MovieScreen> {
                           }
                         },
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          padding: EdgeInsets.symmetric(vertical: 11),
                           child: LoopingControlContent(
-                            interval: const Duration(seconds: 10),
+                            interval: Duration(seconds: 10),
                             delay: Duration(
                               milliseconds:
                                   900 *
@@ -1546,7 +1544,7 @@ class _MovieScreenState extends State<MovieScreen> {
                             child: Column(
                               children: [
                                 if (key == 'genres' && _loadingGenres)
-                                  const SizedBox.square(
+                                  SizedBox.square(
                                     dimension: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
@@ -1554,7 +1552,7 @@ class _MovieScreenState extends State<MovieScreen> {
                                   )
                                 else
                                   Icon(icon, size: 20, color: _colors.primary),
-                                const SizedBox(height: 4),
+                                SizedBox(height: 4),
                                 Text(
                                   label,
                                   style: Theme.of(context)
@@ -1580,16 +1578,16 @@ class _MovieScreenState extends State<MovieScreen> {
     final remove = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove from Continue Watching?'),
+        title: Text('Remove from Continue Watching?'),
         content: Text(item.title),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
+            child: Text('Remove'),
           ),
         ],
       ),
@@ -1604,7 +1602,7 @@ class _MovieScreenState extends State<MovieScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+          padding: EdgeInsets.fromLTRB(18, 18, 18, 8),
           child: Text(
             'Continue Watching',
             style: Theme.of(context).textTheme.titleLarge
@@ -1615,9 +1613,9 @@ class _MovieScreenState extends State<MovieScreen> {
           height: 124,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: 16),
             itemCount: history.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            separatorBuilder: (_, _) => SizedBox(width: 10),
             itemBuilder: (context, index) {
               final item = history[index];
               return GestureDetector(
@@ -1648,7 +1646,7 @@ class _MovieScreenState extends State<MovieScreen> {
                               placeholderColor: _colors.surfaceContainerHighest,
                               placeholderIcon:
                                   Icons.play_circle_outline_rounded,
-                              accentColor: AppColors.primaryLight,
+                              accentColor: context.palette.primary,
                             ),
                             Positioned(
                               left: 0,
@@ -1657,14 +1655,14 @@ class _MovieScreenState extends State<MovieScreen> {
                               height: 3,
                               child: LinearProgressIndicator(
                                 value: item.progress,
-                                backgroundColor: Colors.white30,
-                                color: AppColors.accentRed,
+                                backgroundColor: context.palette.trackBg,
+                                color: context.palette.error,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      SizedBox(height: 5),
                       Text(
                         item.title,
                         maxLines: 1,
@@ -1686,18 +1684,18 @@ class _MovieScreenState extends State<MovieScreen> {
   }
 
   Widget _sectionHeader(String title, {bool showSeeAll = false}) => Padding(
-    padding: const EdgeInsets.fromLTRB(18, 20, 18, 10),
+    padding: EdgeInsets.fromLTRB(18, 20, 18, 10),
     child: Row(
       children: [
         Container(
           width: 4,
           height: 24,
           decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
+            gradient: context.palette.primaryGradient,
             borderRadius: BorderRadius.circular(4),
           ),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         Expanded(
           child: Text(
             title,
@@ -1710,7 +1708,7 @@ class _MovieScreenState extends State<MovieScreen> {
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         if (showSeeAll)
           GestureDetector(
             onTap: _clearFilters,
@@ -1733,7 +1731,7 @@ class _MovieScreenState extends State<MovieScreen> {
   );
 
   Widget _emptyState({bool filtered = false}) => Padding(
-    padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+    padding: EdgeInsets.fromLTRB(24, 16, 24, 40),
     child: Column(
       children: [
         Icon(
@@ -1741,7 +1739,7 @@ class _MovieScreenState extends State<MovieScreen> {
           size: 40,
           color: _colors.onSurfaceVariant,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         Text(
           _failed
               ? 'Could not load ${_source?.provider.name ?? 'this source'}'
@@ -1754,7 +1752,7 @@ class _MovieScreenState extends State<MovieScreen> {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         Text(
           filtered && _hasMore && !_failed
               ? 'Load more titles to keep looking in this source.'
@@ -1762,7 +1760,7 @@ class _MovieScreenState extends State<MovieScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(color: _colors.onSurfaceVariant, fontSize: 12.5),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         Wrap(
           alignment: WrapAlignment.center,
           spacing: 8,
@@ -1773,8 +1771,8 @@ class _MovieScreenState extends State<MovieScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: _colors.onSurface,
               ),
-              icon: const Icon(Icons.swap_horiz_rounded, size: 17),
-              label: const Text('Change source'),
+              icon: Icon(Icons.swap_horiz_rounded, size: 17),
+              label: Text('Change source'),
             ),
           ],
         ),
@@ -1783,8 +1781,8 @@ class _MovieScreenState extends State<MovieScreen> {
   );
 
   Widget _retry({VoidCallback? onPressed}) => FilledButton.tonalIcon(
-    icon: const Icon(Icons.refresh_rounded),
-    label: const Text('Retry'),
+    icon: Icon(Icons.refresh_rounded),
+    label: Text('Retry'),
     onPressed: onPressed ?? _load,
   );
 }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../models/movie_model.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'movie_detail_sheet.dart';
 import 'remote_image.dart';
 
 class MovieCard extends StatelessWidget {
-  static const catalogGrid = SliverGridDelegateWithMaxCrossAxisExtent(
+  static final catalogGrid = SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: 150,
     childAspectRatio: .62,
     crossAxisSpacing: 12,
@@ -17,7 +17,7 @@ class MovieCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool compact;
 
-  const MovieCard({
+  MovieCard({
     super.key,
     required this.movie,
     this.onTap,
@@ -31,15 +31,15 @@ class MovieCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(16),
         boxShadow: compact
             ? null
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                  color: context.palette.shadowAt(isDark ? 0.35 : 0.08),
                   blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  offset: Offset(0, 4),
                 ),
               ],
       ),
@@ -60,15 +60,15 @@ class MovieCard extends StatelessWidget {
                       SmartNetworkImage(
                         url: movie.posterUrl,
                         fit: BoxFit.cover,
-                        placeholderColor: AppColors.darkSurface,
+                        placeholderColor: context.palette.surface,
                         placeholderIcon:
                             movie.genres.contains('Music') ||
                                 movie.genres.contains('Audio')
                             ? Icons.music_note_rounded
                             : Icons.movie_rounded,
                         accentColor: compact
-                            ? AppColors.accentBlue
-                            : AppColors.primary,
+                            ? context.palette.info
+                            : context.palette.primary,
                       ),
 
                       if (!compact) ...[
@@ -83,7 +83,7 @@ class MovieCard extends StatelessWidget {
                               gradient: LinearGradient(
                                 colors: [
                                   Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.85),
+                                  context.palette.shadowAt(0.85),
                                 ],
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
@@ -97,7 +97,7 @@ class MovieCard extends StatelessWidget {
                             top: 8,
                             left: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
+                              padding: EdgeInsets.symmetric(
                                 horizontal: 6,
                                 vertical: 3,
                               ),
@@ -105,14 +105,14 @@ class MovieCard extends StatelessWidget {
                                 color:
                                     movie.quality.contains('FLAC') ||
                                         movie.quality.contains('320')
-                                    ? const Color(0xFF1DB954)
+                                    ? context.palette.success
                                     : (movie.quality.contains('4K')
-                                          ? AppColors.accentGold
-                                          : AppColors.primary),
+                                          ? context.palette.info
+                                          : context.palette.primary),
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.4),
+                                    color: context.palette.shadowAt(0.4),
                                     blurRadius: 4,
                                   ),
                                 ],
@@ -123,8 +123,8 @@ class MovieCard extends StatelessWidget {
                                     : (movie.quality.contains('4K')
                                           ? '4K UHD'
                                           : quality),
-                                style: const TextStyle(
-                                  color: Colors.black,
+                                style: TextStyle(
+                                  color: context.palette.background,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -137,27 +137,27 @@ class MovieCard extends StatelessWidget {
                           top: 8,
                           right: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
+                            padding: EdgeInsets.symmetric(
                               horizontal: 6,
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.85),
+                              color: context.palette.shadowAt(0.85),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.star_rounded,
-                                  color: Colors.amber,
+                                  color: context.palette.info,
                                   size: 12,
                                 ),
-                                const SizedBox(width: 3),
+                                SizedBox(width: 3),
                                 Text(
                                   '${movie.rating}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: context.palette.onScrim,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -173,19 +173,19 @@ class MovieCard extends StatelessWidget {
                             bottom: 8,
                             left: 8,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
+                              padding: EdgeInsets.symmetric(
                                 horizontal: 6,
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFF4D57)
+                                color: context.palette.error
                                     .withValues(alpha: 0.88),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 movie.providerName,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: context.palette.onScrim,
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -198,7 +198,7 @@ class MovieCard extends StatelessWidget {
                           bottom: 8,
                           right: 8,
                           child: Material(
-                            color: AppColors.primary,
+                            color: context.palette.primary,
                             borderRadius: BorderRadius.circular(20),
                             child: InkWell(
                               onTap:
@@ -206,10 +206,10 @@ class MovieCard extends StatelessWidget {
                                   () => MovieDetailSheet.show(context, movie),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
-                                padding: const EdgeInsets.all(6),
-                                child: const Icon(
+                                padding: EdgeInsets.all(6),
+                                child: Icon(
                                   Icons.download_rounded,
-                                  color: Colors.white,
+                                  color: context.palette.onPrimary,
                                   size: 16,
                                 ),
                               ),
@@ -224,8 +224,8 @@ class MovieCard extends StatelessWidget {
                 // Title and Info
                 Padding(
                   padding: compact
-                      ? const EdgeInsets.fromLTRB(8, 7, 8, 8)
-                      : const EdgeInsets.all(8),
+                      ? EdgeInsets.fromLTRB(8, 7, 8, 8)
+                      : EdgeInsets.all(8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -241,7 +241,7 @@ class MovieCard extends StatelessWidget {
                         ),
                       ),
                       if (!compact) ...[
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -252,13 +252,11 @@ class MovieCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: isDark
-                                      ? AppColors.darkTextSecondary
-                                      : AppColors.lightTextSecondary,
+                                  color: context.palette.textSecondary,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 4),
+                            SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 movie.duration,
@@ -267,9 +265,7 @@ class MovieCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: isDark
-                                      ? Colors.white60
-                                      : Colors.black54,
+                                  color: context.palette.textSecondary,
                                 ),
                               ),
                             ),

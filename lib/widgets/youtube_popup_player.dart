@@ -14,12 +14,12 @@ import '../services/player_service.dart';
 import '../screens/audio_player_screen.dart';
 import '../services/playback_controls.dart';
 import '../services/search_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'analyze_download_flow.dart';
 import 'remote_image.dart';
 
 class _PlayerCaptions implements ClosedCaptionFile {
-  const _PlayerCaptions(this.captions);
+  _PlayerCaptions(this.captions);
 
   @override
   final List<Caption> captions;
@@ -110,7 +110,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
   }
 
   Future<void> _requestOrientation(bool fullscreen) async {
-    if (!const [
+    if (![
       TargetPlatform.android,
       TargetPlatform.iOS,
     ].contains(defaultTargetPlatform))
@@ -120,11 +120,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
     );
     await SystemChrome.setPreferredOrientations(
       fullscreen
-          ? const [
+          ? [
               DeviceOrientation.landscapeLeft,
               DeviceOrientation.landscapeRight,
             ]
-          : const [DeviceOrientation.portraitUp],
+          : [DeviceOrientation.portraitUp],
     );
     if (!fullscreen) await SystemUiService.instance.hideBottomBar();
   }
@@ -233,12 +233,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
     required Future<bool> Function(T value) onSelect,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppColors.darkCard : Colors.white;
-    final border = isDark ? AppColors.darkBorder : AppColors.lightBorder;
-    final accent = isDark ? AppColors.primaryLight : AppColors.primary;
-    final secondary = isDark
-        ? AppColors.darkTextSecondary
-        : AppColors.lightTextSecondary;
+    final surface = context.palette.card;
+    final border = context.palette.border;
+    final accent = context.palette.primary;
+    final secondary = context.palette.textSecondary;
 
     showModalBottomSheet(
       context: context,
@@ -247,13 +245,13 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
       builder: (ctx) => Container(
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? .45 : .14),
+              color: context.palette.shadowAt(isDark ? .45 : .14),
               blurRadius: 26,
               spreadRadius: -8,
-              offset: const Offset(0, -6),
+              offset: Offset(0, -6),
             ),
           ],
         ),
@@ -267,7 +265,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                 child: Container(
                   width: 40,
                   height: 4,
-                  margin: const EdgeInsets.only(top: 10, bottom: 14),
+                  margin: EdgeInsets.only(top: 10, bottom: 14),
                   decoration: BoxDecoration(
                     color: secondary.withValues(alpha: .4),
                     borderRadius: BorderRadius.circular(4),
@@ -275,19 +273,19 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
                     Container(
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
+                        gradient: context.palette.primaryGradient,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(icon, color: Colors.white, size: 21),
+                      child: Icon(icon, color: context.palette.onScrim, size: 21),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         title,
@@ -295,21 +293,21 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
                           color: isDark
-                              ? Colors.white
-                              : AppColors.lightTextPrimary,
+                              ? context.palette.card
+                              : context.palette.textPrimary,
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Divider(height: 1, color: border),
               Flexible(
                 child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 20),
                   itemCount: options.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => SizedBox(height: 8),
                   itemBuilder: (_, index) {
                     final option = options[index];
                     final isSelected = option.value == selected;
@@ -330,13 +328,13 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                     : (playerErrorMessage(context) ??
                                           'Could not switch this stream.'),
                               ),
-                              duration: const Duration(seconds: 2),
+                              duration: Duration(seconds: 2),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 11,
                           ),
@@ -344,8 +342,8 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             color: isSelected
                                 ? accent.withValues(alpha: .10)
                                 : (isDark
-                                      ? Colors.white.withValues(alpha: .04)
-                                      : AppColors.lightBg),
+                                      ? context.palette.tint(context.palette.card, .04)
+                                      : context.palette.background),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: isSelected
@@ -369,12 +367,12 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                         color: isSelected
                                             ? accent
                                             : (isDark
-                                                  ? Colors.white
-                                                  : AppColors.lightTextPrimary),
+                                                  ? context.palette.card
+                                                  : context.palette.textPrimary),
                                       ),
                                     ),
                                     if (option.subtitle != null) ...[
-                                      const SizedBox(height: 2),
+                                      SizedBox(height: 2),
                                       Text(
                                         option.subtitle!,
                                         style: TextStyle(
@@ -478,7 +476,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
@@ -489,19 +487,19 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
               Container(
                 width: 40,
                 height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 12),
+                margin: EdgeInsets.only(top: 10, bottom: 12),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.4),
+                  color: context.palette.tint(context.palette.textSecondary, 0.4),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Icon(
                       Icons.timer_rounded,
-                      color: AppColors.accentGold,
+                      color: context.palette.info,
                       size: 20,
                     ),
                     SizedBox(width: 8),
@@ -515,7 +513,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                   ],
                 ),
               ),
-              const Divider(),
+              Divider(),
               ...options.map((opt) {
                 final min = opt['min'] as int?;
                 final isSelected = player.sleepTimerMinutes == min;
@@ -529,9 +527,9 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     ),
                   ),
                   trailing: isSelected
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_circle_rounded,
-                          color: AppColors.accentGold,
+                          color: context.palette.info,
                         )
                       : null,
                   onTap: () {
@@ -544,7 +542,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                               ? 'Sleep timer set for $min minutes'
                               : 'Sleep timer turned off',
                         ),
-                        duration: const Duration(seconds: 1),
+                        duration: Duration(seconds: 1),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -570,11 +568,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF181B26) : Colors.white,
+        backgroundColor: isDark ? context.palette.surface : context.palette.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.analytics_rounded, color: Colors.cyanAccent),
+            Icon(Icons.analytics_rounded, color: context.palette.info),
             SizedBox(width: 8),
             Text(
               'Stats for Nerds',
@@ -619,12 +617,12 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(backgroundColor: context.palette.primary),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               'Close',
               style: TextStyle(
-                color: Colors.white,
+                color: context.palette.onPrimary,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -636,7 +634,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
 
   Widget _statRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -644,9 +642,9 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
             width: 105,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: Colors.grey,
+                color: context.palette.textSecondary,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -656,7 +654,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
               value,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -674,7 +672,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
       builder: (context, _) {
         final player = PlayerService.instance;
         if (player.isHidden || !player.hasMedia) {
-          return const SizedBox.shrink();
+          return SizedBox.shrink();
         }
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -710,7 +708,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                 if (!didPop) _setFullscreen(false);
               },
               child: Material(
-                color: Colors.black,
+                color: context.palette.background,
                 child: _buildVideoSurface(context, player),
               ),
             ),
@@ -729,20 +727,20 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
               }
             },
             child: Material(
-              color: isDark ? AppColors.darkBg : AppColors.lightBg,
+              color: context.palette.background,
               child: SafeArea(
                 child: Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                            icon: Icon(Icons.keyboard_arrow_down_rounded),
                             tooltip: 'Minimize video',
                             onPressed: player.minimize,
                           ),
-                          const Expanded(
+                          Expanded(
                             child: Text(
                               'Now playing',
                               style: TextStyle(
@@ -765,7 +763,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     // Scrollable Video Details & Related Videos
                     Expanded(
                       child: ListView(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
                         ),
@@ -773,13 +771,13 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                           // Title
                           Text(
                             player.title,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
                               height: 1.25,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: 6),
 
                           // Views & Upload Date
                           Row(
@@ -790,36 +788,32 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: isDark
-                                        ? AppColors.darkTextSecondary
-                                        : AppColors.lightTextSecondary,
+                                    color: context.palette.textSecondary,
                                     fontSize: 12,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 14),
+                          SizedBox(height: 14),
 
                           // Channel Row
                           Row(
                             children: [
                               CircleAvatar(
                                 radius: 18,
-                                backgroundColor: AppColors.primary.withValues(
-                                  alpha: 0.2,
-                                ),
+                                backgroundColor: context.palette.tint(context.palette.primary, 0.2,),
                                 child: Text(
                                   player.author.isNotEmpty
                                       ? player.author[0].toUpperCase()
                                       : 'Y',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
+                                    color: context.palette.primary,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,7 +825,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                             player.author,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 13,
                                             ),
@@ -854,32 +848,32 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                             ? 'Subscribed to ${player.author}'
                                             : 'Unsubscribed',
                                       ),
-                                      duration: const Duration(seconds: 1),
+                                      duration: Duration(seconds: 1),
                                       behavior: SnackBarBehavior.floating,
                                     ),
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: _isSubscribed
-                                      ? Colors.grey.shade700
-                                      : AppColors.primary,
-                                  foregroundColor: Colors.white,
+                                      ? context.palette.textSecondary
+                                      : context.palette.primary,
+                                  foregroundColor: context.palette.card,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(20),
                                   ),
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                     horizontal: 16,
                                     vertical: 8,
                                   ),
                                 ),
                                 child: Text(
                                   _isSubscribed ? 'Subscribed' : 'Subscribe',
-                                  style: const TextStyle(fontSize: 12),
+                                  style: TextStyle(fontSize: 12),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          SizedBox(height: 16),
 
                           // Advanced Action Buttons Row (Download, Audio Mode, Speed, Loop, Sleep Timer, Like, Share, Save)
                           SingleChildScrollView(
@@ -895,7 +889,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                     onTap: () =>
                                         analyzeAndPickFormat(context, url: url),
                                   ),
-                                  const SizedBox(width: 8),
+                                  SizedBox(width: 8),
                                 ],
 
                                 // 6. Like Button
@@ -913,7 +907,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                     HapticFeedback.lightImpact();
                                   },
                                 ),
-                                const SizedBox(width: 8),
+                                SizedBox(width: 8),
 
                                 // 7. Dislike Button
                                 _buildActionButton(
@@ -929,7 +923,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                     });
                                   },
                                 ),
-                                const SizedBox(width: 8),
+                                SizedBox(width: 8),
 
                                 // 8. Share Button
                                 _buildActionButton(
@@ -941,11 +935,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                     );
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: const Row(
+                                        content: Row(
                                           children: [
                                             Icon(
                                               Icons.link_rounded,
-                                              color: Colors.white,
+                                              color: context.palette.onScrim,
                                             ),
                                             SizedBox(width: 8),
                                             Text(
@@ -953,7 +947,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                             ),
                                           ],
                                         ),
-                                        duration: const Duration(seconds: 2),
+                                        duration: Duration(seconds: 2),
                                         behavior: SnackBarBehavior.floating,
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
@@ -964,7 +958,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                     );
                                   },
                                 ),
-                                const SizedBox(width: 8),
+                                SizedBox(width: 8),
 
                                 // 9. Save / Bookmark Button
                                 _buildActionButton(
@@ -982,11 +976,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                         SnackBar(
                                           content: Row(
                                             children: [
-                                              const Icon(
+                                              Icon(
                                                 Icons.bookmark_added_rounded,
-                                                color: AppColors.primary,
+                                                color: context.palette.primary,
                                               ),
-                                              const SizedBox(width: 8),
+                                              SizedBox(width: 8),
                                               Expanded(
                                                 child: Text(
                                                   'Saved "${player.title}" to Bookmarks!',
@@ -994,7 +988,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                               ),
                                             ],
                                           ),
-                                          duration: const Duration(seconds: 2),
+                                          duration: Duration(seconds: 2),
                                           behavior: SnackBarBehavior.floating,
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(
@@ -1009,7 +1003,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          SizedBox(height: 24),
                           if (player.currentItem == null)
                             ListenableBuilder(
                               listenable: DownloadManager.instance,
@@ -1035,7 +1029,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                     for (final task in downloads)
                                       ListTile(
                                         contentPadding: EdgeInsets.zero,
-                                        leading: const Icon(
+                                        leading: Icon(
                                           Icons.video_file_outlined,
                                         ),
                                         title: Text(
@@ -1059,7 +1053,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                               future: upNext,
                               builder: (context, snapshot) {
                                 final videos =
-                                    snapshot.data ?? const <VideoItem>[];
+                                    snapshot.data ?? <VideoItem>[];
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1069,10 +1063,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                           .textTheme
                                           .titleMedium,
                                     ),
-                                    const SizedBox(height: 12),
+                                    SizedBox(height: 12),
                                     if (snapshot.connectionState !=
                                         ConnectionState.done)
-                                      const LinearProgressIndicator()
+                                      LinearProgressIndicator()
                                     else if (videos.isEmpty)
                                       Row(
                                         children: [
@@ -1091,11 +1085,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                           ),
                                           TextButton.icon(
                                             onPressed: _retryUpNext,
-                                            icon: const Icon(
+                                            icon: Icon(
                                               Icons.refresh_rounded,
                                               size: 16,
                                             ),
-                                            label: const Text('Retry'),
+                                            label: Text('Retry'),
                                           ),
                                         ],
                                       ),
@@ -1106,7 +1100,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                         },
                                         borderRadius: BorderRadius.circular(12),
                                         child: Padding(
-                                          padding: const EdgeInsets.symmetric(
+                                          padding: EdgeInsets.symmetric(
                                             vertical: 6,
                                           ),
                                           child: Row(
@@ -1122,22 +1116,22 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                                       height: 74,
                                                       fit: BoxFit.cover,
                                                       placeholderColor:
-                                                          Colors.grey.shade900,
+                                                          context.palette.textSecondary,
                                                       placeholderIcon:
                                                           Icons.movie,
-                                                      accentColor: Colors.white,
+                                                      accentColor: context.palette.card,
                                                     ),
                                                     Positioned(
                                                       bottom: 4,
                                                       right: 4,
                                                       child: Container(
                                                         padding:
-                                                            const EdgeInsets.symmetric(
+                                                            EdgeInsets.symmetric(
                                                               horizontal: 4,
                                                               vertical: 1,
                                                             ),
                                                         decoration: BoxDecoration(
-                                                          color: Colors.black87,
+                                                          color: context.palette.textPrimary,
                                                           borderRadius:
                                                               BorderRadius.circular(
                                                                 4,
@@ -1146,7 +1140,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                                         child: Text(
                                                           video.duration,
                                                           style:
-                                                              const TextStyle(
+                                                              TextStyle(
                                                                 color: Colors
                                                                     .white,
                                                                 fontSize: 10,
@@ -1160,7 +1154,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                                   ],
                                                 ),
                                               ),
-                                              const SizedBox(width: 12),
+                                              SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
@@ -1171,17 +1165,17 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                                       maxLines: 2,
                                                       overflow:
                                                           TextOverflow.ellipsis,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.w600,
                                                         fontSize: 13,
                                                       ),
                                                     ),
-                                                    const SizedBox(height: 4),
+                                                    SizedBox(height: 4),
                                                     Text(
                                                       '${video.author} • ${video.views}',
-                                                      style: const TextStyle(
-                                                        color: Colors.grey,
+                                                      style: TextStyle(
+                                                        color: context.palette.textSecondary,
                                                         fontSize: 11,
                                                       ),
                                                     ),
@@ -1197,7 +1191,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                 );
                               },
                             ),
-                          const SizedBox(height: 40),
+                          SizedBox(height: 40),
                         ],
                       ),
                     ),
@@ -1227,14 +1221,14 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
     Color fgColor;
 
     if (isHighlight) {
-      bgColor = AppColors.primary;
-      fgColor = Colors.white;
+      bgColor = context.palette.primary;
+      fgColor = context.palette.card;
     } else if (isActive) {
-      bgColor = AppColors.primary.withValues(alpha: 0.20);
-      fgColor = AppColors.primary;
+      bgColor = context.palette.tint(context.palette.primary, 0.20);
+      fgColor = context.palette.primary;
     } else {
-      bgColor = isDark ? AppColors.darkCard : Colors.grey.shade200;
-      fgColor = isDark ? Colors.white : Colors.black87;
+      bgColor = context.palette.card;
+      fgColor = context.palette.textPrimary;
     }
 
     return Material(
@@ -1244,13 +1238,13 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 16, color: fgColor),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
@@ -1274,7 +1268,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
         ? MediaQuery.viewPaddingOf(context)
         : EdgeInsets.zero;
     final surface = LayoutBuilder(
-      key: const ValueKey("video-player-surface"),
+      key: ValueKey("video-player-surface"),
       builder: (context, constraints) {
         final surfaceWidth = constraints.maxWidth;
         final surfaceHeight = constraints.maxHeight;
@@ -1369,7 +1363,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                       _showVolumeHUD = !brightness;
                     });
                     _hudTimer?.cancel();
-                    _hudTimer = Timer(const Duration(milliseconds: 1400), () {
+                    _hudTimer = Timer(Duration(milliseconds: 1400), () {
                       if (mounted) {
                         setState(() {
                           _showBrightnessHUD = false;
@@ -1403,9 +1397,9 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                   SmartNetworkImage(
                     url: player.thumbnailUrl,
                     fit: BoxFit.cover,
-                    placeholderColor: Colors.black,
+                    placeholderColor: context.palette.background,
                     placeholderIcon: Icons.movie,
-                    accentColor: AppColors.primary,
+                    accentColor: context.palette.primary,
                   ),
 
                 // 2. DOUBLE TAP AREAS (Left 35% skip -10s, Right 35% skip +10s)
@@ -1423,7 +1417,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             setState(() => _doubleTapSide = 'left');
                             _doubleTapTimer?.cancel();
                             _doubleTapTimer = Timer(
-                              const Duration(milliseconds: 650),
+                              Duration(milliseconds: 650),
                               () {
                                 if (mounted)
                                   setState(() => _doubleTapSide = null);
@@ -1432,7 +1426,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                           },
                         ),
                       ),
-                      const Expanded(flex: 30, child: SizedBox.shrink()),
+                      Expanded(flex: 30, child: SizedBox.shrink()),
                       // Right 35% for double tap forward
                       Expanded(
                         flex: 35,
@@ -1444,7 +1438,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             setState(() => _doubleTapSide = 'right');
                             _doubleTapTimer?.cancel();
                             _doubleTapTimer = Timer(
-                              const Duration(milliseconds: 650),
+                              Duration(milliseconds: 650),
                               () {
                                 if (mounted)
                                   setState(() => _doubleTapSide = null);
@@ -1464,27 +1458,27 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     bottom: 0,
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black87,
+                          color: context.palette.scrimAt(0.85),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               Icons.replay_10_rounded,
-                              color: AppColors.primary,
+                              color: context.palette.onScrim,
                               size: 24,
                             ),
                             SizedBox(width: 4),
                             Text(
                               '10s',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: context.palette.onPrimary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -1502,21 +1496,21 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     bottom: 0,
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black87,
+                          color: context.palette.scrimAt(0.85),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               '10s',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: context.palette.onPrimary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -1524,7 +1518,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             SizedBox(width: 4),
                             Icon(
                               Icons.forward_10_rounded,
-                              color: AppColors.primary,
+                              color: context.palette.onScrim,
                               size: 24,
                             ),
                           ],
@@ -1541,23 +1535,23 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     bottom: 0,
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black87.withValues(alpha: 0.85),
+                          color: context.palette.scrimAt(0.85),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.brightness_6_rounded,
-                              color: Colors.amber,
+                              color: context.palette.onScrim,
                               size: 20,
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             SizedBox(
                               height: 80,
                               width: 8,
@@ -1567,20 +1561,20 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                   quarterTurns: 3,
                                   child: LinearProgressIndicator(
                                     value: player.brightness,
-                                    backgroundColor: Colors.white24,
+                                    backgroundColor: context.palette.tint(context.palette.onScrim, 0.24),
                                     valueColor:
-                                        const AlwaysStoppedAnimation<Color>(
-                                          Colors.amber,
+                                        AlwaysStoppedAnimation<Color>(
+                                          context.palette.onScrim,
                                         ),
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
                               '${(player.brightness * 100).toInt()}%',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: context.palette.onScrim,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1598,12 +1592,12 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     bottom: 0,
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black87.withValues(alpha: 0.85),
+                          color: context.palette.scrimAt(0.85),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Column(
@@ -1615,10 +1609,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                   : (_volumeHud > 0
                                         ? Icons.volume_down_rounded
                                         : Icons.volume_off_rounded),
-                              color: AppColors.primary,
+                              color: context.palette.onScrim,
                               size: 20,
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             SizedBox(
                               height: 80,
                               width: 8,
@@ -1628,20 +1622,20 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                   quarterTurns: 3,
                                   child: LinearProgressIndicator(
                                     value: _volumeHud,
-                                    backgroundColor: Colors.white24,
+                                    backgroundColor: context.palette.tint(context.palette.onScrim, 0.24),
                                     valueColor:
-                                        const AlwaysStoppedAnimation<Color>(
-                                          AppColors.primary,
+                                        AlwaysStoppedAnimation<Color>(
+                                          context.palette.onScrim,
                                         ),
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
                               '${(_volumeHud * 100).toInt()}%',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: context.palette.onScrim,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1660,35 +1654,33 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     right: 0,
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding: EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black87,
+                          color: context.palette.scrimAt(0.85),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.accentGold.withValues(
-                                alpha: 0.4,
-                              ),
+                              color: context.palette.tint(context.palette.info, 0.4,),
                               blurRadius: 10,
                             ),
                           ],
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               Icons.fast_forward_rounded,
-                              color: AppColors.accentGold,
+                              color: context.palette.onScrim,
                               size: 16,
                             ),
                             SizedBox(width: 6),
                             Text(
                               '2X Fast Forward',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: context.palette.onScrim,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
@@ -1723,16 +1715,16 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                   ),
 
                 if ((_showControls || preview != null) && !player.isLocked) ...[
-                  const IgnorePointer(
+                  IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.black54,
+                            context.palette.scrimAt(0.75),
                             Colors.transparent,
-                            Colors.black87,
+                            context.palette.scrimAt(0.9),
                           ],
                           stops: [0, .44, 1],
                         ),
@@ -1746,19 +1738,17 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                         children: [
                           IconButton(
                             tooltip: 'Back 10 seconds',
-                            icon: const Icon(Icons.replay_10_rounded),
-                            color: Colors.white,
+                            icon: Icon(Icons.replay_10_rounded),
+                            color: context.palette.onScrim,
                             onPressed: () => player.skip(-10),
                           ),
-                          const SizedBox(width: 16),
+                          SizedBox(width: 16),
                           IconButton.filled(
                             tooltip: player.isPlaying ? 'Pause' : 'Play',
                             style: IconButton.styleFrom(
-                              backgroundColor: Colors.black.withValues(
-                                alpha: .62,
-                              ),
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size.square(56),
+                              backgroundColor: context.palette.shadowAt(.62,),
+                              foregroundColor: context.palette.onScrim,
+                              minimumSize: Size.square(56),
                             ),
                             iconSize: 31,
                             icon: Icon(
@@ -1768,11 +1758,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             ),
                             onPressed: player.togglePlay,
                           ),
-                          const SizedBox(width: 16),
+                          SizedBox(width: 16),
                           IconButton(
                             tooltip: 'Forward 10 seconds',
-                            icon: const Icon(Icons.forward_10_rounded),
-                            color: Colors.white,
+                            icon: Icon(Icons.forward_10_rounded),
+                            color: context.palette.onScrim,
                             onPressed: () => player.skip(10),
                           ),
                         ],
@@ -1783,18 +1773,18 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                       child: IgnorePointer(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: Colors.black87,
+                            color: context.palette.scrimAt(0.85),
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
+                            padding: EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 8,
                             ),
                             child: Text(
                               _seekTime(preview),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: context.palette.onPrimary,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1811,7 +1801,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                       children: [
                         ClipRect(
                           child: AnimatedSize(
-                            duration: const Duration(milliseconds: 200),
+                            duration: Duration(milliseconds: 200),
                             curve: Curves.easeOutCubic,
                             alignment: Alignment.centerRight,
                             child: _settingsExpanded
@@ -1844,7 +1834,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                       ),
                                     ],
                                   )
-                                : const SizedBox(width: 0, height: 44),
+                                : SizedBox(width: 0, height: 44),
                           ),
                         ),
                         _controlIcon(
@@ -1879,15 +1869,15 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                           height: 26,
                           child: SliderTheme(
                             data: SliderTheme.of(context).copyWith(
-                              thumbShape: const RoundSliderThumbShape(
+                              thumbShape: RoundSliderThumbShape(
                                 enabledThumbRadius: 5.5,
                               ),
                               trackHeight: 4,
-                              activeTrackColor: AppColors.primary,
-                              inactiveTrackColor: Colors.white24,
-                              secondaryActiveTrackColor: Colors.white54,
-                              thumbColor: AppColors.primary,
-                              overlayShape: const RoundSliderOverlayShape(
+                              activeTrackColor: context.palette.onScrim,
+                              inactiveTrackColor: context.palette.tint(context.palette.onScrim, 0.24),
+                              secondaryActiveTrackColor: context.palette.tint(context.palette.onScrim, 0.54),
+                              thumbColor: context.palette.onScrim,
+                              overlayShape: RoundSliderOverlayShape(
                                 overlayRadius: 10,
                               ),
                             ),
@@ -1912,7 +1902,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(left: 8),
+                          padding: EdgeInsets.only(left: 8),
                           child: Row(
                             children: [
                               Expanded(
@@ -1920,8 +1910,8 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                   '${preview == null ? player.positionFormatted : _seekTime(preview)} / ${player.durationFormatted}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: context.palette.onScrim,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -1934,7 +1924,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                       : () =>
                                             _showQualityPicker(context, player),
                                   style: TextButton.styleFrom(
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: context.palette.onScrim,
                                     padding: EdgeInsets.zero,
                                   ),
                                   child: player.isSwitchingSource
@@ -1945,7 +1935,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                             value: player.switchProgress > 0
                                                 ? player.switchProgress
                                                 : null,
-                                            color: Colors.white,
+                                            color: context.palette.onScrim,
                                           ),
                                         )
                                       : Text(
@@ -2038,8 +2028,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
       tooltip: tooltip,
       onPressed: onPressed,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 40, height: 44),
-      color: active ? AppColors.primary : Colors.white,
+      constraints: BoxConstraints.tightFor(width: 40, height: 44),
+      color: active
+          ? context.palette.onScrim
+          : context.palette.tint(context.palette.onScrim, 0.78),
       icon: Icon(icon, size: 20),
     );
   }
@@ -2063,7 +2055,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
       final client = youtube.videos.closedCaptions;
       final manifest = await client
           .getManifest(id)
-          .timeout(const Duration(seconds: 8));
+          .timeout(Duration(seconds: 8));
       final trackInfo =
           manifest.getByLanguage(language, autoGenerated: true).firstOrNull ??
           manifest.getByLanguage('en', autoGenerated: true).firstOrNull ??
@@ -2075,7 +2067,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
       }
       final track = await client
           .get(trackInfo)
-          .timeout(const Duration(seconds: 8));
+          .timeout(Duration(seconds: 8));
       if (!mounted || !identical(player.engine, engine)) return;
       if (track.captions.isEmpty) {
         _captionUnavailable();
@@ -2105,7 +2097,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
 
   void _captionUnavailable() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Subtitles unavailable for this video')),
+      SnackBar(content: Text('Subtitles unavailable for this video')),
     );
   }
 
@@ -2153,13 +2145,13 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
         onDismissed: (_) => player.close(),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkCard : AppColors.lightCard,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
+                color: context.palette.shadowAt(isDark ? 0.45 : 0.12),
                 blurRadius: 18,
-                offset: const Offset(0, 6),
+                offset: Offset(0, 6),
               ),
             ],
           ),
@@ -2172,7 +2164,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(8),
                     child: Row(
                       children: [
                         // Small 16:9 Video Thumbnail
@@ -2186,23 +2178,23 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                 width: 56,
                                 height: 42,
                                 fit: BoxFit.cover,
-                                placeholderColor: Colors.black,
+                                placeholderColor: context.palette.background,
                                 placeholderIcon: Icons.play_arrow,
-                                accentColor: Colors.white,
+                                accentColor: context.palette.card,
                               ),
                               if (player.isPlaying)
                                 Container(
                                   width: 8,
                                   height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.accentRed,
+                                  decoration: BoxDecoration(
+                                    color: context.palette.error,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        SizedBox(width: 10),
 
                         // Title & Author
                         Expanded(
@@ -2213,18 +2205,16 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                 player.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: 2),
                               Text(
                                 '${player.positionFormatted} / ${player.durationFormatted} • ${player.author}',
                                 style: TextStyle(
-                                  color: isDark
-                                      ? AppColors.darkTextSecondary
-                                      : AppColors.lightTextSecondary,
+                                  color: context.palette.textSecondary,
                                   fontSize: 11,
                                 ),
                               ),
@@ -2238,7 +2228,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             player.isPlaying
                                 ? Icons.pause_circle_filled_rounded
                                 : Icons.play_circle_fill_rounded,
-                            color: AppColors.primary,
+                            color: context.palette.primary,
                             size: 32,
                           ),
                           onPressed: player.togglePlay,
@@ -2246,10 +2236,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
 
                         // Close (X)
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.close_rounded,
                             size: 20,
-                            color: Colors.grey,
+                            color: context.palette.textSecondary,
                           ),
                           onPressed: player.close,
                         ),
@@ -2259,15 +2249,15 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
 
                   // Progress line
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
+                    borderRadius: BorderRadius.vertical(
                       bottom: Radius.circular(16),
                     ),
                     child: LinearProgressIndicator(
                       value: progress,
                       minHeight: 2.5,
                       backgroundColor: Colors.transparent,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.primary,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        context.palette.primary,
                       ),
                     ),
                   ),

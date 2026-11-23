@@ -11,7 +11,7 @@ import '../services/preference_service.dart';
 import '../services/provider_engine/provider_engine_service.dart';
 import '../services/provider_engine/provider_models.dart';
 import '../services/watch_history_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'movie_card.dart';
 import 'movie_source_picker_sheet.dart';
 import 'remote_image.dart';
@@ -24,7 +24,7 @@ class MovieDetailSheet extends StatefulWidget {
   /// stream in any repo — the list screen uses it to drop the movie for good.
   final VoidCallback? onUnplayable;
 
-  const MovieDetailSheet({
+  MovieDetailSheet({
     super.key,
     required this.movie,
     this.onUnplayable,
@@ -60,7 +60,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
   /// source picker so it only offers sources for that exact format.
   _ResPick? _selectedResPick;
 
-  List<MovieSource> _allSources = const [];
+  List<MovieSource> _allSources = [];
   bool _resolving = false;
 
   // Selected language key (e.g. 'bn', 'hi', 'en', 'dual', 'multi', 'ta', 'te', etc.)
@@ -138,7 +138,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
   }
 
   // Plain labels only — no flag/globe/film emoji in the UI.
-  static const Map<String, String> _languageMeta = {
+  static Map<String, String> _languageMeta = {
     'bn': 'Bangla',
     'hi': 'Hindi',
     'dual': 'Dual Audio',
@@ -313,7 +313,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
             .getInstalledActiveProviders();
         final p = providers.firstWhere(
           (prov) => prov.id.toLowerCase() == s.providerId.toLowerCase(),
-          orElse: () => const MovieProvider(id: '', name: ''),
+          orElse: () => MovieProvider(id: '', name: ''),
         );
         if (p.language.isNotEmpty) {
           keys.add(p.language.toLowerCase());
@@ -344,7 +344,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
 
   /// Groups all real sources across every repository into language options
   List<_LanguageOption> _getAvailableLanguages() {
-    if (_effectiveSources.isEmpty) return const [];
+    if (_effectiveSources.isEmpty) return [];
 
     final map = <String, List<MovieSource>>{};
     for (final s in _effectiveSources) {
@@ -357,7 +357,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     }
 
     final options = <_LanguageOption>[];
-    const preferredOrder = [
+    final preferredOrder = [
       'bn',
       'hi',
       'dual',
@@ -421,7 +421,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
 
   /// Sources belonging to the selected language
   List<MovieSource> get _currentPool {
-    if (_effectiveSources.isEmpty) return const [];
+    if (_effectiveSources.isEmpty) return [];
     final langs = _getAvailableLanguages();
     if (langs.isEmpty) return _effectiveSources;
 
@@ -462,7 +462,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     final picks = _resolutionPicks();
     if (picks.isNotEmpty) return picks.first.best;
     if (pool.isNotEmpty) return pool.first;
-    return const MovieSource(
+    return MovieSource(
       serverName: 'No source',
       resolution: '-',
       downloadUrl: '',
@@ -649,9 +649,9 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     }
     if (effectiveUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('No playable download URL found for this server.'),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: context.palette.error,
         ),
       );
       return;
@@ -669,11 +669,11 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
         if (!granted) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content: Text(
                   'Storage permission is required to save downloads.',
                 ),
-                backgroundColor: Colors.redAccent,
+                backgroundColor: context.palette.error,
               ),
             );
           }
@@ -696,20 +696,20 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: AppColors.darkCard,
+            backgroundColor: context.palette.card,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
-            duration: const Duration(seconds: 4),
+            duration: Duration(seconds: 4),
             content: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.download_done_rounded,
-                  color: AppColors.primary,
+                  color: context.palette.primary,
                   size: 28,
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -717,9 +717,9 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                     children: [
                       Text(
                         'Downloading "$titleToUse"',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: context.palette.onPrimary,
                           fontSize: 13,
                         ),
                         maxLines: 1,
@@ -727,8 +727,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                       ),
                       Text(
                         '${s.resolution} • ${s.repoName.isNotEmpty ? s.repoName : s.serverName}',
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        style: TextStyle(
+                          color: context.palette.textSecondary,
                           fontSize: 11,
                         ),
                         maxLines: 1,
@@ -747,7 +747,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not start download: $e'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: context.palette.error,
           ),
         );
       }
@@ -765,7 +765,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     )) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No playable source resolved yet.')),
+          SnackBar(content: Text('No playable source resolved yet.')),
         );
       }
       return;
@@ -788,7 +788,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
       MaterialPageRoute(
         builder: (_) => MoviePlayerScreen(
           movie: widget.movie,
-          initialSource: const MovieSource(
+          initialSource: MovieSource(
             serverName: 'Trailer',
             resolution: 'HD',
             downloadUrl: '',
@@ -815,7 +815,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
 
   Widget _buildMoreLikeThis(bool isDark) {
     if (!PreferenceService.instance.hasEnoughSignal) {
-      return const SizedBox.shrink();
+      return SizedBox.shrink();
     }
     final me = widget.movie.title.toLowerCase().trim();
     final pool = MovieRepositoryService.instance
@@ -827,13 +827,13 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
       fromHistory: [widget.movie],
       limit: 10,
     );
-    if (similar.isEmpty) return const SizedBox.shrink();
+    if (similar.isEmpty) return SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
-            Icon(Icons.explore_rounded, size: 18, color: AppColors.primary),
+            Icon(Icons.explore_rounded, size: 18, color: context.palette.primary),
             SizedBox(width: 6),
             Text(
               'More Like This',
@@ -841,14 +841,14 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         SizedBox(
           height: 190,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.none,
             itemCount: similar.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            separatorBuilder: (_, _) => SizedBox(width: 10),
             itemBuilder: (context, index) =>
                 SizedBox(width: 116, child: MovieCard(movie: similar[index])),
           ),
@@ -875,10 +875,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     final sourceCount = _effectiveSources.length;
 
     return Container(
-      margin: const EdgeInsets.only(top: 14, bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: EdgeInsets.only(top: 14, bottom: 4),
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: isDark ? 0.14 : 0.08),
+        color: context.palette.tint(context.palette.primary, isDark ? 0.14 : 0.08),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -887,48 +887,48 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: context.palette.primary,
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.35),
+                  color: context.palette.tint(context.palette.primary, 0.35),
                   blurRadius: 6,
-                  offset: const Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
-            child: const Icon(Icons.dns_rounded, color: Colors.white, size: 18),
+            child: Icon(Icons.dns_rounded, color: context.palette.onScrim, size: 18),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'INSIDE SOURCE',
                       style: TextStyle(
                         fontSize: 9.5,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.0,
-                        color: AppColors.primary,
+                        color: context.palette.primary,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         horizontal: 5,
                         vertical: 1,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.2),
+                        color: context.palette.tint(context.palette.success, 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
+                      child: Text(
                         'ONLINE',
                         style: TextStyle(
-                          color: Colors.green,
+                          color: context.palette.success,
                           fontSize: 8.5,
                           fontWeight: FontWeight.w900,
                         ),
@@ -936,12 +936,12 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   '$providerName • $repoName',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 13,
                   ),
@@ -952,23 +952,23 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? Colors.white60 : Colors.black54,
+                    color: context.palette.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: _openSourcePicker,
-            icon: const Icon(Icons.swap_horiz_rounded, size: 14),
+            icon: Icon(Icons.swap_horiz_rounded, size: 14),
             label: Text(
               sourceCount > 1 ? '$sourceCount Sources' : 'Change',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
             ),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              foregroundColor: context.palette.primary,
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               visualDensity: VisualDensity.compact,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -982,7 +982,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
 
   Widget _buildLanguageSelector(bool isDark) {
     final languages = _getAvailableLanguages();
-    if (languages.isEmpty) return const SizedBox.shrink();
+    if (languages.isEmpty) return SizedBox.shrink();
 
     final activeKey = _selectedLanguageKey ?? languages.first.key;
 
@@ -991,34 +991,34 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
       children: [
         Row(
           children: [
-            const Icon(
+            Icon(
               Icons.language_rounded,
               size: 18,
-              color: AppColors.primary,
+              color: context.palette.primary,
             ),
-            const SizedBox(width: 6),
-            const Text(
+            SizedBox(width: 6),
+            Text(
               '1. Select Audio / Language',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
-            const Spacer(),
+            Spacer(),
             Text(
               '${languages.length} Language${languages.length > 1 ? "s" : ""}',
               style: TextStyle(
                 fontSize: 11,
-                color: isDark ? Colors.white54 : Colors.black54,
+                color: context.palette.onPrimary,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         SizedBox(
           height: 42,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.none,
             itemCount: languages.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => SizedBox(width: 8),
             itemBuilder: (context, i) {
               final lang = languages[i];
               final isSelected = lang.key == activeKey;
@@ -1035,17 +1035,15 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                           _checkedResolutions.clear();
                         }),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
+                    duration: Duration(milliseconds: 200),
+                    padding: EdgeInsets.symmetric(
                       horizontal: 15,
                       vertical: 9,
                     ),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? AppColors.primary.withValues(
-                              alpha: isDark ? 0.16 : 0.10,
-                            )
-                          : (isDark ? AppColors.darkCard : AppColors.lightCard),
+                          ? context.palette.tint(context.palette.primary, isDark ? 0.16 : 0.10,)
+                          : (context.palette.card),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -1059,24 +1057,22 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                                 ? FontWeight.w700
                                 : FontWeight.w600,
                             color: isSelected
-                                ? (isDark
-                                      ? AppColors.primaryLight
-                                      : AppColors.primaryDark)
-                                : (isDark ? Colors.white70 : Colors.black87),
+                                ? (context.palette.primary)
+                                : (isDark ? context.palette.textSecondary : context.palette.textPrimary),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 6,
                             vertical: 1.5,
                           ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? Colors.white.withValues(alpha: 0.25)
+                                ? context.palette.tint(context.palette.card, 0.25)
                                 : (isDark
-                                      ? Colors.white12
-                                      : Colors.black.withValues(alpha: 0.08)),
+                                      ? context.palette.tint(context.palette.onScrim, 0.12)
+                                      : context.palette.shadowAt(0.08)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -1085,8 +1081,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                               fontSize: 10,
                               fontWeight: FontWeight.w900,
                               color: isSelected
-                                  ? Colors.white
-                                  : (isDark ? Colors.white70 : Colors.black87),
+                                  ? context.palette.card
+                                  : (isDark ? context.palette.textSecondary : context.palette.textPrimary),
                             ),
                           ),
                         ),
@@ -1113,18 +1109,18 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     final serverName = s.serverName.isNotEmpty ? s.serverName : sourceProvider;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: isSelected
-            ? AppColors.primary.withValues(alpha: 0.12)
-            : (isDark ? AppColors.darkCard : AppColors.lightCard),
+            ? context.palette.tint(context.palette.primary, 0.12)
+            : (context.palette.card),
         borderRadius: BorderRadius.circular(16),
         boxShadow: isSelected
             ? [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.25),
+                  color: context.palette.tint(context.palette.primary, 0.25),
                   blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ]
             : null,
@@ -1138,7 +1134,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
             _selectedSource = s;
           }),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1151,10 +1147,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppColors.primary
+                            ? context.palette.primary
                             : (isDark
-                                  ? Colors.white10
-                                  : Colors.black.withValues(alpha: 0.05)),
+                                  ? context.palette.tint(context.palette.onScrim, 0.10)
+                                  : context.palette.shadowAt(0.05)),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -1163,12 +1159,12 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
                           color: isSelected
-                              ? Colors.white
-                              : (isDark ? Colors.white : Colors.black87),
+                              ? context.palette.card
+                              : (isDark ? context.palette.card : context.palette.textPrimary),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1182,27 +1178,27 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                     color: isSelected
-                                        ? AppColors.primary
+                                        ? context.palette.primary
                                         : null,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (s.isFastBDIX) ...[
-                                const SizedBox(width: 6),
+                                SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                     horizontal: 5,
                                     vertical: 1,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.accentGold,
+                                    color: context.palette.info,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: const Text(
+                                  child: Text(
                                     'BDIX',
                                     style: TextStyle(
-                                      color: Colors.black,
+                                      color: context.palette.background,
                                       fontSize: 8,
                                       fontWeight: FontWeight.w900,
                                     ),
@@ -1211,40 +1207,40 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                               ],
                             ],
                           ),
-                          const SizedBox(height: 3),
+                          SizedBox(height: 3),
                           Text(
                             '$sourceProvider • $serverName',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: isDark ? Colors.white70 : Colors.black87,
+                              color: isDark ? context.palette.textSecondary : context.palette.textPrimary,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: 2),
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: 5,
                                   vertical: 1,
                                 ),
                                 decoration: BoxDecoration(
                                   color: (isDark
-                                      ? Colors.white10
-                                      : Colors.black.withValues(alpha: 0.05)),
+                                      ? context.palette.tint(context.palette.onScrim, 0.10)
+                                      : context.palette.shadowAt(0.05)),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
                                   s.format.toUpperCase(),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
                               if (!widget.selectedSourceOnly) ...[
-                                const SizedBox(width: 6),
+                                SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
                                     pick.fileCount > 1
@@ -1254,9 +1250,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 10.5,
-                                      color: isDark
-                                          ? Colors.white38
-                                          : Colors.black38,
+                                      color: context.palette.textSecondary,
                                     ),
                                   ),
                                 ),
@@ -1266,7 +1260,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     // File size & selection icon
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -1277,16 +1271,16 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                             fontSize: 13.5,
                             fontWeight: FontWeight.w900,
                             color: isSelected
-                                ? AppColors.primary
-                                : AppColors.accentGreen,
+                                ? context.palette.primary
+                                : context.palette.success,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Icon(
                           isSelected
                               ? Icons.radio_button_checked_rounded
                               : Icons.radio_button_unchecked_rounded,
-                          color: isSelected ? AppColors.primary : Colors.grey,
+                          color: isSelected ? context.palette.primary : context.palette.textSecondary,
                           size: 24,
                         ),
                       ],
@@ -1294,17 +1288,17 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                   ],
                 ),
                 if (!widget.selectedSourceOnly) ...[
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Row(
                     children: [
                       Icon(
                         Icons.folder_special_rounded,
                         size: 13,
                         color: isSelected
-                            ? AppColors.primary
-                            : (isDark ? Colors.white54 : Colors.black45),
+                            ? context.palette.primary
+                            : (context.palette.textSecondary),
                       ),
-                      const SizedBox(width: 5),
+                      SizedBox(width: 5),
                       Expanded(
                         child: Text(
                           pick.fileCount > 1
@@ -1316,8 +1310,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                                 ? FontWeight.w600
                                 : FontWeight.normal,
                             color: isSelected
-                                ? AppColors.primary
-                                : (isDark ? Colors.white60 : Colors.black54),
+                                ? context.palette.primary
+                                : (context.palette.textSecondary),
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1328,8 +1322,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                           fontSize: 10.5,
                           fontWeight: FontWeight.w600,
                           color: isSelected
-                              ? AppColors.primary
-                              : (isDark ? Colors.white38 : Colors.black38),
+                              ? context.palette.primary
+                              : (context.palette.textSecondary),
                         ),
                       ),
                     ],
@@ -1346,10 +1340,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
   Widget _buildLanguageAndFormatSection(bool isDark) {
     if (_resolving && _effectiveSources.isEmpty) {
       return Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        padding: const EdgeInsets.all(18),
+        margin: EdgeInsets.symmetric(vertical: 12),
+        padding: EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -1359,7 +1353,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
               height: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2.2,
-                color: AppColors.primary,
+                color: context.palette.primary,
               ),
             ),
             SizedBox(width: 14),
@@ -1382,10 +1376,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
 
     if (_effectiveSources.isEmpty) {
       return Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        padding: const EdgeInsets.all(18),
+        margin: EdgeInsets.symmetric(vertical: 12),
+        padding: EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -1394,19 +1388,19 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.accentGold.withValues(alpha: 0.15),
+                    color: context.palette.tint(context.palette.info, 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.movie_filter_rounded,
-                    color: AppColors.accentGold,
+                    color: context.palette.info,
                     size: 22,
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
+                SizedBox(width: 12),
+                Expanded(
                   child: Text(
                     'No Streams Found Right Now',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
@@ -1414,16 +1408,16 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text(
               'This source has no playable formats for this title right now.',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
-                color: isDark ? Colors.white60 : Colors.black54,
+                color: context.palette.textSecondary,
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
@@ -1432,50 +1426,50 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                       otherSources: !widget.selectedSourceOnly,
                     ),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.refresh_rounded,
                       size: 16,
-                      color: AppColors.primary,
+                      color: context.palette.primary,
                     ),
                     label: Text(
                       widget.selectedSourceOnly
                           ? 'Retry'
                           : 'Find other sources',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+                        color: context.palette.primary,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _handleTrailer,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      backgroundColor: context.palette.primary,
+                      padding: EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.theaters_rounded,
                       size: 16,
-                      color: Colors.black,
+                      color: context.palette.background,
                     ),
-                    label: const Text(
+                    label: Text(
                       'Watch Trailer',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        color: context.palette.background,
                       ),
                     ),
                   ),
@@ -1494,43 +1488,43 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildLanguageSelector(isDark),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         Row(
           children: [
-            const Icon(
+            Icon(
               Icons.video_settings_rounded,
               size: 18,
-              color: AppColors.primary,
+              color: context.palette.primary,
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
             Expanded(
               child: Text(
                 '2. Available Formats ($_selectedLanguageName)',
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
             Text(
               '(${picks.length} Format${picks.length > 1 ? "s" : ""})',
               style: TextStyle(
                 fontSize: 11,
-                color: isDark ? Colors.white54 : Colors.black54,
+                color: context.palette.textSecondary,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
         Text(
           'Select your format to stream or download (${_currentPool.length} streams found):',
           style: TextStyle(
             fontSize: 11,
-            color: isDark ? Colors.white54 : Colors.black54,
+            color: context.palette.textSecondary,
           ),
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         for (final p in picks) _buildResolutionCard(isDark, p, activeHeight),
       ],
     );
@@ -1544,11 +1538,11 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.88,
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        color: context.palette.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(
           top: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            color: context.palette.border,
             width: 1.5,
           ),
         ),
@@ -1558,11 +1552,11 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
           // Drag handle
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              margin: EdgeInsets.only(top: 10, bottom: 6),
               width: 44,
               height: 5,
               decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.grey.shade400,
+                color: isDark ? context.palette.tint(context.palette.onScrim, 0.24) : context.palette.textSecondary,
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
@@ -1570,7 +1564,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
 
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               children: [
                 // Backdrop banner with scrim
                 ClipRRect(
@@ -1584,9 +1578,9 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                               ? movie.backdropUrl
                               : movie.posterUrl,
                           fit: BoxFit.cover,
-                          placeholderColor: AppColors.darkCard,
+                          placeholderColor: context.palette.card,
                           placeholderIcon: Icons.movie_rounded,
-                          accentColor: AppColors.primary,
+                          accentColor: context.palette.primary,
                         ),
                       ),
                       Positioned.fill(
@@ -1597,7 +1591,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                               end: Alignment.bottomCenter,
                               colors: [
                                 Colors.transparent,
-                                Colors.black.withValues(alpha: 0.9),
+                                context.palette.shadowAt(0.9),
                               ],
                             ),
                           ),
@@ -1612,41 +1606,41 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                           children: [
                             Text(
                               movie.title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: context.palette.onScrim,
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 height: 1.15,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.star_rounded,
-                                  color: Colors.amber,
+                                  color: context.palette.info,
                                   size: 18,
                                 ),
-                                const SizedBox(width: 4),
+                                SizedBox(width: 4),
                                 Text(
                                   '${movie.rating} / 10',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: context.palette.onScrim,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                SizedBox(width: 12),
                                 Text(
                                   '${movie.year} • ${movie.duration}',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
+                                  style: TextStyle(
+                                    color: context.palette.textSecondary,
                                     fontSize: 13,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                SizedBox(width: 12),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                     horizontal: 6,
                                     vertical: 2,
                                   ),
@@ -1655,8 +1649,8 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                                   ),
                                   child: Text(
                                     movie.quality,
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: context.palette.onScrim,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -1677,7 +1671,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                 else
                   _buildActiveSourceBanner(isDark),
 
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
 
                 // Genres tags
                 Wrap(
@@ -1685,14 +1679,14 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                   runSpacing: 6,
                   children: movie.genres.map((g) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? AppColors.darkCard
-                            : Colors.grey.shade200,
+                            ? context.palette.card
+                            : context.palette.textSecondary,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -1700,56 +1694,54 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white70 : Colors.black87,
+                          color: isDark ? context.palette.textSecondary : context.palette.textPrimary,
                         ),
                       ),
                     );
                   }).toList(),
                 ),
 
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
 
                 // Synopsis
-                const Text(
+                Text(
                   'Overview',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 Text(
                   movie.synopsis,
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
-                    color: isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary,
+                    color: context.palette.textSecondary,
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                SizedBox(height: 18),
 
                 // Personalized "More Like This"
                 _buildMoreLikeThis(isDark),
 
-                const SizedBox(height: 18),
+                SizedBox(height: 18),
 
                 // Language selection first â†’ Available formats for that language
                 if (!widget.selectedSourceOnly)
                   _buildLanguageAndFormatSection(isDark),
 
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
               ],
             ),
           ),
 
           // Bottom actions — two calm primaries, extras tucked into a menu.
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurface : Colors.white,
+              color: isDark ? context.palette.surface : context.palette.card,
               border: Border(
                 top: BorderSide(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  color: context.palette.border,
                 ),
               ),
             ),
@@ -1774,13 +1766,13 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                                       : 0.0,
                                 ),
                           style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            padding: EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
                             foregroundColor: _effectiveSources.isEmpty
-                                ? Colors.grey
-                                : AppColors.primary,
+                                ? context.palette.textSecondary
+                                : context.palette.primary,
                           ),
                           icon: Icon(
                             hasProgress
@@ -1794,7 +1786,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                                 : 'Watch',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
                             ),
@@ -1803,7 +1795,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
 
                   // Next — choose which repo/source carries this format
                   Expanded(
@@ -1814,23 +1806,23 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                           ? () => _handleDownloadSource(_activeSource)
                           : _openSourcePicker,
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: context.palette.primary,
                         disabledBackgroundColor: isDark
-                            ? Colors.white12
-                            : Colors.grey.shade300,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                            ? context.palette.tint(context.palette.onScrim, 0.12)
+                            : context.palette.textSecondary,
+                        foregroundColor: context.palette.card,
+                        padding: EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                       icon: _isDownloading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.2,
-                                color: Colors.white,
+                                color: context.palette.card,
                               ),
                             )
                           : Icon(
@@ -1849,24 +1841,24 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                             : 'Next',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: 4),
 
                   // Trailer / external player live here instead of cluttering the bar.
                   PopupMenuButton<String>(
-                    color: isDark ? AppColors.darkCard : Colors.white,
+                    color: context.palette.card,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                     icon: Icon(
                       Icons.more_horiz_rounded,
-                      color: isDark ? Colors.white70 : Colors.black54,
+                      color: context.palette.textSecondary,
                     ),
                     onSelected: (value) {
                       if (value == 'trailer') _handleTrailer();
@@ -1880,10 +1872,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                             Icon(
                               Icons.theaters_outlined,
                               size: 18,
-                              color: isDark ? Colors.white70 : Colors.black54,
+                              color: context.palette.textSecondary,
                             ),
-                            const SizedBox(width: 10),
-                            const Text(
+                            SizedBox(width: 10),
+                            Text(
                               'Watch trailer',
                               style: TextStyle(fontSize: 13),
                             ),
@@ -1898,10 +1890,10 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
                             Icon(
                               Icons.connected_tv_outlined,
                               size: 18,
-                              color: isDark ? Colors.white70 : Colors.black54,
+                              color: context.palette.textSecondary,
                             ),
-                            const SizedBox(width: 10),
-                            const Text(
+                            SizedBox(width: 10),
+                            Text(
                               'Open in external player',
                               style: TextStyle(fontSize: 13),
                             ),
@@ -1925,7 +1917,7 @@ class _LanguageOption {
   final String label;
   final List<MovieSource> sources;
 
-  const _LanguageOption({
+  _LanguageOption({
     required this.key,
     required this.label,
     required this.sources,
@@ -1948,7 +1940,7 @@ class _ResPick {
   final int fileCount;
   final List<MovieSource> sources;
 
-  const _ResPick({
+  _ResPick({
     required this.label,
     required this.shortBadge,
     required this.height,

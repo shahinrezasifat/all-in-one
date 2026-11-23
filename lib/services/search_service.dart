@@ -194,6 +194,7 @@ class SearchService {
                 id: video.id.value,
                 title: video.title,
                 author: video.author,
+                channelId: video.channelId.value,
                 duration: time,
                 views: '',
                 thumbnailUrl: video.thumbnails.mediumResUrl,
@@ -304,6 +305,8 @@ class SearchService {
                 id: vid,
                 title: title.toString(),
                 author: author.toString(),
+                channelAvatarUrl: _rendererChannelAvatar(cvr),
+                channelId: _rendererChannelId(cvr),
                 duration: duration,
                 views: views,
                 thumbnailUrl: 'https://i.ytimg.com/vi/$vid/hqdefault.jpg',
@@ -387,6 +390,8 @@ class SearchService {
                     id: vid,
                     title: title,
                     author: author,
+                    channelAvatarUrl: _rendererChannelAvatar(vr),
+                    channelId: _rendererChannelId(vr),
                     duration: duration,
                     views: views,
                     thumbnailUrl: thumb,
@@ -445,6 +450,8 @@ class SearchService {
                       id: vid,
                       title: title,
                       author: author,
+                      channelAvatarUrl: _rendererChannelAvatar(vr),
+                      channelId: _rendererChannelId(vr),
                       duration: duration,
                       views: views,
                       thumbnailUrl: 'https://i.ytimg.com/vi/$vid/hqdefault.jpg',
@@ -652,6 +659,30 @@ class SearchService {
     }
   }
 
+  String? _rendererChannelAvatar(Map renderer) {
+    final thumbnails = renderer['channelThumbnailSupportedRenderers']
+            ?['channelThumbnailWithLinkRenderer']?['thumbnail']?['thumbnails'] ??
+        renderer['channelThumbnail']?['thumbnails'];
+    if (thumbnails is! List) return null;
+    for (final thumbnail in thumbnails.reversed.whereType<Map>()) {
+      final url = thumbnail['url'];
+      if (url is String && Uri.tryParse(url)?.scheme == 'https') return url;
+    }
+    return null;
+  }
+
+  String? _rendererChannelId(Map renderer) {
+    for (final key in ['ownerText', 'shortBylineText', 'longBylineText']) {
+      final runs = renderer[key]?['runs'];
+      if (runs is! List) continue;
+      for (final run in runs.whereType<Map>()) {
+        final id = run['navigationEndpoint']?['browseEndpoint']?['browseId'];
+        if (id is String && id.startsWith('UC')) return id;
+      }
+    }
+    return null;
+  }
+
   VideoItem? _videoItemFromRenderer(Map vr) {
     final vid = (vr['videoId'] ?? '').toString();
     if (vid.isEmpty) return null;
@@ -669,6 +700,8 @@ class SearchService {
       id: vid,
       title: title,
       author: author,
+      channelAvatarUrl: _rendererChannelAvatar(vr),
+      channelId: _rendererChannelId(vr),
       duration: duration.isEmpty ? 'New' : duration,
       views: views.isEmpty ? 'Trending' : views,
       thumbnailUrl: 'https://i.ytimg.com/vi/$vid/hqdefault.jpg',

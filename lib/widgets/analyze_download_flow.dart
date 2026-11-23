@@ -4,7 +4,7 @@ import 'package:ytdlp_flutter/ytdlp_flutter.dart';
 import '../models/extract_result.dart';
 import '../services/extractor_service.dart';
 import '../services/yt_dlp_service.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'format_picker_sheet.dart';
 
 /// Shared "tap Download -> analyze -> pick a quality" flow.
@@ -109,7 +109,7 @@ Future<ExtractResult?> resolveNativeFormats(String url) async {
   final uri = Uri.tryParse(url);
   if (uri == null ||
       uri.host.isEmpty ||
-      !const ['http', 'https'].contains(uri.scheme)) {
+      !['http', 'https'].contains(uri.scheme)) {
     return null;
   }
   final engine = YtDlpService.instance;
@@ -184,29 +184,29 @@ void _showRetry(
   messenger.showSnackBar(
     SnackBar(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: AppColors.darkCard,
-      duration: const Duration(seconds: 6),
+      backgroundColor: AppPalette.current.card,
+      duration: Duration(seconds: 6),
       content: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline_rounded,
-            color: AppColors.accentRed,
+            color: AppPalette.current.error,
             size: 20,
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 12.5),
+              style: TextStyle(color: AppPalette.current.textPrimary, fontSize: 12.5),
             ),
           ),
         ],
       ),
       action: SnackBarAction(
         label: 'RETRY',
-        textColor: AppColors.primary,
+        textColor: AppPalette.current.primary,
         onPressed: retry,
       ),
     ),
@@ -222,7 +222,7 @@ String _short(String message) {
 class AnalyzingOverlay extends StatelessWidget {
   final String text;
 
-  const AnalyzingOverlay({super.key, this.text = 'Checking available formats'});
+  AnalyzingOverlay({super.key, this.text = 'Checking available formats'});
 
   @override
   Widget build(BuildContext context) {
@@ -232,47 +232,47 @@ class AnalyzingOverlay extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 320),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+          constraints: BoxConstraints(maxWidth: 320),
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 26),
           decoration: BoxDecoration(
-            color: AppColors.darkCard,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
+                color: context.palette.shadowAt(0.45),
                 blurRadius: 24,
-                offset: const Offset(0, 8),
+                offset: Offset(0, 8),
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 38,
                 height: 38,
                 child: CircularProgressIndicator(
                   strokeWidth: 3,
-                  color: AppColors.primary,
+                  color: context.palette.primary,
                 ),
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: 18),
               Text(
                 text,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.palette.textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   height: 1.3,
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text(
                 'Looking for video and audio tracks at the source.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: context.palette.tint(context.palette.card, 0.6),
                   fontSize: 11.5,
                   height: 1.35,
                 ),

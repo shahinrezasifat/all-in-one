@@ -41,7 +41,9 @@ void main() {
       id: 'video',
       title: 'Fixture',
       raw: {
-        'formats': [{'filesize': 90000}],
+        'formats': [
+          {'filesize': 90000},
+        ],
         'requested_downloads': [
           {
             'requested_formats': [
@@ -52,14 +54,18 @@ void main() {
         ],
       },
     );
+    expect(YtDlpService.selectedDownloadSize(info), (
+      bytes: 10000,
+      estimated: true,
+    ));
     expect(
-      YtDlpService.selectedDownloadSize(info),
-      (bytes: 10000, estimated: true),
-    );
-    expect(
-      YtDlpService.selectedDownloadSize(const VideoInfo(
-        id: 'live', title: 'Live', raw: {'is_live': true, 'filesize_approx': 20},
-      )),
+      YtDlpService.selectedDownloadSize(
+        const VideoInfo(
+          id: 'live',
+          title: 'Live',
+          raw: {'is_live': true, 'filesize_approx': 20},
+        ),
+      ),
       isNull,
     );
   });
@@ -83,21 +89,26 @@ void main() {
           'providers': [
             {'id': 'migrated_provider', 'name': 'Migrated Provider'},
           ],
-        }
+        },
       ]),
     });
 
     await MovieRepositoryService.instance.ready;
 
-    final repo = MovieRepositoryService.instance.repositories
-        .firstWhere((r) => r.id == 'repo_migrated');
+    final repo = MovieRepositoryService.instance.repositories.firstWhere(
+      (r) => r.id == 'repo_migrated',
+    );
     expect(repo.name, 'Migrated Repo');
     expect(repo.providers.single.id, 'migrated_provider');
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('snaptube_movie_repos_v8_user_clean'), isNull,
-        reason: 'legacy key is removed only after migration');
-    final saved = prefs.getKeys()
+    expect(
+      prefs.getString('snaptube_movie_repos_v8_user_clean'),
+      isNull,
+      reason: 'legacy key is removed only after migration',
+    );
+    final saved = prefs
+        .getKeys()
         .map((k) => prefs.get(k))
         .whereType<String>()
         .firstWhere((v) => v.contains('https://example.com/repo.json'));
@@ -139,12 +150,19 @@ void main() {
       final range = request.headers.value(HttpHeaders.rangeHeader);
       ranges.add(range);
       final start = range == 'bytes=16384-' ? 16384 : 0;
-      final end = range == 'bytes=0-0' ? 1 : range == null ? 16384 : expected.length;
+      final end = range == 'bytes=0-0'
+          ? 1
+          : range == null
+          ? 16384
+          : expected.length;
       response
         ..statusCode = HttpStatus.partialContent
         ..headers.contentType = ContentType('video', 'mp4')
         ..headers.contentLength = end - start
-        ..headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-${end - 1}/${expected.length}')
+        ..headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes $start-${end - 1}/${expected.length}',
+        )
         ..add(expected.sublist(start, end));
       await response.close();
     });
@@ -195,89 +213,95 @@ void main() {
     manager.deleteTask(movieTask);
   });
 
-  test('movies use parallel ranges and fall back when a range is refused', () async {
-    final bytes = Uint8List(18 * 1024 * 1024);
-    for (var i = 0; i < bytes.length; i++) {
-      bytes[i] = (i * 31) % 251;
-    }
-    final media = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final folder = await Directory.systemTemp.createTemp('all_in_one_ranges');
-    addTearDown(() async {
-      await media.close(force: true);
-      await folder.delete(recursive: true);
-    });
-    var activeRanges = 0;
-    var maxRanges = 0;
-    var fullRequests = 0;
-    media.listen((request) async {
-      final response = request.response;
-      response.headers.contentType = ContentType('video', 'mp4');
-      final range = RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(
-        request.headers.value(HttpHeaders.rangeHeader) ?? '',
-      );
-      if (range == null || (request.uri.path == '/fallback.mp4' && range.group(2) != '0')) {
-        if (range == null) fullRequests++;
-        if (range == null) {
-          response.contentLength = bytes.length;
-          response.add(bytes);
-        } else {
-          response.statusCode = HttpStatus.forbidden;
+  test(
+    'movies use parallel ranges and fall back when a range is refused',
+    () async {
+      final bytes = Uint8List(18 * 1024 * 1024);
+      for (var i = 0; i < bytes.length; i++) {
+        bytes[i] = (i * 31) % 251;
+      }
+      final media = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final folder = await Directory.systemTemp.createTemp('all_in_one_ranges');
+      addTearDown(() async {
+        await media.close(force: true);
+        await folder.delete(recursive: true);
+      });
+      var activeRanges = 0;
+      var maxRanges = 0;
+      var fullRequests = 0;
+      media.listen((request) async {
+        final response = request.response;
+        response.headers.contentType = ContentType('video', 'mp4');
+        final range = RegExp(r'^bytes=(\d+)-(\d+)$')
+            .firstMatch(request.headers.value(HttpHeaders.rangeHeader) ?? '');
+        if (range == null ||
+            (request.uri.path == '/fallback.mp4' && range.group(2) != '0')) {
+          if (range == null) fullRequests++;
+          if (range == null) {
+            response.contentLength = bytes.length;
+            response.add(bytes);
+          } else {
+            response.statusCode = HttpStatus.forbidden;
+          }
+          await response.close();
+          return;
         }
+        final start = int.parse(range.group(1)!);
+        final end = int.parse(range.group(2)!);
+        if (end > 0) {
+          activeRanges++;
+          if (activeRanges > maxRanges) maxRanges = activeRanges;
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+        }
+        response
+          ..statusCode = HttpStatus.partialContent
+          ..headers.contentLength = end - start + 1
+          ..headers.set(
+            HttpHeaders.contentRangeHeader,
+            'bytes $start-$end/${bytes.length}',
+          )
+          ..add(Uint8List.sublistView(bytes, start, end + 1));
         await response.close();
-        return;
+        if (end > 0) activeRanges--;
+      });
+      final manager = DownloadManager.instance;
+      await manager.setDownloadDirectory(folder.path);
+      for (final target in ['parallel', 'fallback']) {
+        final url = 'http://127.0.0.1:${media.port}/$target.mp4';
+        final task = await manager.startMovieDownload(
+          movie: const MovieItem(
+            id: 'range_fixture',
+            title: 'Range Fixture',
+            posterUrl: '',
+            backdropUrl: '',
+            year: 2026,
+            rating: 0,
+            quality: '360p',
+            genres: [],
+            type: 'movie',
+            synopsis: '',
+            duration: '',
+            repoId: 'fixture',
+            repoName: 'Fixture',
+            sources: [],
+          ),
+          source: MovieSource(
+            serverName: 'Fixture',
+            resolution: '360p',
+            downloadUrl: url,
+            streamUrl: url,
+            fileSize: '18 MB',
+          ),
+        );
+        await _waitForCompletedDownload(task);
+        final actual = await File(task.savePath!).readAsBytes();
+        expect(listEquals(actual, bytes), isTrue);
+        manager.deleteTask(task);
       }
-      final start = int.parse(range.group(1)!);
-      final end = int.parse(range.group(2)!);
-      if (end > 0) {
-        activeRanges++;
-        if (activeRanges > maxRanges) maxRanges = activeRanges;
-        await Future<void>.delayed(const Duration(milliseconds: 40));
-      }
-      response
-        ..statusCode = HttpStatus.partialContent
-        ..headers.contentLength = end - start + 1
-        ..headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-$end/${bytes.length}')
-        ..add(Uint8List.sublistView(bytes, start, end + 1));
-      await response.close();
-      if (end > 0) activeRanges--;
-    });
-    final manager = DownloadManager.instance;
-    await manager.setDownloadDirectory(folder.path);
-    for (final target in ['parallel', 'fallback']) {
-      final url = 'http://127.0.0.1:${media.port}/$target.mp4';
-      final task = await manager.startMovieDownload(
-        movie: const MovieItem(
-          id: 'range_fixture',
-          title: 'Range Fixture',
-          posterUrl: '',
-          backdropUrl: '',
-          year: 2026,
-          rating: 0,
-          quality: '360p',
-          genres: [],
-          type: 'movie',
-          synopsis: '',
-          duration: '',
-          repoId: 'fixture',
-          repoName: 'Fixture',
-          sources: [],
-        ),
-        source: MovieSource(
-          serverName: 'Fixture',
-          resolution: '360p',
-          downloadUrl: url,
-          streamUrl: url,
-          fileSize: '18 MB',
-        ),
-      );
-      await _waitForCompletedDownload(task);
-      final actual = await File(task.savePath!).readAsBytes();
-      expect(listEquals(actual, bytes), isTrue);
-      manager.deleteTask(task);
-    }
-    expect(maxRanges, greaterThan(1));
-    expect(fullRequests, 1);
-  });
+      expect(maxRanges, greaterThan(1));
+      expect(fullRequests, 1);
+    },
+  );
 
   test('HLS master playlists are downloaded as one playable file', () async {
     SharedPreferences.setMockInitialValues({});
@@ -332,79 +356,116 @@ void main() {
     DownloadManager.instance.deleteTask(task);
   });
 
-  test('HLS download honors the selected dimensions and keeps them on restore', () async {
-    SharedPreferences.setMockInitialValues({});
-    final temp = await Directory.systemTemp.createTemp('selected_hls_test');
-    addTearDown(() => temp.delete(recursive: true));
-    final media = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    addTearDown(() => media.close(force: true));
-    final requests = <String>[];
-    int? totalBeforePayload;
-    media.listen((request) async {
-      final path = request.uri.path;
-      requests.add(request.method == "HEAD" ? "HEAD $path" : path);
-      switch (path) {
-        case '/master.m3u8':
-          request.response.write('#EXTM3U\n'
+  test(
+    'HLS download honors the selected dimensions and keeps them on restore',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final temp = await Directory.systemTemp.createTemp('selected_hls_test');
+      addTearDown(() => temp.delete(recursive: true));
+      final media = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => media.close(force: true));
+      final requests = <String>[];
+      int? totalBeforePayload;
+      media.listen((request) async {
+        final path = request.uri.path;
+        requests.add(request.method == "HEAD" ? "HEAD $path" : path);
+        switch (path) {
+          case '/master.m3u8':
+            request.response.write(
+              '#EXTM3U\n'
               '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=3840x2160\nuhd.m3u8\n'
-              '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x800\nfullhd.m3u8\n');
-        case '/fullhd.m3u8':
-        case '/uhd.m3u8':
-          final segment = path == '/fullhd.m3u8' ? 'selected.ts' : 'other.ts';
-          request.response.write('#EXTM3U\n#EXTINF:2,\n$segment\n#EXT-X-ENDLIST\n');
-        case '/selected.ts':
-          request.response.contentLength = 3;
-          if (request.method != 'HEAD') {
-            totalBeforePayload = DownloadManager.instance.tasks
-                .firstWhere((task) => task.hlsVariantResolution == '1920x800')
-                .displayTotalBytes;
-            request.response.add([1, 2, 3]);
-          }
-        case '/other.ts':
-          request.response.add([9, 9, 9]);
-        default:
-          request.response.statusCode = HttpStatus.notFound;
-      }
-      await request.response.close();
-    });
-    final url = 'http://127.0.0.1:${media.port}/master.m3u8';
-    final manager = DownloadManager.instance;
-    await manager.setDownloadDirectory(temp.path);
-    const movie = MovieItem(
-      id: 'exact-hls', title: 'Exact HLS', posterUrl: '', backdropUrl: '',
-      year: 2026, rating: 0, quality: '', genres: [], type: 'movie', synopsis: '',
-      duration: '', repoId: '', repoName: '', sources: [],
-    );
-    final task = await manager.startMovieDownload(
-      movie: movie,
-      source: MovieSource(serverName: 'Fixture', resolution: '1080p',
-          downloadUrl: url, fileSize: '', format: 'm3u8', hlsVariantResolution: '1920x800'),
-    );
-    await _waitForCompletedDownload(task);
-    expect(await File(task.savePath!).readAsBytes(), [1, 2, 3]);
-    expect(requests, [
-      '/master.m3u8', '/fullhd.m3u8', 'HEAD /selected.ts', '/selected.ts',
-    ]);
-    expect(totalBeforePayload, 3);
-    expect(task.totalBytesIsEstimate, false);
-    expect(DownloadTask.fromJson(task.toJson()).hlsVariantResolution, '1920x800');
-    manager.deleteTask(task);
+              '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x800\nfullhd.m3u8\n',
+            );
+          case '/fullhd.m3u8':
+          case '/uhd.m3u8':
+            final segment = path == '/fullhd.m3u8' ? 'selected.ts' : 'other.ts';
+            request.response.write(
+              '#EXTM3U\n#EXTINF:2,\n$segment\n#EXT-X-ENDLIST\n',
+            );
+          case '/selected.ts':
+            request.response.contentLength = 3;
+            if (request.method != 'HEAD') {
+              totalBeforePayload = DownloadManager.instance.tasks
+                  .firstWhere((task) => task.hlsVariantResolution == '1920x800')
+                  .displayTotalBytes;
+              request.response.add([1, 2, 3]);
+            }
+          case '/other.ts':
+            request.response.add([9, 9, 9]);
+          default:
+            request.response.statusCode = HttpStatus.notFound;
+        }
+        await request.response.close();
+      });
+      final url = 'http://127.0.0.1:${media.port}/master.m3u8';
+      final manager = DownloadManager.instance;
+      await manager.setDownloadDirectory(temp.path);
+      const movie = MovieItem(
+        id: 'exact-hls',
+        title: 'Exact HLS',
+        posterUrl: '',
+        backdropUrl: '',
+        year: 2026,
+        rating: 0,
+        quality: '',
+        genres: [],
+        type: 'movie',
+        synopsis: '',
+        duration: '',
+        repoId: '',
+        repoName: '',
+        sources: [],
+      );
+      final task = await manager.startMovieDownload(
+        movie: movie,
+        source: MovieSource(
+          serverName: 'Fixture',
+          resolution: '1080p',
+          downloadUrl: url,
+          fileSize: '',
+          format: 'm3u8',
+          hlsVariantResolution: '1920x800',
+        ),
+      );
+      await _waitForCompletedDownload(task);
+      expect(await File(task.savePath!).readAsBytes(), [1, 2, 3]);
+      expect(requests, [
+        '/master.m3u8',
+        '/fullhd.m3u8',
+        'HEAD /selected.ts',
+        '/selected.ts',
+      ]);
+      expect(totalBeforePayload, 3);
+      expect(task.totalBytesIsEstimate, false);
+      expect(
+        DownloadTask.fromJson(task.toJson()).hlsVariantResolution,
+        '1920x800',
+      );
+      manager.deleteTask(task);
 
-    requests.clear();
-    final missing = await manager.startMovieDownload(
-      movie: movie,
-      source: MovieSource(serverName: 'Fixture', resolution: '720p',
-          downloadUrl: url, fileSize: '', format: 'm3u8', hlsVariantResolution: '1280x720'),
-    );
-    final deadline = DateTime.now().add(const Duration(seconds: 5));
-    while (missing.status == DownloadStatus.downloading && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-    expect(missing.status, DownloadStatus.failed);
-    expect(requests, ['/master.m3u8']);
-    expect(missing.errorMessage, contains('selected video resolution'));
-    manager.deleteTask(missing);
-  });
+      requests.clear();
+      final missing = await manager.startMovieDownload(
+        movie: movie,
+        source: MovieSource(
+          serverName: 'Fixture',
+          resolution: '720p',
+          downloadUrl: url,
+          fileSize: '',
+          format: 'm3u8',
+          hlsVariantResolution: '1280x720',
+        ),
+      );
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (missing.status == DownloadStatus.downloading &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(missing.status, DownloadStatus.failed);
+      expect(requests, ['/master.m3u8']);
+      expect(missing.errorMessage, contains('selected video resolution'));
+      manager.deleteTask(missing);
+    },
+  );
 
   test('a full season queues every episode in its own season folder', () async {
     final temp = await Directory.systemTemp.createTemp('season_download_test');
@@ -420,12 +481,22 @@ void main() {
       await request.response.close();
     });
     final manager = DownloadManager.instance;
-    await manager.setDownloadDirectory(temp.path);
+    await manager.setDownloadDirectory('${temp.path}/All in One');
     const series = MovieItem(
-      id: 'season-fixture', title: 'Fixture Series', posterUrl: '',
-      backdropUrl: '', year: 2026, rating: 0, quality: '', genres: [],
-      type: 'series', synopsis: '', duration: '', repoId: 'repo',
-      repoName: 'Fixture', sources: [],
+      id: 'season-fixture',
+      title: 'Fixture Series',
+      posterUrl: '',
+      backdropUrl: '',
+      year: 2026,
+      rating: 0,
+      quality: '',
+      genres: [],
+      type: 'series',
+      synopsis: '',
+      duration: '',
+      repoId: 'repo',
+      repoName: 'Fixture',
+      sources: [],
     );
     await manager.startSeasonDownload(
       series: series,
@@ -436,10 +507,15 @@ void main() {
         for (var number = 1; number <= 4; number++)
           (
             episode: ProviderEpisode(
-              id: '$number', number: number, url: 'episode-$number', title: 'Story',
+              id: '$number',
+              number: number,
+              url: 'episode-$number',
+              title: 'Story',
             ),
             source: MovieSource(
-              serverName: 'Hindi', resolution: '720p', fileSize: '',
+              serverName: 'Hindi',
+              resolution: '720p',
+              fileSize: '',
               downloadUrl: 'http://127.0.0.1:${media.port}/$number.mp4',
             ),
           ),
@@ -449,19 +525,27 @@ void main() {
         .where((task) => task.series?.id == series.id)
         .toList();
     expect(tasks.length, 4);
-    expect(tasks.where((task) => task.status == DownloadStatus.queued).length, 1);
+    expect(
+      tasks.where((task) => task.status == DownloadStatus.queued).length,
+      1,
+    );
     release.complete();
     for (final task in tasks) {
       await _waitForCompletedDownload(task);
-      expect(task.savePath, startsWith('${temp.path}/Fixture Series/Season 7/Episode '));
+      expect(
+        task.savePath,
+        startsWith('${temp.path}/All in One/Fixture Series/Season 7/Episode '),
+      );
       expect(await File(task.savePath!).readAsBytes(), [1, 2, 3]);
       final restored = DownloadTask.fromJson(task.toJson());
       expect(restored.seriesResolution, '720p');
       expect(restored.seriesLanguage, 'hi');
       expect(restored.seriesEpisodeUrl, startsWith('episode-'));
     }
-    expect(manager.organizedWebsiteFolders['Fixture Series']?['Season 7'],
-        unorderedEquals(tasks));
+    expect(
+      manager.organizedWebsiteFolders['Fixture Series']?['Season 7'],
+      unorderedEquals(tasks),
+    );
     for (final task in tasks) {
       manager.deleteTask(task);
     }
@@ -530,12 +614,15 @@ void main() {
     expect(saved, isNotNull);
 
     final list = jsonDecode(saved!) as List<dynamic>;
-    final custom = list
-        .cast<Map<String, dynamic>>()
-        .firstWhere((e) => e['url'] == '$baseUrl/cloudstream/repo.json');
+    final custom = list.cast<Map<String, dynamic>>().firstWhere(
+      (e) => e['url'] == '$baseUrl/cloudstream/repo.json',
+    );
     final reloaded = MovieRepository.fromJson(custom);
     expect(reloaded.url, '$baseUrl/cloudstream/repo.json');
-    expect(reloaded.providers.map((p) => p.name), ['Alpha Source', 'Beta Source']);
+    expect(reloaded.providers.map((p) => p.name), [
+      'Alpha Source',
+      'Beta Source',
+    ]);
   });
 
   test('theme mode and audio preference persist across reads', () async {
@@ -579,7 +666,8 @@ void main() {
 
 Future<void> _waitForCompletedDownload(DownloadTask task) async {
   final deadline = DateTime.now().add(const Duration(seconds: 15));
-  while ((task.status == DownloadStatus.downloading || task.status == DownloadStatus.queued) &&
+  while ((task.status == DownloadStatus.downloading ||
+          task.status == DownloadStatus.queued) &&
       DateTime.now().isBefore(deadline)) {
     await Future<void>.delayed(const Duration(milliseconds: 100));
   }
@@ -621,11 +709,17 @@ Future<void> _handleRequest(HttpRequest request, int port) async {
       final end = parts.length > 1 && parts[1].isNotEmpty
           ? int.tryParse(parts[1]) ?? bytes.length - 1
           : bytes.length - 1;
-      final slice = bytes.sublist(start.clamp(0, bytes.length), (end + 1).clamp(0, bytes.length));
+      final slice = bytes.sublist(
+        start.clamp(0, bytes.length),
+        (end + 1).clamp(0, bytes.length),
+      );
       request.response
         ..statusCode = HttpStatus.partialContent
         ..headers.contentType = ContentType('video', 'mp4')
-        ..headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-${start + slice.length - 1}/${bytes.length}')
+        ..headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes $start-${start + slice.length - 1}/${bytes.length}',
+        )
         ..headers.contentLength = slice.length
         ..add(slice);
       await request.response.close();
