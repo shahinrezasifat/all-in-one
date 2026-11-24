@@ -719,7 +719,14 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
         final upNext = _recommendationsFor(player.currentItem);
 
         return Positioned.fill(
-          child: GestureDetector(
+          child: PopScope<Object?>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              // System back minimises into the floating popup instead of
+              // walking back through the previous screens.
+              if (!didPop) player.minimize();
+            },
+            child: GestureDetector(
             onVerticalDragEnd: (details) {
               if (details.primaryVelocity != null &&
                   details.primaryVelocity! > 300) {
@@ -1199,6 +1206,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                 ),
               ),
             ),
+          ),
           ),
         );
       },

@@ -1,10 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../models/download_task.dart';
+import '../models/movie_model.dart';
 import '../services/download_manager.dart';
 import '../services/player_service.dart';
+import '../services/watch_history_service.dart';
+import 'movie_player_screen.dart';
 import '../services/virtual_folder_service.dart';
 import '../theme/app_palette.dart';
+import 'downloaded_title_page.dart';
 import '../widgets/download_item_tile.dart';
 import '../widgets/folder_picker_sheet.dart';
 import '../widgets/movie_card.dart';
@@ -214,185 +220,162 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           body: SafeArea(
             child: Column(
               children: [
+                // Hyper-Modern Animated Sliding Tab Switcher
                 Padding(
-                  padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Downloads',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ),
-
-                // Modern Floating Segmented Switcher (Downloading vs Downloaded)
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Container(
-                    padding: EdgeInsets.all(4),
+                    height: 48,
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: context.palette.selectedBg,
-                      borderRadius: BorderRadius.circular(30),
+                      color: isDark ? const Color(0x1AFFFFFF) : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(
+                        color: isDark ? const Color(0x22FFFFFF) : Colors.black12,
+                        width: 1,
+                      ),
                     ),
-                    child: Row(
+                    child: Stack(
                       children: [
-                        // Tab 0: Downloading
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _activeTabIndex = 0;
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: Duration(milliseconds: 200),
-                              padding: EdgeInsets.symmetric(vertical: 10),
+                        // Smooth Sliding Active Pill Indicator
+                        AnimatedAlign(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                          alignment: _activeTabIndex == 0
+                              ? Alignment.centerLeft
+                              : Alignment.centerRight,
+                          child: FractionallySizedBox(
+                            widthFactor: 0.5,
+                            child: Container(
                               decoration: BoxDecoration(
-                                color: _activeTabIndex == 0
-                                    ? context.palette.primary
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(26),
-                                boxShadow: _activeTabIndex == 0
-                                    ? [
-                                        BoxShadow(
-                                          color: context.palette.tint(context.palette.primary, 0.35,),
-                                          blurRadius: 10,
-                                          offset: Offset(0, 3),
-                                        ),
-                                      ]
-                                    : [],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.download_rounded,
-                                    size: 18,
-                                    color: _activeTabIndex == 0
-                                        ? context.palette.onPrimary
-                                        : context.palette.textPrimary,
+                                color: context.palette.primary,
+                                borderRadius: BorderRadius.circular(22),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: context.palette.primary.withValues(alpha: 0.35),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 3),
                                   ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'Downloading',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: _activeTabIndex == 0
-                                          ? context.palette.onPrimary
-                                        : context.palette.textPrimary,
-                                    ),
-                                  ),
-                                  if (activeList.isNotEmpty) ...[
-                                    SizedBox(width: 6),
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _activeTabIndex == 0
-                                            ? context.palette.onPrimary
-                                            : context.palette.trackBg,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        '${activeList.length}',
-                                        style: TextStyle(
-                                          color: _activeTabIndex == 0
-                                              ? context.palette.primary
-                                              : context.palette.textPrimary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
                           ),
                         ),
 
-                        // Tab 1: Downloaded Folders
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _activeTabIndex = 1;
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: Duration(milliseconds: 200),
-                              padding: EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: _activeTabIndex == 1
-                                    ? context.palette.primary
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(26),
-                                boxShadow: _activeTabIndex == 1
-                                    ? [
-                                        BoxShadow(
-                                          color: context.palette.tint(context.palette.primary, 0.35,),
-                                          blurRadius: 10,
-                                          offset: Offset(0, 3),
-                                        ),
-                                      ]
-                                    : [],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.cloud_done_rounded,
-                                    size: 18,
-                                    color: _activeTabIndex == 1
-                                        ? context.palette.onPrimary
-                                        : context.palette.textPrimary,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'Downloaded',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: _activeTabIndex == 1
-                                          ? context.palette.onPrimary
-                                        : context.palette.textPrimary,
-                                    ),
-                                  ),
-                                  if (completedList.isNotEmpty) ...[
-                                    SizedBox(width: 6),
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _activeTabIndex == 1
+                        // Tab Options Layer
+                        Row(
+                          children: [
+                            // Tab 0: Downloading
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => setState(() => _activeTabIndex = 0),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.download_rounded,
+                                        size: 18,
+                                        color: _activeTabIndex == 0
                                             ? context.palette.onPrimary
-                                            : context.palette.trackBg,
-                                        borderRadius: BorderRadius.circular(10),
+                                            : context.palette.textPrimary,
                                       ),
-                                      child: Text(
-                                        '${completedList.length}',
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Downloading',
                                         style: TextStyle(
-                                          color: _activeTabIndex == 1
-                                              ? context.palette.primary
-                                              : (isDark
-                                                    ? context.palette.textSecondary
-                                                    : context.palette.textPrimary),
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13,
+                                          color: _activeTabIndex == 0
+                                              ? context.palette.onPrimary
+                                              : context.palette.textPrimary,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ],
+                                      if (activeList.isNotEmpty) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _activeTabIndex == 0
+                                                ? context.palette.onPrimary
+                                                : context.palette.primary.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            '${activeList.length}',
+                                            style: TextStyle(
+                                              color: context.palette.primary,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+
+                            // Tab 1: Downloaded
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => setState(() => _activeTabIndex = 1),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.cloud_done_rounded,
+                                        size: 18,
+                                        color: _activeTabIndex == 1
+                                            ? context.palette.onPrimary
+                                            : context.palette.textPrimary,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Downloaded',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13,
+                                          color: _activeTabIndex == 1
+                                              ? context.palette.onPrimary
+                                              : context.palette.textPrimary,
+                                        ),
+                                      ),
+                                      if (completedList.isNotEmpty) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _activeTabIndex == 1
+                                                ? context.palette.onPrimary
+                                                : context.palette.primary.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            '${completedList.length}',
+                                            style: TextStyle(
+                                              color: context.palette.primary,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -504,11 +487,47 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (movieGroups.isNotEmpty) ...[
-            Text(
-              'Movies & Series',
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: [
+                Container(
+                  width: 3,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: context.palette.primary,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Text(
+                  'Movies & Series',
+                  style: TextStyle(
+                    color: context.palette.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.palette.selectedBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${movieGroups.length}',
+                    style: TextStyle(
+                      color: context.palette.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             GridView.builder(
               padding: EdgeInsets.zero,
               shrinkWrap: true,
@@ -532,10 +551,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Auto Organized Folders (ওয়েবসাইট ও চ্যানেল ফোল্ডার)',
+                    'Auto Organized Folders',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: context.palette.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 SizedBox(width: 6),
@@ -721,6 +744,67 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     );
   }
 
+  void _openDownloadedTask(BuildContext context, DownloadTask task) {
+    final path = task.savePath ?? '';
+    if (task.isAudioTask ||
+        task.isImageTask ||
+        path.isEmpty ||
+        !File(path).existsSync()) {
+      PlayerService.instance.playDownloadTask(task);
+      return;
+    }
+    final history = WatchHistoryService.instance.getProgress(task.id);
+    final season = history?.seasonNumber ??
+        int.tryParse(
+          RegExp(r'\d+').firstMatch(task.seriesSeason ?? '')?.group(0) ?? '',
+        ) ??
+        1;
+    final source = MovieSource(
+      serverName: 'Downloaded',
+      resolution: task.formatLabel.isNotEmpty ? task.formatLabel : 'Original',
+      downloadUrl: path,
+      streamUrl: path,
+      fileSize: '',
+      format: task.ext.toLowerCase(),
+    );
+    final series = task.series;
+    final movie = series != null
+        ? series.copyWith(
+            sources: [source],
+            detailUrl: path,
+            episodeUrl: task.seriesEpisodeUrl ?? '',
+          )
+        : MovieItem(
+            id: task.id,
+            title: task.title,
+            posterUrl: task.thumbnailUrl,
+            backdropUrl: task.thumbnailUrl,
+            year: 0,
+            rating: 0,
+            quality: task.formatLabel,
+            genres: const ['Downloaded'],
+            type: 'movie',
+            synopsis: '',
+            duration: '',
+            repoId: '',
+            repoName: 'Downloads',
+            detailUrl: path,
+            sources: [source],
+          );
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MoviePlayerScreen(
+          movie: movie,
+          initialSource: source,
+          initialSeason: season,
+          initialEpisode: history?.episodeNumber ?? 1,
+          initialPositionSeconds: history?.positionSeconds ?? 0,
+          liveSources: [source],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDownloadedPoster(List<DownloadTask> tasks) {
     final task = tasks.first;
     final series = task.series;
@@ -729,105 +813,23 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final manager = DownloadManager.instance;
 
     void showFiles() {
-      String? selectedSeason;
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        builder: (context) => FractionallySizedBox(
-          heightFactor: .65,
-          child: StatefulBuilder(
-            builder: (context, updateSheet) => ListenableBuilder(
-              listenable: manager,
-              builder: (context, _) {
-                final completed = manager.completedTasks.toSet();
-                final files = tasks.where(completed.contains).toList();
-                final seasons = <String, List<DownloadTask>>{};
-                if (seriesTitle != null) {
-                  for (final file in files) {
-                    seasons
-                        .putIfAbsent(_downloadedSeason(file), () => [])
-                        .add(file);
-                  }
-                }
-                final labels = seasons.keys.toList()
-                  ..sort((a, b) {
-                    final first = int.tryParse(
-                      _numberedSeason.firstMatch(a)?.group(1) ?? '',
-                    );
-                    final second = int.tryParse(
-                      _numberedSeason.firstMatch(b)?.group(1) ?? '',
-                    );
-                    if (first != null && second != null)
-                      return first.compareTo(second);
-                    if (first != null) return -1;
-                    if (second != null) return 1;
-                    return a.compareTo(b);
-                  });
-                final activeSeason = seasons.containsKey(selectedSeason)
-                    ? selectedSeason
-                    : labels.firstOrNull;
-                return ListView(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleLarge),
-                    if (labels.isNotEmpty) ...[
-                      SizedBox(height: 8),
-                      Text(
-                        'Downloaded seasons',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          for (final label in labels)
-                            ChoiceChip(
-                              label: Text(label),
-                              selected: label == activeSeason,
-                              onSelected: (_) => updateSheet(() {
-                                selectedSeason = label;
-                              }),
-                            ),
-                        ],
-                      ),
-                    ],
-                    SizedBox(height: 12),
-                    if (files.isEmpty) Text('No downloaded files'),
-                    if (seriesTitle == null)
-                      for (final file in files)
-                        DownloadItemTile(key: ValueKey(file.id), task: file),
-                    if (activeSeason != null) ...[
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          '$activeSeason · ${seasons[activeSeason]!.length} downloaded',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ),
-                      for (final file in [...seasons[activeSeason]!]
-                        ..sort(
-                          (a, b) =>
-                              _episodeNumber(a).compareTo(_episodeNumber(b)),
-                        ))
-                        DownloadItemTile(key: ValueKey(file.id), task: file),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
+      DownloadedTitlePage.show(
+        context,
+        title: title,
+        tasks: tasks,
+        isSeries: seriesTitle != null,
       );
     }
 
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainer,
-      borderRadius: BorderRadius.circular(16),
+    final card = Material(
+      color: context.palette.card,
+      borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
+      elevation: 1,
+      shadowColor: context.palette.shadowAt(0.18),
       child: InkWell(
         onTap: seriesTitle == null
-            ? () => PlayerService.instance.playDownloadTask(task)
+            ? () => _openDownloadedTask(context, task)
             : showFiles,
         onLongPress: showFiles,
         child: Column(
@@ -843,22 +845,53 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     placeholderIcon: Icons.movie_rounded,
                     placeholderColor: context.palette.surface,
                   ),
+                  // Small type badge only — no floating icon on the artwork.
                   Positioned(
-                    right: 4,
-                    top: 4,
-                    child: IconButton.filledTonal(
-                      tooltip: seriesTitle == null
-                          ? 'Download options'
-                          : 'Episodes',
-                      onPressed: showFiles,
-                      icon: Icon(
-                        seriesTitle == null
-                            ? Icons.more_vert_rounded
-                            : Icons.video_library_rounded,
-                        size: 18,
+                    right: 5,
+                    top: 5,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.palette.scrimAt(0.78),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        seriesTitle == null ? 'MOVIE' : 'SERIES',
+                        style: TextStyle(
+                          color: context.palette.onScrim,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ),
+                  if (tasks.length > 1)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.palette.scrimAt(0.78),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${tasks.length} episodes',
+                          style: TextStyle(
+                            color: context.palette.onScrim,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -879,6 +912,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         ),
       ),
     );
+    return seriesTitle == null
+        ? card
+        : Tooltip(message: 'Episodes', child: card);
   }
 
   // Website Channels View: Shows channels inside the opened website

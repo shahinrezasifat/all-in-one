@@ -788,13 +788,74 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     }
   }
 
+  ({int season, MovieEpisode episode})? _nextEpisode() {
+    final seasons = widget.movie.seasons;
+    for (final season in seasons) {
+      if (season.seasonNumber != _currentSeasonNumber) continue;
+      final index = season.episodes.indexWhere(
+        (e) => e.episodeNumber == _currentEpisodeNumber,
+      );
+      if (index >= 0 && index + 1 < season.episodes.length) {
+        return (season: season.seasonNumber, episode: season.episodes[index + 1]);
+      }
+    }
+    final nextSeason = seasons
+        .where((s) => s.seasonNumber > _currentSeasonNumber)
+        .toList()
+      ..sort((a, b) => a.seasonNumber.compareTo(b.seasonNumber));
+    if (nextSeason.isNotEmpty && nextSeason.first.episodes.isNotEmpty) {
+      return (
+        season: nextSeason.first.seasonNumber,
+        episode: nextSeason.first.episodes.first,
+      );
+    }
+    return null;
+  }
+
+  void _playNextEpisode(({int season, MovieEpisode episode}) next) {
+    setState(() {
+      _currentSeasonNumber = next.season;
+      _currentEpisodeNumber = next.episode.episodeNumber;
+      _currentSeconds = 0;
+      _completionPromptShown = false;
+      _currentSource = next.episode.sources.firstWhere(
+        (source) => source.streamUrl.isNotEmpty || source.downloadUrl.isNotEmpty,
+      );
+    });
+    _saveProgress();
+    unawaited(_initVideoPlayer());
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Playing S$_currentSeasonNumber E$_currentEpisodeNumber · ${next.episode.title}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _maybePromptCompletion() {
-    final taskId = widget.downloadTaskId;
-    if (_completionPromptShown || !mounted || taskId == null ||
-        widget.trailerOnly || widget.isLiveTv ||
+    if (_completionPromptShown ||
+        !mounted ||
+        widget.trailerOnly ||
+        widget.isLiveTv ||
         ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
+    final taskId = widget.downloadTaskId;
+    if (taskId == null && widget.movie.isSeries) {
+      final next = _nextEpisode();
+      if (next != null && next.episode.sources.any(
+        (source) => source.streamUrl.isNotEmpty || source.downloadUrl.isNotEmpty,
+      )) {
+        _completionPromptShown = true;
+        _playNextEpisode(next);
+        return;
+      }
+    }
+    if (taskId == null) return;
     final manager = DownloadManager.instance;
     final path = _currentSource.streamUrl;
     final task = manager.completedTasks
@@ -1057,7 +1118,18 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    if (_mini) return _buildMiniPlayer();
+    if (_mini) {
+      final h = MediaQuery.sizeOf(context).height;
+      return TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: -0.45, end: 0),
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+        builder: (context, dy, _) => Transform.translate(
+          offset: Offset(0, dy * h),
+          child: _buildMiniPlayer(),
+        ),
+      );
+    }
 
     return PopScope<Object?>(
       canPop: false,
@@ -2000,6 +2072,23 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (widget.movie.isSeries)
+                        TextButton.icon(
+                          onPressed: _showSeasonEpisodeDrawer,
+                          icon: Icon(
+                            Icons.video_library_outlined,
+                            color: context.palette.onScrim,
+                            size: 15,
+                          ),
+                          label: Text(
+                            'S$_currentSeasonNumber E$_currentEpisodeNumber',
+                            style: TextStyle(
+                              color: context.palette.onScrim,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
                       TextButton(
                         onPressed: () {
                           setState(() {

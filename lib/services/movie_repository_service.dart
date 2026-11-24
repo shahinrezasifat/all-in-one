@@ -106,6 +106,19 @@ class MovieRepositoryService extends ChangeNotifier {
       }
     }
 
+    // The upstream duro92/ExtCloud repository was deleted from GitHub, so this
+    // shipped default can never refresh. Purge it from saved catalogs on launch,
+    // including installs seeded by an older version of the app.
+    final hadRetiredRepo = _repositories.any(_isRetiredExtCloudRepo);
+    if (hadRetiredRepo) {
+      _repositories.removeWhere(_isRetiredExtCloudRepo);
+    }
+    if (_selectedSource != null &&
+        _isRetiredExtCloudId(_selectedSource!.repo)) {
+      _selectedSource = null;
+      await prefs.remove(_selectedSourceKey);
+    }
+
     if (!wasSeeded) {
       addMissing(
         _getDefaultRepositories().map(
@@ -116,7 +129,11 @@ class MovieRepositoryService extends ChangeNotifier {
     // This repo is a required default: make sure every existing install gets
     // it too, even when the one-time seeding flag was already set.
     _ensureAllMovieLandRepo();
-    if (!wasSeeded || legacyKeys.any(prefs.containsKey)) await _save();
+    if (!wasSeeded ||
+        legacyKeys.any(prefs.containsKey) ||
+        hadRetiredRepo) {
+      await _save();
+    }
     if (!wasSeeded) await prefs.setBool(_seededFlagKey, true);
 
     // Always clean up any legacy storage keys
@@ -125,6 +142,19 @@ class MovieRepositoryService extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  static bool _isRetiredExtCloudId(String id) =>
+      id.trim().toLowerCase() == 'cs_extcloud';
+
+  static bool _isRetiredExtCloudRepo(MovieRepository repo) {
+    if (_isRetiredExtCloudId(repo.id) ||
+        repo.shortcode.trim().toLowerCase() == 'extcloud') {
+      return true;
+    }
+    return normalizeRepoUrl(repo.url)
+        .toLowerCase()
+        .contains('raw.githubusercontent.com/duro92/extcloud/');
   }
 
   /// The Phisher repo / AllMovieLand provider are part of the shipped catalog.
@@ -845,23 +875,6 @@ class MovieRepositoryService extends ChangeNotifier {
         tags: const ['Indonesian', 'Asian Drama'],
       ),
       MovieRepository(
-        id: 'cs_extcloud',
-        name: 'ExtCloud Repo',
-        shortcode: 'extcloud',
-        description:
-            'ExtCloud Indonesian streaming extensions and cinema suite.',
-        url: normalizeRepoUrl(
-          'https://raw.githubusercontent.com/duro92/ExtCloud/main/repo.json',
-        ),
-        author: 'duro92',
-        version: '1.0.0',
-        iconType: 'cloudstream',
-        ecosystem: 'cloudstream',
-        isEnabled: true,
-        providerCount: 7,
-        tags: const ['Indonesian'],
-      ),
-      MovieRepository(
         id: 'cs_cloudx',
         name: 'CloudX Repository',
         shortcode: 'cloudx',
@@ -1375,14 +1388,6 @@ class MovieRepositoryService extends ChangeNotifier {
       'url': 'https://raw.githubusercontent.com/TeKuma25/IndoStream/builds/repo.json',
       'desc': 'Indonesian movies, Asian dramas, and streaming providers.',
       'author': 'TeKuma25',
-      'type': 'cloudstream',
-      'ecosystem': 'cloudstream',
-    },
-    'extcloud': {
-      'name': 'ExtCloud Repo',
-      'url': 'https://raw.githubusercontent.com/duro92/ExtCloud/main/repo.json',
-      'desc': 'ExtCloud Indonesian streaming extensions suite.',
-      'author': 'duro92',
       'type': 'cloudstream',
       'ecosystem': 'cloudstream',
     },

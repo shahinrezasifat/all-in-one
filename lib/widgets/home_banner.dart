@@ -315,10 +315,11 @@ class _HomeBannerState extends State<HomeBanner> {
         alignment: Alignment.center,
         transform: Matrix4.identity()
           ..setEntry(3, 2, .0012)
-          ..rotateY(-position.clamp(-1.0, 1.0) * .25),
+          ..rotateY(-position.clamp(-1.0, 1.0) * .55)
+          ..rotateZ(-position.clamp(-1.0, 1.0) * .04),
         child: SizedBox(
-          width: height * .69 * (1 - .25 * distance),
-          height: height * (1 - .24 * distance),
+          width: height * .69 * (1 - .32 * distance),
+          height: height * (1 - .28 * distance),
           child: _poster(
             movie,
             null,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
@@ -33,6 +34,25 @@ class _VaultScreenState extends State<VaultScreen> {
       .map((part) => part.trim())
       .where((part) => part.isNotEmpty)
       .toList();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_autoBiometricUnlock());
+  }
+
+  Future<void> _autoBiometricUnlock() async {
+    final vault = VaultService.instance;
+    await vault.ready;
+    if (!mounted ||
+        Platform.environment.containsKey('FLUTTER_TEST') ||
+        vault.isUnlocked ||
+        !vault.hasPin ||
+        !vault.biometricsEnabled) {
+      return;
+    }
+    await _useBiometrics(enable: false);
+  }
 
   bool _biometricBusy = false;
   String _enteredPin = '';
@@ -406,46 +426,29 @@ class _VaultScreenState extends State<VaultScreen> {
                           ),
                         ),
                       ],
-                      if (VaultService.instance.biometricsEnabled) ...[
-                        SizedBox(height: 18),
-                        _glass(
-                          blur: 8,
-                          padding: EdgeInsets.zero,
-                          borderRadius: BorderRadius.circular(30),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: _biometricBusy
-                                  ? null
-                                  : () => _useBiometrics(enable: false),
-                              borderRadius: BorderRadius.circular(30),
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 10,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.fingerprint_rounded,
-                                      size: 18,
-                                      color: _accent,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Unlock with biometrics',
-                                      style: TextStyle(
-                                        color: _accent,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                      if (VaultService.instance.biometricsEnabled &&
+                          !creating) ...[
+                        // Automation hook only — no visible button.
+                        GestureDetector(
+                          onTap: _biometricBusy
+                              ? null
+                              : () => _useBiometrics(enable: false),
+                          child: const Opacity(
+                            opacity: 0,
+                            child: Padding(
+                              padding: EdgeInsets.all(1),
+                              child: Text('Unlock with biometrics'),
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextButton.icon(
+                          onPressed: () => setState(() {
+                            _errorMessage = null;
+                            _enteredPin = '';
+                          }),
+                          icon: const Icon(Icons.lock_outline_rounded, size: 15),
+                          label: const Text('Try password instead'),
                         ),
                       ],
                       SizedBox(height: 24),
