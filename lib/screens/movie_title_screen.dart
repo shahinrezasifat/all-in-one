@@ -352,9 +352,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                                             style: TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w700,
-                                              color: sheetDark
-                                                  ? context.palette.card
-                                                  : context.palette.textPrimary,
+                                              color: context.palette.textPrimary,
                                             ),
                                           ),
                                           if (subtitle != null) ...[

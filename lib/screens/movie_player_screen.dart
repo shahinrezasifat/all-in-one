@@ -28,6 +28,7 @@ class MoviePlayerScreen extends StatefulWidget {
   final int initialSeason;
   final int initialEpisode;
   final double initialPositionSeconds;
+  final String? downloadTaskId;
 
   /// When true the player shows ONLY the movie's YouTube trailer (on-demand,
   /// opened from the "Trailer" button). It never touches the real provider
@@ -49,6 +50,7 @@ class MoviePlayerScreen extends StatefulWidget {
     this.initialSeason = 1,
     this.initialEpisode = 1,
     this.initialPositionSeconds = 0.0,
+    this.downloadTaskId,
     this.trailerOnly = false,
     this.isLiveTv = false,
     this.liveSources = const [],
@@ -69,6 +71,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
   bool _isPlaying = true;
   bool _mini = false;
+  bool _completionPromptShown = false;
   double _currentSeconds = 0.0;
   double _totalSeconds = 7200.0; // 2h default
   double _playbackSpeed = 1.0;
@@ -778,10 +781,52 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       _totalSeconds = dur;
       needsUpdate = true;
     }
+    if (val.isCompleted) _maybePromptCompletion();
 
     if (needsUpdate && mounted) {
       setState(() {});
     }
+  }
+
+  void _maybePromptCompletion() {
+    final taskId = widget.downloadTaskId;
+    if (_completionPromptShown || !mounted || taskId == null ||
+        widget.trailerOnly || widget.isLiveTv ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    final manager = DownloadManager.instance;
+    final path = _currentSource.streamUrl;
+    final task = manager.completedTasks
+        .where((task) => task.id == taskId && task.savePath == path)
+        .firstOrNull;
+    if (task == null) return;
+    _completionPromptShown = true;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Downloaded file'),
+        content: Text(
+          'You finished "${widget.movie.title}". Delete the downloaded file to free space?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (manager.completedTasks.contains(task) && task.savePath == path) {
+                manager.deleteTask(task);
+              }
+              if (mounted) Navigator.of(context).pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _saveProgress() {
@@ -789,7 +834,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     // seekable progress to remember.
     if (widget.trailerOnly || widget.isLiveTv) return;
     WatchHistoryService.instance.saveProgress(
-      movieId: widget.movie.id,
+      movieId: widget.downloadTaskId ?? widget.movie.id,
       title: widget.movie.title,
       posterUrl: widget.movie.posterUrl,
       backdropUrl: widget.movie.backdropUrl,

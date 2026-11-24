@@ -12,7 +12,6 @@ import '../services/movie_repository_service.dart';
 import '../services/permission_service.dart';
 import '../services/settings_service.dart';
 import '../services/storage_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../widgets/folder_picker_sheet.dart';
 import '../widgets/permission_dialog.dart';
@@ -606,6 +605,103 @@ class SettingsScreen extends StatelessWidget {
   // ---------------------------------------------------------------------------
   // Download Preference Dropdowns
   // ---------------------------------------------------------------------------
+  Widget _preferenceSelectorRow({
+    required BuildContext context,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String valueLabel,
+    required bool isDark,
+    required Color accent,
+    required Color secondaryText,
+    required VoidCallback onTap,
+  }) {
+    final p = context.palette;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          child: Row(
+            children: [
+              _iconTile(icon, iconColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: p.textPrimary,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: secondaryText,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? accent.withValues(alpha: 0.12)
+                      : accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark
+                        ? accent.withValues(alpha: 0.28)
+                        : accent.withValues(alpha: 0.20),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 110),
+                      child: Text(
+                        valueLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: accent,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: accent,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _parallelRow(
     BuildContext context,
     SettingsService settings,
@@ -613,59 +709,35 @@ class SettingsScreen extends StatelessWidget {
     Color accent,
     Color secondaryText,
   ) {
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _iconTile(Icons.speed_rounded, context.palette.success),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Simultaneous Downloads',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Files downloading at once',
-                      style: TextStyle(color: secondaryText, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _dropdownTile(
-            context: context,
-            isDark: isDark,
-            accent: accent,
-            valueText: '⚡ ${settings.maxConcurrent} File${settings.maxConcurrent == 1 ? '' : 's'} downloading at once',
-            onTap: () {
-              _showDropdownPickerSheet<int>(
-                context: context,
-                title: 'Simultaneous Downloads',
-                subtitle: 'Choose how many files can download at the same time',
-                icon: Icons.speed_rounded,
-                currentValue: settings.maxConcurrent,
-                items: const [
-                  ('1 File at once', 'Conserves network bandwidth and memory', 1),
-                  ('2 Files at once', 'Balanced download speed', 2),
-                  ('3 Files at once', 'Recommended for high-speed connections', 3),
-                  ('4 Files at once', 'Fast multi-file downloads', 4),
-                  ('5 Files at once', 'Maximum parallel download capacity', 5),
-                ],
-                onSelect: (val) => settings.setMaxConcurrent(val),
-              );
-            },
-          ),
-        ],
-      ),
+    final count = settings.maxConcurrent;
+    final valueLabel = '$count ${count == 1 ? 'File' : 'Files'}';
+    return _preferenceSelectorRow(
+      context: context,
+      icon: Icons.speed_rounded,
+      iconColor: context.palette.success,
+      title: 'Simultaneous Downloads',
+      subtitle: 'Files downloading at once',
+      valueLabel: valueLabel,
+      isDark: isDark,
+      accent: accent,
+      secondaryText: secondaryText,
+      onTap: () {
+        _showDropdownPickerSheet<int>(
+          context: context,
+          title: 'Simultaneous Downloads',
+          subtitle: 'Choose how many files can download at the same time',
+          icon: Icons.speed_rounded,
+          currentValue: settings.maxConcurrent,
+          items: const [
+            ('1 File at once', 'Conserves network bandwidth and memory', 1),
+            ('2 Files at once', 'Balanced download speed', 2),
+            ('3 Files at once', 'Recommended for high-speed connections', 3),
+            ('4 Files at once', 'Fast multi-file downloads', 4),
+            ('5 Files at once', 'Maximum parallel download capacity', 5),
+          ],
+          onSelect: (val) => settings.setMaxConcurrent(val),
+        );
+      },
     );
   }
 
@@ -676,58 +748,32 @@ class SettingsScreen extends StatelessWidget {
     Color accent,
     Color secondaryText,
   ) {
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _iconTile(Icons.high_quality_rounded, context.palette.info),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Default Video Quality',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Used when selected quality is available',
-                      style: TextStyle(color: secondaryText, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _dropdownTile(
-            context: context,
-            isDark: isDark,
-            accent: accent,
-            valueText: '🎬 ${settings.defaultVideoQuality}',
-            onTap: () {
-              _showDropdownPickerSheet<String>(
-                context: context,
-                title: 'Default Video Quality',
-                subtitle: 'Preferred resolution for video downloads',
-                icon: Icons.high_quality_rounded,
-                currentValue: settings.defaultVideoQuality,
-                items: const [
-                  ('Ask Every Time', 'Prompt quality selection before downloading', 'Ask Every Time'),
-                  ('4K Ultra HD', 'Highest resolution (2160p / 4K)', '4K Ultra HD'),
-                  ('1080p Full HD', 'Best balance of clarity and size (1080p)', '1080p Full HD'),
-                  ('720p HD', 'Standard HD video quality (720p)', '720p HD'),
-                ],
-                onSelect: (val) => settings.setDefaultVideoQuality(val),
-              );
-            },
-          ),
-        ],
-      ),
+    return _preferenceSelectorRow(
+      context: context,
+      icon: Icons.high_quality_rounded,
+      iconColor: context.palette.info,
+      title: 'Default Video Quality',
+      subtitle: 'Preferred download resolution',
+      valueLabel: settings.defaultVideoQuality,
+      isDark: isDark,
+      accent: accent,
+      secondaryText: secondaryText,
+      onTap: () {
+        _showDropdownPickerSheet<String>(
+          context: context,
+          title: 'Default Video Quality',
+          subtitle: 'Preferred resolution for video downloads',
+          icon: Icons.high_quality_rounded,
+          currentValue: settings.defaultVideoQuality,
+          items: const [
+            ('Ask Every Time', 'Prompt quality selection before downloading', 'Ask Every Time'),
+            ('4K Ultra HD', 'Highest resolution (2160p / 4K)', '4K Ultra HD'),
+            ('1080p Full HD', 'Best balance of clarity and size (1080p)', '1080p Full HD'),
+            ('720p HD', 'Standard HD video quality (720p)', '720p HD'),
+          ],
+          onSelect: (val) => settings.setDefaultVideoQuality(val),
+        );
+      },
     );
   }
 
@@ -738,58 +784,32 @@ class SettingsScreen extends StatelessWidget {
     Color accent,
     Color secondaryText,
   ) {
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _iconTile(Icons.audiotrack_rounded, context.palette.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Default Audio Format',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Used for audio downloads',
-                      style: TextStyle(color: secondaryText, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _dropdownTile(
-            context: context,
-            isDark: isDark,
-            accent: accent,
-            valueText: '🎵 ${settings.defaultAudioFormat}',
-            onTap: () {
-              _showDropdownPickerSheet<String>(
-                context: context,
-                title: 'Default Audio Format',
-                subtitle: 'Preferred bitrate and encoding for music downloads',
-                icon: Icons.audiotrack_rounded,
-                currentValue: settings.defaultAudioFormat,
-                items: const [
-                  ('320 kbps MP3', 'Highest audio quality (320 kbps MP3)', '320 kbps MP3'),
-                  ('256 kbps MP3', 'High quality audio (256 kbps MP3)', '256 kbps MP3'),
-                  ('128 kbps MP3', 'Standard audio quality (128 kbps MP3)', '128 kbps MP3'),
-                  ('M4A (AAC)', 'Native AAC container (M4A)', 'M4A (AAC)'),
-                ],
-                onSelect: (val) => settings.setDefaultAudioFormat(val),
-              );
-            },
-          ),
-        ],
-      ),
+    return _preferenceSelectorRow(
+      context: context,
+      icon: Icons.audiotrack_rounded,
+      iconColor: context.palette.primary,
+      title: 'Default Audio Format',
+      subtitle: 'Preferred audio download format',
+      valueLabel: settings.defaultAudioFormat,
+      isDark: isDark,
+      accent: accent,
+      secondaryText: secondaryText,
+      onTap: () {
+        _showDropdownPickerSheet<String>(
+          context: context,
+          title: 'Default Audio Format',
+          subtitle: 'Preferred bitrate and encoding for music downloads',
+          icon: Icons.audiotrack_rounded,
+          currentValue: settings.defaultAudioFormat,
+          items: const [
+            ('320 kbps MP3', 'Highest audio quality (320 kbps MP3)', '320 kbps MP3'),
+            ('256 kbps MP3', 'High quality audio (256 kbps MP3)', '256 kbps MP3'),
+            ('128 kbps MP3', 'Standard audio quality (128 kbps MP3)', '128 kbps MP3'),
+            ('M4A (AAC)', 'Native AAC container (M4A)', 'M4A (AAC)'),
+          ],
+          onSelect: (val) => settings.setDefaultAudioFormat(val),
+        );
+      },
     );
   }
 
@@ -1244,55 +1264,6 @@ class SettingsScreen extends StatelessWidget {
   // ---------------------------------------------------------------------------
   // Helper Widgets
   // ---------------------------------------------------------------------------
-  Widget _dropdownTile({
-    required BuildContext context,
-    required bool isDark,
-    required Color accent,
-    required String valueText,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Colors.black.withValues(alpha: 0.06),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  valueText,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                    color: accent,
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 20,
-                color: accent,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   void _showDropdownPickerSheet<T>({
     required BuildContext context,

@@ -3,13 +3,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../models/download_task.dart';
+import '../models/movie_model.dart';
 import '../screens/audio_player_screen.dart';
+import '../screens/movie_player_screen.dart';
 import '../screens/vault_screen.dart';
 import '../services/download_manager.dart';
 import '../services/gallery_media_service.dart';
 import '../services/player_service.dart';
+import '../services/watch_history_service.dart';
 import '../services/vault_service.dart';
 import '../services/virtual_folder_service.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import 'image_viewer_dialog.dart';
 import 'remote_image.dart';
@@ -17,9 +21,68 @@ import 'remote_image.dart';
 class DownloadItemTile extends StatelessWidget {
   final DownloadTask task;
 
-  DownloadItemTile({super.key, required this.task});
+  const DownloadItemTile({super.key, required this.task});
 
   void _play(BuildContext context) {
+    final path = task.savePath ?? '';
+    final isVideo = !task.isAudioTask && !task.isImageTask;
+    if (isVideo && path.isNotEmpty && File(path).existsSync()) {
+      // Downloaded movies/series always open in the app's cinema player, with
+      // the exact position the user last left — including per-episode history.
+      final history = WatchHistoryService.instance.getProgress(task.id);
+      final season = history?.seasonNumber ??
+          int.tryParse(
+            RegExp(r'\d+').firstMatch(task.seriesSeason ?? '')?.group(0) ?? '',
+          ) ??
+          1;
+      final episode = history?.episodeNumber ?? 1;
+      final source = MovieSource(
+        serverName: 'Downloaded',
+        resolution: task.formatLabel.isNotEmpty ? task.formatLabel : 'Original',
+        downloadUrl: path,
+        streamUrl: path,
+        fileSize: '',
+        format: task.ext.toLowerCase(),
+      );
+      final series = task.series;
+      final movie = series != null
+          ? series.copyWith(
+              sources: [source],
+              detailUrl: path,
+              episodeUrl: task.seriesEpisodeUrl ?? '',
+            )
+          : MovieItem(
+              id: task.id,
+              title: task.title,
+              posterUrl: task.thumbnailUrl,
+              backdropUrl: task.thumbnailUrl,
+              year: 0,
+              rating: 0,
+              quality: task.formatLabel,
+              genres: const ['Downloaded'],
+              type: 'movie',
+              synopsis: '',
+              duration: '',
+              repoId: '',
+              repoName: 'Downloads',
+              detailUrl: path,
+              sources: [source],
+            );
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MoviePlayerScreen(
+            movie: movie,
+            initialSource: source,
+            initialSeason: season,
+            initialEpisode: episode,
+            initialPositionSeconds: history?.positionSeconds ?? 0,
+            downloadTaskId: task.id,
+            liveSources: [source],
+          ),
+        ),
+      );
+      return;
+    }
     PlayerService.instance.playDownloadTask(task);
     if (task.isAudioTask && ModalRoute.of(context)?.isFirst == false) {
       Navigator.of(context).push<void>(
@@ -497,33 +560,33 @@ class DownloadItemTile extends StatelessWidget {
     String label = formatLabel;
 
     if (lower.contains('4k') || lower.contains('2160')) {
-      startColor = AppPalette.current.textSecondary;
-      endColor = AppPalette.current.textSecondary;
+      startColor = const Color(0xFF8B5CF6);
+      endColor = const Color(0xFF6366F1);
       label = '4K UHD';
     } else if (lower.contains('1080') || lower.contains('fhd')) {
-      startColor = AppPalette.current.success;
-      endColor = AppPalette.current.info;
+      startColor = const Color(0xFF00E676);
+      endColor = const Color(0xFF00B0FF);
       label = '1080p FHD';
     } else if (lower.contains('720') || lower.contains('hd')) {
-      startColor = AppPalette.current.info;
-      endColor = AppPalette.current.info;
+      startColor = const Color(0xFF06B6D4);
+      endColor = const Color(0xFF3B82F6);
       label = '720p HD';
     } else if (lower.contains('480') || lower.contains('sd')) {
-      startColor = AppPalette.current.primary;
-      endColor = AppPalette.current.primary;
+      startColor = const Color(0xFF10B981);
+      endColor = const Color(0xFF059669);
       label = '480p SD';
     } else if (isAudio) {
-      startColor = AppPalette.current.success;
-      endColor = AppPalette.current.success;
+      startColor = const Color(0xFF10B981);
+      endColor = const Color(0xFF06B6D4);
       label = task.ext.isNotEmpty ? task.ext.toUpperCase() : 'AUDIO';
     } else {
-      startColor = AppPalette.current.primary;
-      endColor = AppPalette.current.success;
+      startColor = const Color(0xFF10B981);
+      endColor = const Color(0xFF00B0FF);
       label = formatLabel.isNotEmpty ? formatLabel : 'HD';
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [startColor, endColor],
@@ -535,14 +598,14 @@ class DownloadItemTile extends StatelessWidget {
           BoxShadow(
             color: startColor.withValues(alpha: 0.35),
             blurRadius: 4,
-            offset: Offset(0, 1.5),
+            offset: const Offset(0, 1.5),
           ),
         ],
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: AppPalette.current.textPrimary,
+        style: const TextStyle(
+          color: Colors.white,
           fontSize: 9.5,
           fontWeight: FontWeight.w900,
           letterSpacing: 0.3,
@@ -560,29 +623,34 @@ class DownloadItemTile extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
   }) {
+    final effectiveBg = isDark
+        ? borderColor.withValues(alpha: 0.16)
+        : borderColor.withValues(alpha: 0.10);
+    final effectiveBorder = borderColor.withValues(alpha: isDark ? 0.38 : 0.28);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          height: 32,
-          padding: EdgeInsets.symmetric(horizontal: 12),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: bgColor,
+            color: effectiveBg,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor, width: 1),
+            border: Border.all(color: effectiveBorder, width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 14),
-              SizedBox(width: 4),
+              Icon(icon, color: borderColor, size: 15),
+              const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
-                  color: color,
-                  fontSize: 11.5,
+                  color: borderColor,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.2,
                 ),
@@ -605,25 +673,29 @@ class DownloadItemTile extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(17),
           onTap: onTap,
           child: Container(
-            width: 32,
-            height: 32,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: isDark
-                  ? AppPalette.current.tint(AppPalette.current.card, 0.06)
-                  : AppPalette.current.card,
-              borderRadius: BorderRadius.circular(10),
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(17),
               border: Border.all(
-                color: isDark ? AppPalette.current.tint(AppPalette.current.onScrim, 0.12) : AppPalette.current.card,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.14)
+                    : Colors.black.withValues(alpha: 0.08),
                 width: 1,
               ),
             ),
             child: Icon(
               icon,
-              color: AppPalette.current.textSecondary,
-              size: 15,
+              color: isDark
+                  ? const Color(0xFFCBD5E1)
+                  : const Color(0xFF64748B),
+              size: 16,
             ),
           ),
         ),
@@ -670,21 +742,23 @@ class DownloadItemTile extends StatelessWidget {
     }
 
     return Container(
-      margin: EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: context.palette.card,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? context.palette.border : context.palette.card,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.09)
+              : const Color(0xFFE2E8F0),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? context.palette.shadowAt(0.3)
-                : context.palette.textSecondary.withValues(alpha: 0.07),
+                ? Colors.black.withValues(alpha: 0.35)
+                : Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
-            offset: Offset(0, 3),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -702,7 +776,7 @@ class DownloadItemTile extends StatelessWidget {
                 }
               : null,
           child: Padding(
-            padding: EdgeInsets.all(12),
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -722,7 +796,7 @@ class DownloadItemTile extends StatelessWidget {
                               BoxShadow(
                                 color: context.palette.shadowAt(0.25),
                                 blurRadius: 6,
-                                offset: Offset(0, 2),
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
@@ -744,7 +818,7 @@ class DownloadItemTile extends StatelessWidget {
                           bottom: 4,
                           right: 4,
                           child: Container(
-                            padding: EdgeInsets.all(3.5),
+                            padding: const EdgeInsets.all(3.5),
                             decoration: BoxDecoration(
                               color: task.isImageTask
                                   ? context.palette.secondary
@@ -777,15 +851,15 @@ class DownloadItemTile extends StatelessWidget {
                             top: 4,
                             left: 4,
                             child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 2,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2.5,
                               ),
                               decoration: BoxDecoration(
-                                color: context.palette.shadowAt(0.72),
-                                borderRadius: BorderRadius.circular(5),
+                                color: Colors.black.withValues(alpha: 0.72),
+                                borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
-                                  color: context.palette.tint(context.palette.onScrim, 0.12),
+                                  color: Colors.white.withValues(alpha: 0.16),
                                   width: 0.5,
                                 ),
                               ),
@@ -793,8 +867,8 @@ class DownloadItemTile extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Container(
-                                    width: 5,
-                                    height: 5,
+                                    width: 5.5,
+                                    height: 5.5,
                                     decoration: BoxDecoration(
                                       color: statusDotColor,
                                       shape: BoxShape.circle,
@@ -804,18 +878,18 @@ class DownloadItemTile extends StatelessWidget {
                                             color: statusDotColor.withValues(
                                               alpha: 0.9,
                                             ),
-                                            blurRadius: 3,
+                                            blurRadius: 4,
                                           ),
                                       ],
                                     ),
                                   ),
-                                  SizedBox(width: 3.5),
+                                  const SizedBox(width: 4),
                                   Text(
                                     statusLabel,
-                                    style: TextStyle(
-                                      color: context.palette.onScrim,
-                                      fontSize: 7.5,
-                                      fontWeight: FontWeight.w900,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800,
                                       letterSpacing: 0.4,
                                     ),
                                   ),
@@ -973,15 +1047,44 @@ class DownloadItemTile extends StatelessWidget {
                           },
                         )
                       else
-                        IconButton(
-                          tooltip: 'Play Video',
-                          icon: Icon(
-                            Icons.play_circle_fill_rounded,
-                            color: context.palette.onAccent,
-                            size: 34,
-                          ),
-                          onPressed: () {
-                            _play(context);
+                        AnimatedBuilder(
+                          animation: WatchHistoryService.instance,
+                          builder: (context, child) {
+                            final h = WatchHistoryService.instance
+                                .getProgress(task.id);
+                            final ratio = h == null || h.totalSeconds <= 0
+                                ? 0.0
+                                : (h.positionSeconds / h.totalSeconds).clamp(
+                                    0.0,
+                                    1.0,
+                                  );
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Play Video',
+                                  icon: Icon(
+                                    Icons.play_circle_fill_rounded,
+                                    color: context.palette.onAccent,
+                                    size: 34,
+                                  ),
+                                  onPressed: () => _play(context),
+                                ),
+                                if (ratio > 0)
+                                  Text(
+                                    ratio >= 0.95
+                                        ? 'Watched'
+                                        : '${(ratio * 100).round()}%',
+                                    style: TextStyle(
+                                      color: ratio >= 0.95
+                                          ? context.palette.success
+                                          : context.palette.textSecondary,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                              ],
+                            );
                           },
                         ),
                       IconButton(
@@ -1009,7 +1112,7 @@ class DownloadItemTile extends StatelessWidget {
 
                 // Downloading Progress & Controls Section
                 if (!isDone) ...[
-                  SizedBox(height: 11),
+                  const SizedBox(height: 12),
 
                   if (isPreparing)
                     Column(
@@ -1018,14 +1121,14 @@ class DownloadItemTile extends StatelessWidget {
                         Row(
                           children: [
                             SizedBox(
-                              width: 12,
-                              height: 12,
+                              width: 14,
+                              height: 14,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                                strokeWidth: 2.2,
                                 color: context.palette.primary,
                               ),
                             ),
-                            SizedBox(width: 7),
+                            const SizedBox(width: 8),
                             Text(
                               task.statusNote == 'Starting download…'
                                   ? 'Starting download…'
@@ -1035,22 +1138,22 @@ class DownloadItemTile extends StatelessWidget {
                               style: TextStyle(
                                 color: context.palette.primary,
                                 fontWeight: FontWeight.w800,
-                                fontSize: 12,
+                                fontSize: 12.5,
                               ),
                             ),
-                            Spacer(),
+                            const Spacer(),
                             if (total > 0)
                               Text(
                                 'Total $totalLabel · $percentLabel',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
                                   color: context.palette.textSecondary,
                                 ),
                               ),
                           ],
                         ),
-                        SizedBox(height: 3),
+                        const SizedBox(height: 4),
                         Text(
                           task.statusNote == 'Starting download…'
                               ? (total > 0
@@ -1063,7 +1166,7 @@ class DownloadItemTile extends StatelessWidget {
                             color: context.palette.textSecondary,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         _SmoothDownloadProgressSlider(
                           progress: null,
                           isPreparing: true,
@@ -1076,19 +1179,19 @@ class DownloadItemTile extends StatelessWidget {
                     // Live transfer stats row
                     Row(
                       children: [
-                        // Dynamic Speed Badge (UC Browser signature "+ <speed>")
+                        // Dynamic Speed Badge
                         if (isDownloading &&
                             task.speedFormatted.isNotEmpty) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
-                              vertical: 3,
+                              vertical: 3.5,
                             ),
                             decoration: BoxDecoration(
-                              color: context.palette.primary.withValues(alpha: 0.18),
+                              color: context.palette.primary.withValues(alpha: isDark ? 0.16 : 0.10),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: context.palette.primary.withValues(alpha: 0.35),
+                                color: context.palette.primary.withValues(alpha: isDark ? 0.35 : 0.25),
                                 width: 1,
                               ),
                             ),
@@ -1097,32 +1200,23 @@ class DownloadItemTile extends StatelessWidget {
                               children: [
                                 Icon(
                                   Icons.arrow_downward_rounded,
-                                  size: 12,
+                                  size: 13,
                                   color: context.palette.primary,
                                 ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  '+',
-                                  style: TextStyle(
-                                    color: context.palette.primary,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
+                                const SizedBox(width: 4),
                                 Text(
                                   task.speedFormatted,
                                   style: TextStyle(
                                     color: context.palette.textPrimary,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
                                     letterSpacing: 0.2,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                         ],
 
                         // ETA / Status
@@ -1133,14 +1227,14 @@ class DownloadItemTile extends StatelessWidget {
                             children: [
                               Icon(
                                 Icons.schedule_rounded,
-                                size: 12,
+                                size: 13,
                                 color: context.palette.textSecondary,
                               ),
-                              SizedBox(width: 3),
+                              const SizedBox(width: 4),
                               Text(
                                 '${task.etaFormatted} left',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
                                   color: context.palette.textSecondary,
                                 ),
@@ -1149,42 +1243,53 @@ class DownloadItemTile extends StatelessWidget {
                           ),
                         ] else if (isPaused || isQueued) ...[
                           Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
                             ),
                             decoration: BoxDecoration(
                               color: isPaused
-                                  ? context.palette.tint(
-                                      context.palette.textSecondary, .12)
+                                  ? (isDark
+                                      ? const Color(0xFFD97706).withValues(alpha: 0.18)
+                                      : const Color(0xFFFEF3C7))
                                   : context.palette.selectedBg,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isPaused
+                                    ? (isDark
+                                        ? const Color(0xFFD97706).withValues(alpha: 0.40)
+                                        : const Color(0xFFF59E0B))
+                                    : context.palette.primary.withValues(alpha: 0.3),
+                                width: 0.8,
+                              ),
                             ),
                             child: Text(
                               isQueued ? 'Queued' : 'Paused',
                               style: TextStyle(
-                                color: context.palette.textPrimary,
+                                color: isPaused
+                                    ? (isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309))
+                                    : context.palette.textPrimary,
                                 fontSize: 11,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                         ] else if (isFailed) ...[
                           Flexible(
                             child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
                               ),
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? context.palette.error
-                                    : context.palette.tint(context.palette.error, 0.06),
-                                borderRadius: BorderRadius.circular(6),
+                                    ? context.palette.error.withValues(alpha: 0.16)
+                                    : context.palette.tint(context.palette.error, 0.08),
+                                borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isDark
-                                      ? context.palette.tint(context.palette.error, 0.30)
-                                      : context.palette.error,
+                                      ? context.palette.tint(context.palette.error, 0.35)
+                                      : context.palette.error.withValues(alpha: 0.5),
                                   width: 0.8,
                                 ),
                               ),
@@ -1195,7 +1300,7 @@ class DownloadItemTile extends StatelessWidget {
                                 style: TextStyle(
                                   color: context.palette.error,
                                   fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
@@ -1203,15 +1308,19 @@ class DownloadItemTile extends StatelessWidget {
                         ] else if (task.isConverting) ...[
                           Flexible(
                             child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
                               ),
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? context.palette.secondary
+                                    ? context.palette.secondary.withValues(alpha: 0.18)
                                     : context.palette.card,
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: context.palette.info.withValues(alpha: 0.35),
+                                  width: 0.8,
+                                ),
                               ),
                               child: Text(
                                 task.convertStage ?? 'Processing…',
@@ -1220,14 +1329,14 @@ class DownloadItemTile extends StatelessWidget {
                                 style: TextStyle(
                                   color: context.palette.info,
                                   fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
                           ),
                         ],
 
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
 
                         // Downloaded / Total Bytes
                         Expanded(
@@ -1245,26 +1354,33 @@ class DownloadItemTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                        SizedBox(width: 6),
+                        const SizedBox(width: 8),
 
                         // Bold Percentage Chip
                         Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1.5,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2.5,
                           ),
                           decoration: BoxDecoration(
                             color: (task.isAudio
                                     ? context.palette.success
                                     : context.palette.primary)
-                                .withValues(alpha: isDark ? 0.22 : 0.12),
-                            borderRadius: BorderRadius.circular(6),
+                                .withValues(alpha: isDark ? 0.20 : 0.12),
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(
+                              color: (task.isAudio
+                                      ? context.palette.success
+                                      : context.palette.primary)
+                                  .withValues(alpha: isDark ? 0.40 : 0.25),
+                              width: 0.8,
+                            ),
                           ),
                           child: Text(
                             percentLabel,
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
                               color: task.isAudio
                                   ? context.palette.success
                                   : (context.palette.primary),
@@ -1274,7 +1390,7 @@ class DownloadItemTile extends StatelessWidget {
                       ],
                     ),
 
-                    SizedBox(height: 8),
+                    const SizedBox(height: 9),
 
                     // Ultra-Smooth UC Browser Slider with Lead Buffer & Flowing Shimmer
                     _SmoothDownloadProgressSlider(
@@ -1293,42 +1409,42 @@ class DownloadItemTile extends StatelessWidget {
                           : context.palette.primary,
                     ),
                   ],
-                  SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
                   // Bottom Controls & Multi-Threads Row
                   Row(
                     children: [
                       if (task.threadsCount > 1)
                         Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 7,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? context.palette.tint(context.palette.card, 0.05)
-                                : context.palette.card,
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : Colors.black.withValues(alpha: 0.04),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: isDark
-                                  ? context.palette.tint(context.palette.onScrim, 0.10)
-                                  : context.palette.card,
+                                  ? Colors.white.withValues(alpha: 0.10)
+                                  : Colors.black.withValues(alpha: 0.06),
                               width: 0.8,
                             ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons.flash_on_rounded,
-                                size: 12,
-                                color: context.palette.info,
+                              const Icon(
+                                Icons.bolt_rounded,
+                                size: 14,
+                                color: Color(0xFFFBBF24),
                               ),
-                              SizedBox(width: 3),
+                              const SizedBox(width: 4),
                               Text(
                                 '${task.threadsCount}x Multi-Threads',
                                 style: TextStyle(
-                                  fontSize: 10.5,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   color: context.palette.textSecondary,
                                 ),
@@ -1337,7 +1453,7 @@ class DownloadItemTile extends StatelessWidget {
                           ),
                         ),
 
-                      Spacer(),
+                      const Spacer(),
 
                       // Cohesive Pause / Resume / Retry Pill
                       _actionPillButton(
@@ -1367,9 +1483,9 @@ class DownloadItemTile extends StatelessWidget {
                                 ? () => DownloadManager.instance.pauseTask(task)
                                 : () => DownloadManager.instance.resumeTask(task)),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
 
-                      // Harmonized 32x32 Cancel Button
+                      // Harmonized Cancel Button
                       _actionIconButton(
                         isDark: isDark,
                         icon: Icons.close_rounded,
@@ -1408,7 +1524,7 @@ class _SmoothDownloadProgressSlider extends StatefulWidget {
   final Color? primaryColor;
   final Color? secondaryColor;
 
-  _SmoothDownloadProgressSlider({
+  const _SmoothDownloadProgressSlider({
     required this.progress,
     this.isPreparing = false,
     this.isPaused = false,
@@ -1418,7 +1534,7 @@ class _SmoothDownloadProgressSlider extends StatefulWidget {
     this.secondaryColor,
   });
 
-  static double sliderHeight = 7.0;
+  static double sliderHeight = 10.0;
 
   @override
   State<_SmoothDownloadProgressSlider> createState() =>
@@ -1506,7 +1622,13 @@ class _SmoothDownloadProgressSliderState
 
   @override
   Widget build(BuildContext context) {
-    final trackColor = context.palette.trackBg;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final trackColor = isDark
+        ? const Color(0xFF1B2430)
+        : const Color(0xFFE2E8F0);
+    final trackBorder = isDark
+        ? const Color(0xFF2A374A)
+        : const Color(0xFFCBD5E1);
 
     final targetProgress = widget.progress?.clamp(0.0, 1.0);
     final isIndeterminate = widget.isPreparing || targetProgress == null;
@@ -1518,12 +1640,27 @@ class _SmoothDownloadProgressSliderState
             : (widget.primaryColor ?? context.palette.primary));
     final secondary = widget.secondaryColor ??
         (widget.isFailed
-            ? context.palette.error
+            ? const Color(0xFFEF4444)
             : (widget.isPaused
-                ? context.palette.info
-                : context.palette.primary));
+                ? const Color(0xFFF59E0B)
+                : const Color(0xFF00E5FF)));
 
     final height = _SmoothDownloadProgressSlider.sliderHeight;
+
+    final progressGradient = widget.isFailed
+        ? const LinearGradient(
+            colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+          )
+        : (widget.isPaused
+            ? const LinearGradient(
+                colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+              )
+            : LinearGradient(
+                colors: [
+                  secondary,
+                  primary,
+                ],
+              ));
 
     return Semantics(
       label: 'Download progress',
@@ -1541,7 +1678,7 @@ class _SmoothDownloadProgressSliderState
               opacity: 0,
               child: LinearProgressIndicator(
                 value: isIndeterminate ? null : targetProgress,
-                color: context.palette.primary,
+                color: AppColors.primary,
                 backgroundColor: context.palette.tint(context.palette.primary, 0.14),
               ),
             ),
@@ -1564,23 +1701,24 @@ class _SmoothDownloadProgressSliderState
                       decoration: BoxDecoration(
                         color: trackColor,
                         borderRadius: BorderRadius.circular(height / 2),
+                        border: Border.all(color: trackBorder, width: 0.8),
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: Stack(
                         children: [
                           Positioned(
-                            left: (t * (totalWidth + 120)) - 100,
+                            left: (t * (totalWidth + 140)) - 120,
                             top: 0,
                             bottom: 0,
                             child: Container(
-                              width: 90,
+                              width: 100,
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
                                     primary.withValues(alpha: 0.0),
-                                    primary.withValues(alpha: 0.7),
-                                    primary,
-                                    primary.withValues(alpha: 0.7),
+                                    primary.withValues(alpha: 0.75),
+                                    Colors.white.withValues(alpha: 0.9),
+                                    primary.withValues(alpha: 0.75),
                                     primary.withValues(alpha: 0.0),
                                   ],
                                 ),
@@ -1612,6 +1750,7 @@ class _SmoothDownloadProgressSliderState
                         decoration: BoxDecoration(
                           color: trackColor,
                           borderRadius: BorderRadius.circular(height / 2),
+                          border: Border.all(color: trackBorder, width: 0.8),
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: Stack(
@@ -1621,9 +1760,7 @@ class _SmoothDownloadProgressSliderState
                               heightFactor: 1,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [secondary, primary],
-                                  ),
+                                  gradient: progressGradient,
                                 ),
                               ),
                             ),
@@ -1634,21 +1771,18 @@ class _SmoothDownloadProgressSliderState
                                 top: 0.8,
                                 child: Container(
                                   width: filledWidth.clamp(0.0, totalWidth),
-                                  height: height * 0.30,
+                                  height: height * 0.35,
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(colors: [
-                                      context.palette.tint(
-                                          context.palette.onScrim, 0.05),
-                                      context.palette.tint(
-                                          context.palette.onScrim, 0.34),
-                                      context.palette.tint(
-                                          context.palette.onScrim, 0.05),
+                                      Colors.white.withValues(alpha: 0.05),
+                                      Colors.white.withValues(alpha: 0.45),
+                                      Colors.white.withValues(alpha: 0.05),
                                     ]),
                                     borderRadius: BorderRadius.circular(height),
                                   ),
                                 ),
                               ),
-                            // UC / Opera Mini style traveling light sweep.
+                            // Fluid light sweep across filled bar
                             if (_isDownloading && filledWidth > 12)
                               AnimatedBuilder(
                                 animation: _shimmerController,
@@ -1663,12 +1797,9 @@ class _SmoothDownloadProgressSliderState
                                         width: 70,
                                         decoration: BoxDecoration(
                                           gradient: LinearGradient(colors: [
-                                            context.palette.tint(
-                                                context.palette.onScrim, 0.0),
-                                            context.palette.tint(
-                                                context.palette.onScrim, 0.42),
-                                            context.palette.tint(
-                                                context.palette.onScrim, 0.0),
+                                            Colors.white.withValues(alpha: 0.0),
+                                            Colors.white.withValues(alpha: 0.40),
+                                            Colors.white.withValues(alpha: 0.0),
                                           ]),
                                         ),
                                       ),
@@ -1679,26 +1810,31 @@ class _SmoothDownloadProgressSliderState
                           ],
                         ),
                       ),
-                      // Soft glow at the leading edge of completed progress.
-                      if (_isDownloading && filledWidth > 4 && totalWidth >= 10)
+                      // Luminous pulse head at the leading edge of completed progress
+                      if (_isDownloading && filledWidth > 2 && totalWidth >= 12)
                         Positioned(
-                          left: (filledWidth - 5).clamp(0.0, totalWidth - 10),
-                          top: (height - 10) / 2,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: context.palette
-                                  .tint(context.palette.onScrim, 0.55),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: context.palette
-                                      .tint(primary, 0.55),
-                                  blurRadius: 9,
-                                  spreadRadius: 2,
-                                ),
-                              ],
+                          left: (filledWidth - height / 2).clamp(0.0, totalWidth - height),
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: Container(
+                              width: height,
+                              height: height,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primary.withValues(alpha: 0.95),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                  BoxShadow(
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    blurRadius: 3,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

@@ -46,6 +46,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     r'^(.*?) - (?:(?:Season\s+(\d+)\s*·\s*)?Episode\s+\d+|S(\d+)E\d+)\b',
     caseSensitive: false,
   );
+  static final _numberedEpisode = RegExp(
+    r'(?:Episode\s*|E)(\d+)',
+    caseSensitive: false,
+  );
+
+  int _episodeNumber(DownloadTask task) =>
+      int.tryParse(
+        _numberedEpisode.firstMatch(task.title)?.group(1) ?? '',
+      ) ??
+      0;
+
   static final _numberedSeason = RegExp(
     r'^Season\s+(\d+)$',
     caseSensitive: false,
@@ -794,7 +805,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
-                      for (final file in seasons[activeSeason]!)
+                      for (final file in [...seasons[activeSeason]!]
+                        ..sort(
+                          (a, b) =>
+                              _episodeNumber(a).compareTo(_episodeNumber(b)),
+                        ))
                         DownloadItemTile(key: ValueKey(file.id), task: file),
                     ],
                   ],
@@ -1051,6 +1066,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     } else if (_inFolderFilter == 'Movies') {
       tasks = tasks.where((t) => t.category == 'movie').toList();
     }
+    // First episode on top, last episode at the bottom.
+    tasks.sort((a, b) => _episodeNumber(a).compareTo(_episodeNumber(b)));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1325,6 +1342,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           .where((t) => t.category == 'movie')
           .toList();
     }
+    tasksInFolder.sort(
+      (a, b) => _episodeNumber(a).compareTo(_episodeNumber(b)),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

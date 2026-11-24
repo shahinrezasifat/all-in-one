@@ -74,6 +74,7 @@ class _MovieScreenState extends State<MovieScreen> {
 
   String? _category;
   String? _genre;
+  String? _tag;
   bool _loadingGenres = false;
   final _genreLookups = <String>{};
   ColorScheme get _colors => Theme.of(context).colorScheme;
@@ -174,6 +175,7 @@ class _MovieScreenState extends State<MovieScreen> {
         _detectedMode = null;
         _category = null;
         _genre = null;
+        _tag = null;
         _channelCountry = null;
         _channelLanguage = null;
       }
@@ -348,6 +350,7 @@ class _MovieScreenState extends State<MovieScreen> {
           !movie.genres.any((g) => g.toLowerCase() == _genre!.toLowerCase())) {
         return false;
       }
+      if (_tag != null && !_matchesTag(movie, _tag!)) return false;
       return switch (_category) {
         'movie' => !movie.isSeries && !movie.isAnime,
         'series' => movie.isSeries && !movie.isAnime,
@@ -1254,6 +1257,8 @@ class _MovieScreenState extends State<MovieScreen> {
                   ),
                 ),
                 SliverToBoxAdapter(child: _categoryTiles()),
+                if (_query.isEmpty && !_isLiveTvMode)
+                  SliverToBoxAdapter(child: _buildTagChips()),
                 if (history.isNotEmpty)
                   SliverToBoxAdapter(child: _continueWatching(history)),
                 if (_query.isEmpty && !filtered)
@@ -1467,6 +1472,84 @@ class _MovieScreenState extends State<MovieScreen> {
       ),
     ),
   );
+
+  static const _tags = [
+    'Korean',
+    'Bengali',
+    'Hindi',
+    'English',
+    'Tamil',
+    'Telugu',
+    'Japanese',
+    'Anime',
+    'Hollywood',
+    'Bollywood',
+  ];
+
+  bool _matchesTag(MovieItem movie, String tag) {
+    final text = [
+      movie.title,
+      ...movie.genres,
+      ...movie.catalogGroups,
+      movie.providerName,
+      movie.repoName,
+    ].join(' ').toLowerCase();
+    return switch (tag) {
+      'Korean' =>
+        text.contains('korean') ||
+        text.contains('korea') ||
+        text.contains('k-drama') ||
+        text.contains('kdrama'),
+      'Bengali' => text.contains('bengali') || text.contains('bangla'),
+      'Hindi' => text.contains('hindi'),
+      'English' => text.contains('english') || text.contains('hollywood'),
+      'Tamil' => text.contains('tamil'),
+      'Telugu' => text.contains('telugu'),
+      'Japanese' => text.contains('japan'),
+      'Anime' => movie.isAnime || text.contains('anime'),
+      'Hollywood' => text.contains('hollywood') || text.contains('english'),
+      'Bollywood' => text.contains('bollywood') || text.contains('hindi'),
+      _ => true,
+    };
+  }
+
+  Widget _buildTagChips() {
+    final p = context.palette;
+    final available = _tags
+        .where((tag) => _items.any((movie) => _matchesTag(movie, tag)))
+        .toList();
+    if (available.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      child: SizedBox(
+        height: 38,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: available.length + 1,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final tag = index == 0 ? null : available[index - 1];
+            final selected = _tag == tag;
+            return ActionChip(
+              label: Text(
+                tag ?? 'All',
+                style: TextStyle(
+                  color: selected ? p.onPrimary : p.textPrimary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              backgroundColor: selected ? p.primary : p.card,
+              side: BorderSide(color: selected ? p.primary : p.border),
+              onPressed: () => setState(
+                () => _tag = selected ? null : tag,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 
   Widget _categoryTiles() {
     final tiles = [
