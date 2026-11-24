@@ -74,10 +74,10 @@ Each architecture-specific APK includes the app and the media engines for its CP
 
 | Platform | Package | Run |
 | --- | --- | --- |
-| Windows x64 | [Portable ZIP](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/all-in-one-v1.0.12-windows-x64.zip) | Extract the entire ZIP and open `snaptube_pure.exe` |
+| Windows 10/11 x64 | [Download Windows installer (.exe)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/all-in-one-v1.0.12-windows-x64-setup.exe) | Run the installer and open **All in One** from the Start menu |
 | Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/all-in-one-v1.0.12-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
 
-Windows needs the x64 Visual C++ Runtime and WebView2 for the in-app browser. Keep the executable, DLLs, and data folder together. [Microsoft Visual C++ Runtime](https://aka.ms/vc14/vc_redist.x64.exe) · [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+Windows Setup installs the app for the current user. Setup may request administrator access to install the Visual C++ Runtime. If WebView2 is missing, its installer requires an internet connection. [Microsoft Visual C++ Runtime](https://aka.ms/vc14/vc_redist.x64.exe) · [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
 
 Linux was tested on Ubuntu 24.04 x64. The desktop bundle uses GTK 3, WebKitGTK 4.1, and JSON-GLib from the distribution. On Ubuntu 24.04, install them with `sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 libjson-glib-1.0-0`.
 
