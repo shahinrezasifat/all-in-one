@@ -22,7 +22,7 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   FLUTTER_VERSION: '3.50.0'
@@ -97,6 +97,14 @@ jobs:
           name: windows-x64
           path: all-in-one-*-windows-x64.zip
           if-no-files-found: error
+      - name: Upload Windows package to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ inputs.tag }}'
+          gh release upload $tag "all-in-one-$tag-windows-x64.zip" --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   linux:
     needs: verify
@@ -145,3 +153,7 @@ jobs:
           name: linux-x64
           path: all-in-one-*-linux-x64.tar.gz
           if-no-files-found: error
+      - name: Upload Linux package to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" "all-in-one-${{ inputs.tag }}-linux-x64.tar.gz" --clobber
