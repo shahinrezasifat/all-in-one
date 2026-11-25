@@ -117,7 +117,7 @@ class YtDlpService {
         const Duration(seconds: 6),
       ),
     );
-    if (info != null && format == null && headers.isEmpty) {
+    if (format == null && headers.isEmpty) {
       _infoCache[canonical] = _CachedInfo(DateTime.now(), info);
       if (_infoCache.length > 24) _infoCache.remove(_infoCache.keys.first);
     }

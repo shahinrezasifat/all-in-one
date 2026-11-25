@@ -114,7 +114,7 @@ Future<void> analyzeAndPickFormat(
   } catch (error) {
     failure ??= error;
   } finally {
-    ticker?.cancel();
+    ticker.cancel();
     advance(1.0, 'Done');
     if (route.isActive) navigator.removeRoute(route);
   }

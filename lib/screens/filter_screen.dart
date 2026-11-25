@@ -215,6 +215,47 @@ class _FilterScreenState extends State<FilterScreen> {
       ),
       body: Column(
         children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            child: Row(
+              children: [
+                for (final type in ['All', ..._types])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(type),
+                      selected: _type == type,
+                      onSelected: (_) => setState(() => _type = type),
+                      selectedColor: p.primary,
+                      backgroundColor: p.card,
+                      side: BorderSide(
+                        color: _type == type ? p.primary : p.border,
+                      ),
+                      labelStyle: TextStyle(
+                        color: _type == type ? p.onPrimary : p.textPrimary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                OutlineButtonChip(
+                  label: _genre ?? 'Genre',
+                  onTap: () => _pickFilter('Genre'),
+                ),
+                const SizedBox(width: 8),
+                OutlineButtonChip(
+                  label: _country ?? 'Country',
+                  onTap: () => _pickFilter('Country'),
+                ),
+                const SizedBox(width: 8),
+                OutlineButtonChip(
+                  label: _year?.toString() ?? 'Year',
+                  onTap: () => _pickFilter('Year'),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: movies.isEmpty
                 ? Center(

@@ -97,6 +97,34 @@ class DownloadManager extends ChangeNotifier {
   List<DownloadTask> get imageTasks =>
       completedTasks.where((t) => t.isImageTask).toList();
 
+  /// Every completed video file belonging to the same downloaded series as
+  /// [task]. Used by the cinema player to build the episode picker even for
+  /// downloads made before season metadata was stored on the task.
+  List<DownloadTask> downloadedSiblings(DownloadTask task) {
+    final candidates = _tasks
+        .where(
+          (t) =>
+              t.status == DownloadStatus.completed &&
+              t.isVideoTask &&
+              (t.savePath ?? '').isNotEmpty,
+        )
+        .toList();
+
+    final seriesTitle = task.series?.title ?? '';
+    if (seriesTitle.isNotEmpty) {
+      final byTitle = candidates
+          .where((t) => t.series?.title == seriesTitle)
+          .toList();
+      if (byTitle.isNotEmpty) return byTitle;
+    }
+    final seriesId = task.series?.id;
+    if (seriesId != null && seriesId.isNotEmpty) {
+      final byId = candidates.where((t) => t.series?.id == seriesId).toList();
+      if (byId.isNotEmpty) return byId;
+    }
+    return candidates.where((t) => t.id == task.id).toList();
+  }
+
   /// Groups all completed tasks into a clean Website -> Channel -> `List<DownloadTask>` hierarchy.
   Map<String, Map<String, List<DownloadTask>>> get organizedWebsiteFolders =>
       organizeWebsiteFolders(completedTasks);
@@ -564,7 +592,7 @@ class DownloadManager extends ChangeNotifier {
       customTitle ?? movie.title,
       folder,
       series: movie.isSeries
-          ? movie.copyWith(sources: const [], seasons: const [])
+          ? movie.copyWith(sources: const [])
           : null,
       seasonName: seasonNumber == null ? null : 'Season $seasonNumber',
     );
@@ -590,7 +618,9 @@ class DownloadManager extends ChangeNotifier {
     final season = _safeDownloadName(seasonName, fallback: 'Season 1');
     final folder = '$downloadDirectory/$seriesName/$season';
     await Directory(folder).create(recursive: true);
-    final details = series.copyWith(sources: const [], seasons: const []);
+    // Keep the season/episode catalogue on the stored task so the player's
+    // episode picker works without having to re-query the provider.
+    final details = series.copyWith(sources: const []);
     for (final entry in episodes) {
       final episode = entry.episode;
       final number = episode.number.toString().padLeft(2, '0');

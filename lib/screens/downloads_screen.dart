@@ -10,6 +10,7 @@ import '../services/watch_history_service.dart';
 import 'movie_player_screen.dart';
 import '../services/virtual_folder_service.dart';
 import '../theme/app_palette.dart';
+import '../utils/episode_parser.dart';
 import 'downloaded_title_page.dart';
 import '../widgets/download_item_tile.dart';
 import '../widgets/folder_picker_sheet.dart';
@@ -63,30 +64,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       ) ??
       0;
 
-  static final _numberedSeason = RegExp(
-    r'^Season\s+(\d+)$',
-    caseSensitive: false,
-  );
-
   String? _seriesTitle(DownloadTask task) =>
       task.series?.title ?? _episodeTitle.firstMatch(task.title)?.group(1);
-
-  String _downloadedSeason(DownloadTask task) {
-    final episode = _episodeTitle.firstMatch(task.title);
-    final seasonNumber = episode?.group(2) ?? episode?.group(3);
-    final path = (task.savePath ?? '').split(RegExp(r'[/\\]'));
-    final label =
-        task.seriesSeason ??
-        (seasonNumber != null
-            ? 'Season $seasonNumber'
-            : task.seriesEpisodeUrl != null && path.length >= 3
-            ? path[path.length - 2]
-            : 'Season unspecified');
-    final number = int.tryParse(
-      _numberedSeason.firstMatch(label)?.group(1) ?? '',
-    );
-    return number == null ? label : 'Season $number';
-  }
 
   Map<String, Map<String, List<DownloadTask>>> _websiteFolders(
     DownloadManager manager,
@@ -754,11 +733,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       return;
     }
     final history = WatchHistoryService.instance.getProgress(task.id);
-    final season = history?.seasonNumber ??
-        int.tryParse(
-          RegExp(r'\d+').firstMatch(task.seriesSeason ?? '')?.group(0) ?? '',
-        ) ??
-        1;
+    final parsedSeason = EpisodeParser.season(task.seriesSeason ?? '') ??
+        EpisodeParser.season(task.title) ??
+        EpisodeParser.season(task.savePath ?? '');
+    final parsedEpisode = EpisodeParser.episode(task.title) ??
+        EpisodeParser.episode(task.seriesEpisodeUrl ?? '') ??
+        EpisodeParser.episode(task.savePath ?? '');
+    final season = parsedSeason ?? history?.seasonNumber ?? 1;
+    final episode = parsedEpisode ?? history?.episodeNumber ?? 1;
     final source = MovieSource(
       serverName: 'Downloaded',
       resolution: task.formatLabel.isNotEmpty ? task.formatLabel : 'Original',
@@ -797,8 +779,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           movie: movie,
           initialSource: source,
           initialSeason: season,
-          initialEpisode: history?.episodeNumber ?? 1,
+          initialEpisode: episode,
           initialPositionSeconds: history?.positionSeconds ?? 0,
+          downloadTaskId: task.id,
+          downloadedEpisodes: DownloadManager.instance.downloadedSiblings(task),
           liveSources: [source],
         ),
       ),
@@ -810,7 +794,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final series = task.series;
     final seriesTitle = _seriesTitle(task);
     final title = seriesTitle ?? task.title;
-    final manager = DownloadManager.instance;
 
     void showFiles() {
       DownloadedTitlePage.show(

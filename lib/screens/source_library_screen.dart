@@ -61,13 +61,6 @@ class _SourceLibraryScreenState extends State<SourceLibraryScreen> {
   static const _maxPages = 12;
   static const _budget = Duration(seconds: 10);
 
-  String get _category => switch (_tab) {
-        'Movies' => 'movies',
-        'Series' => 'series',
-        'Anime' => 'anime',
-        _ => 'all',
-      };
-
   @override
   void initState() {
     super.initState();

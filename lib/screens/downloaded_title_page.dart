@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/download_task.dart';
 import '../services/watch_history_service.dart';
 import '../theme/app_palette.dart';
+import '../utils/episode_parser.dart';
 import '../widgets/download_item_tile.dart';
 import '../widgets/remote_image.dart';
 
@@ -42,22 +43,21 @@ class DownloadedTitlePage extends StatefulWidget {
 }
 
 class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
-  static final _seasonPattern = RegExp(r'(?:Season\s*|S)(\d+)', caseSensitive: false);
-  static final _episodePattern = RegExp(r'(?:Episode\s*|E)(\d+)', caseSensitive: false);
-
   String? _season;
   String? _language;
 
   int _episode(DownloadTask task) =>
-      int.tryParse(_episodePattern.firstMatch(task.title)?.group(1) ?? '') ?? 0;
+      EpisodeParser.episode(task.title) ??
+      EpisodeParser.episode(task.savePath ?? '') ??
+      0;
 
   String _seasonOf(DownloadTask task) {
-    final m = _seasonPattern.firstMatch(task.title);
-    if (m != null) return 'Season ${m.group(1)}';
-    final explicit = task.seriesSeason?.trim();
-    if (explicit != null && explicit.isNotEmpty) return explicit;
-    final pathMatch = _seasonPattern.firstMatch(task.savePath ?? '');
-    if (pathMatch != null) return 'Season ${pathMatch.group(1)}';
+    final explicit = EpisodeParser.season(task.title) ??
+        EpisodeParser.season(task.seriesSeason ?? '') ??
+        EpisodeParser.season(task.savePath ?? '');
+    if (explicit != null) return 'Season $explicit';
+    final named = task.seriesSeason?.trim();
+    if (named != null && named.isNotEmpty) return named;
     return 'Season 1';
   }
 
@@ -85,8 +85,8 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
   List<String> get _seasons {
     final list = widget.tasks.map(_seasonOf).toSet().toList();
     list.sort((a, b) {
-      final x = int.tryParse(_seasonPattern.firstMatch(a)?.group(1) ?? '') ?? 0;
-      final y = int.tryParse(_seasonPattern.firstMatch(b)?.group(1) ?? '') ?? 0;
+      final x = EpisodeParser.season(a) ?? 0;
+      final y = EpisodeParser.season(b) ?? 0;
       return x.compareTo(y);
     });
     return list;
@@ -104,6 +104,11 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
     final seasons = _seasons;
     final languages = widget.tasks.map(_languageOf).toSet().toList()..sort();
     final tasks = _filtered;
+    final posterUrl = widget.tasks.isNotEmpty
+        ? (widget.tasks.first.thumbnailUrl.isNotEmpty
+            ? widget.tasks.first.thumbnailUrl
+            : widget.tasks.first.series?.posterUrl ?? '')
+        : '';
 
     return Scaffold(
       backgroundColor: p.background,
@@ -135,15 +140,11 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
+            // ── Hero banner ───────────────────────────────────────────────
+            _buildHero(p, posterUrl),
+            const SizedBox(height: 18),
             if (widget.isSeries && seasons.isNotEmpty) ...[
-              Text(
-                'Downloaded seasons',
-                style: TextStyle(
-                  color: p.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              _buildSectionTitle('Downloaded seasons', p),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -168,17 +169,10 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
                     ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
             ],
             if (languages.length > 1) ...[
-              Text(
-                'Languages',
-                style: TextStyle(
-                  color: p.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              _buildSectionTitle('Languages', p),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -203,20 +197,15 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
                     ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
             ],
-            if (_season != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  '$_season · ${tasks.length} downloaded',
-                  style: TextStyle(
-                    color: p.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+            _buildSectionTitle(
+              _season != null
+                  ? '$_season · ${tasks.length} downloaded'
+                  : '${tasks.length} downloaded',
+              p,
+            ),
+            const SizedBox(height: 10),
             if (tasks.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(32),
@@ -228,40 +217,99 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
                 ),
               )
             else
-              ...tasks.map((task) {
-                final history = WatchHistoryService.instance
-                    .getProgress(task.id);
-                final ratio = history == null || history.totalSeconds <= 0
-                    ? 0.0
-                    : (history.positionSeconds / history.totalSeconds).clamp(
-                        0.0,
-                        1.0,
-                      );
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      DownloadItemTile(key: ValueKey(task.id), task: task),
-                      if (ratio > 0)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: ratio,
-                              minHeight: 4,
-                              backgroundColor: p.trackBg,
-                              color: p.primary,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              }),
+              ...tasks.map(
+                (task) => DownloadItemTile(
+                  key: ValueKey(task.id),
+                  task: task,
+                  episodeMode: true,
+                ),
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String label, AppPalette p) => Text(
+        label,
+        style: TextStyle(
+          color: p.textPrimary,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+
+  Widget _buildHero(AppPalette p, String posterUrl) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
+        children: [
+          SizedBox(
+            height: 148,
+            width: double.infinity,
+            child: posterUrl.isNotEmpty
+                ? SmartNetworkImage(
+                    url: posterUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: 148,
+                    placeholderColor: p.card,
+                    placeholderIcon: Icons.movie_rounded,
+                  )
+                : Container(color: p.card),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [p.scrimAt(0.15), p.scrimAt(0.88)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 14,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: p.onScrim,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.download_done_rounded,
+                      size: 14,
+                      color: p.success,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${widget.tasks.length} episodes ready to watch offline',
+                      style: TextStyle(
+                        color: p.onScrim,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

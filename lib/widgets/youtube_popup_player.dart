@@ -1223,8 +1223,6 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
     bool isHighlight = false,
     bool isActive = false,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     Color bgColor;
     Color fgColor;
 

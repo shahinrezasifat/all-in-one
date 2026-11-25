@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
+import '../models/download_task.dart';
 import '../models/movie_model.dart';
 import '../models/video_item.dart';
 import '../services/download_manager.dart';
@@ -19,6 +20,7 @@ import '../services/provider_engine/provider_models.dart';
 import '../services/stream_fallback_service.dart';
 import '../services/watch_history_service.dart';
 import '../theme/app_palette.dart';
+import '../utils/episode_parser.dart';
 import '../widgets/remote_image.dart';
 import 'audio_player_screen.dart';
 
@@ -29,6 +31,10 @@ class MoviePlayerScreen extends StatefulWidget {
   final int initialEpisode;
   final double initialPositionSeconds;
   final String? downloadTaskId;
+
+  /// Other locally downloaded episodes of the same series. Used to build the
+  /// episode picker when the provider season metadata was never stored.
+  final List<DownloadTask> downloadedEpisodes;
 
   /// When true the player shows ONLY the movie's YouTube trailer (on-demand,
   /// opened from the "Trailer" button). It never touches the real provider
@@ -51,6 +57,7 @@ class MoviePlayerScreen extends StatefulWidget {
     this.initialEpisode = 1,
     this.initialPositionSeconds = 0.0,
     this.downloadTaskId,
+    this.downloadedEpisodes = const [],
     this.trailerOnly = false,
     this.isLiveTv = false,
     this.liveSources = const [],
@@ -71,6 +78,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
   bool _isPlaying = true;
   bool _mini = false;
+  String? _activeDownloadTaskId;
+  double _zoom = 1.0;
+  double _zoomStart = 1.0;
   bool _completionPromptShown = false;
   double _currentSeconds = 0.0;
   double _totalSeconds = 7200.0; // 2h default
@@ -111,7 +121,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   bool _showControls = true;
   Timer? _controlsDismissTimer;
   bool _isLocked = false;
-  String _aspectRatioMode = 'Fit'; // 'Fit', 'Fill', 'Zoom', '16:9'
+  String _aspectRatioMode = 'Fit'; // 'Fit' (native ratio) or 'Fill' (crop)
 
   // Double tap skip animations
   bool _showLeftDoubleTap = false;
@@ -123,6 +133,20 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     _currentSource = widget.initialSource;
     _currentSeasonNumber = widget.initialSeason;
     _currentEpisodeNumber = widget.initialEpisode;
+    _activeDownloadTaskId = widget.downloadTaskId;
+    // The file name is authoritative for downloaded episodes — an old watch
+    // history record or a missing history must never turn E5 into E1.
+    for (final task in widget.downloadedEpisodes) {
+      if (task.id != widget.downloadTaskId) continue;
+      final parsedSeason = EpisodeParser.season(task.seriesSeason ?? '') ??
+          EpisodeParser.season(task.title) ??
+          EpisodeParser.season(task.savePath ?? '');
+      final parsedEpisode = EpisodeParser.episode(task.title) ??
+          EpisodeParser.episode(task.savePath ?? '');
+      if (parsedSeason != null) _currentSeasonNumber = parsedSeason;
+      if (parsedEpisode != null) _currentEpisodeNumber = parsedEpisode;
+      break;
+    }
     _currentSeconds = widget.initialPositionSeconds;
     _currentAudioTrack = widget.movie.audioTracks.isNotEmpty
         ? widget.movie.audioTracks.first
@@ -149,13 +173,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
     // Every stream — movie or live channel — opens in this same cinema player
     // and starts in landscape. The fullscreen toggle can re-enable portrait.
-    if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    }
+    _applyPlayerOrientation(true);
 
     if (widget.trailerOnly) {
       _playTrailer();
@@ -244,15 +262,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     _saveProgress();
 
     // Restore UI orientation (Mobile only)
-    if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    }
+    _applyPlayerOrientation(false);
     super.dispose();
   }
 
@@ -789,7 +799,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   }
 
   ({int season, MovieEpisode episode})? _nextEpisode() {
-    final seasons = widget.movie.seasons;
+    final seasons = _pickerSeasons();
     for (final season in seasons) {
       if (season.seasonNumber != _currentSeasonNumber) continue;
       final index = season.episodes.indexWhere(
@@ -895,7 +905,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     // seekable progress to remember.
     if (widget.trailerOnly || widget.isLiveTv) return;
     WatchHistoryService.instance.saveProgress(
-      movieId: widget.downloadTaskId ?? widget.movie.id,
+      movieId: _activeDownloadTaskId ?? widget.movie.id,
       title: widget.movie.title,
       posterUrl: widget.movie.posterUrl,
       backdropUrl: widget.movie.backdropUrl,
@@ -910,12 +920,60 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     );
   }
 
+  /// Seasons shown in the episode picker. Saved provider metadata is used
+  /// first; older downloads are reconstructed from their local files.
+  List<MovieSeason> _pickerSeasons() {
+    final saved = widget.movie.seasons;
+    if (saved.isNotEmpty || widget.downloadedEpisodes.isEmpty) return saved;
+
+    final groups = <int, List<MovieEpisode>>{};
+    for (final task in widget.downloadedEpisodes) {
+      final number = EpisodeParser.episode(task.title) ??
+          EpisodeParser.episode(task.savePath ?? '');
+      if (number == null) continue;
+      final seasonNumber = EpisodeParser.season(task.seriesSeason ?? '') ??
+          EpisodeParser.season(task.title) ??
+          EpisodeParser.season(task.savePath ?? '') ??
+          1;
+      final path = task.savePath ?? '';
+      final source = MovieSource(
+        serverName: 'Downloaded',
+        resolution: task.formatLabel.isNotEmpty ? task.formatLabel : 'Original',
+        downloadUrl: path,
+        streamUrl: path,
+        fileSize: '',
+        format: task.ext.toLowerCase(),
+      );
+      groups.putIfAbsent(seasonNumber, () => []).add(
+            MovieEpisode(
+              episodeNumber: number,
+              title: EpisodeParser.episodeName(task.title),
+              thumbnailUrl: task.thumbnailUrl,
+              synopsis: task.author,
+              sources: [source],
+            ),
+          );
+    }
+    return groups.entries
+        .map(
+          (e) => MovieSeason(
+            seasonNumber: e.key,
+            title: 'Season ${e.key}',
+            episodes: e.value
+              ..sort((a, b) => a.episodeNumber.compareTo(b.episodeNumber)),
+          ),
+        )
+        .toList()
+      ..sort((a, b) => a.seasonNumber.compareTo(b.seasonNumber));
+  }
+
   String _getCurrentEpisodeTitle() {
     if (!widget.movie.isSeries) return '';
-    final season = widget.movie.seasons.firstWhere(
+    final seasons = _pickerSeasons();
+    final season = seasons.firstWhere(
       (s) => s.seasonNumber == _currentSeasonNumber,
-      orElse: () => widget.movie.seasons.isNotEmpty
-          ? widget.movie.seasons.first
+      orElse: () => seasons.isNotEmpty
+          ? seasons.first
           : MovieSeason(seasonNumber: 1, title: '', episodes: []),
     );
     final ep = season.episodes.firstWhere(
@@ -961,27 +1019,48 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     _seekTo(_currentSeconds + deltaSeconds);
   }
 
+  void _applyPlayerOrientation(bool fullscreen) {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (fullscreen) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+  }
+
+  void _setMini(bool value) {
+    if (_mini == value) return;
+    setState(() {
+      _mini = value;
+      _zoom = 1.0;
+      _showControls = true;
+    });
+    // Minimising must release the landscape lock, otherwise the mini popup
+    // sits on a blank black landscape canvas.
+    _applyPlayerOrientation(!value);
+    _resetControlsTimer();
+  }
+
+  Future<void> _exitPlayer() async {
+    _saveProgress();
+    if (mounted) Navigator.of(context).pop();
+  }
+
   void _toggleFullScreen() {
     setState(() {
       _isFullScreen = !_isFullScreen;
     });
-
-    if (Platform.isAndroid || Platform.isIOS) {
-      if (_isFullScreen) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-      } else {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-      }
-    }
+    _applyPlayerOrientation(_isFullScreen);
   }
 
   void _resetControlsTimer() {
@@ -1117,36 +1196,34 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
-    if (_mini) {
-      final h = MediaQuery.sizeOf(context).height;
-      return TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: -0.45, end: 0),
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeOutCubic,
-        builder: (context, dy, _) => Transform.translate(
-          offset: Offset(0, dy * h),
-          child: _buildMiniPlayer(),
-        ),
-      );
-    }
+    final p = context.palette;
 
     return PopScope<Object?>(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        // First system back minimises into a draggable popup; a second back
-        // (or the close button) actually leaves the player.
-        if (!didPop && mounted) setState(() => _mini = true);
+        // First system back minimises into a live floating popup; a second
+        // back (or the close button) actually leaves the player.
+        if (didPop) return;
+        if (_mini) {
+          _exitPlayer();
+        } else {
+          _setMini(true);
+        }
       },
       child: Scaffold(
       backgroundColor: context.palette.background,
       body: Stack(
         children: [
-          // 1. Real Video Player Canvas
-          _buildVideoCanvas(size),
+          // 0. Themed backdrop — mini mode must never show a black canvas.
+          if (_mini) Positioned.fill(child: Container(color: p.background)),
 
-          // 2. Gesture Detector Layer (MX Player Swipe Controls)
-          Positioned.fill(
+          // 1. Real Video Player Canvas — kept in the tree in both modes so
+          //    playback continues seamlessly when the player is minimised.
+          _buildVideoLayer(size),
+
+          // 2. Gesture Detector Layer (MX Player Swipe Controls + pinch zoom)
+          if (!_mini)
+            Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: _toggleControls,
@@ -1253,7 +1330,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
             ),
 
           // 5. Cinematic Player Overlay Controls (Header + Bottom Bar)
-          if (_showControls) ...[
+          if (!_mini && _showControls) ...[
             // Top App Bar
             Positioned(left: 0, right: 0, top: 0, child: _buildTopBar(context)),
 
@@ -1267,7 +1344,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           ],
 
           // Lock Indicator Button
-          if (_isLocked)
+          if (_isLocked && !_mini)
             Positioned(
               left: 20,
               top: 20,
@@ -1283,114 +1360,195 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                 ),
               ),
             ),
+
+          // 6. Floating mini-player controls over the live video
+          if (_mini) _buildMiniPlayer(),
         ],
       ),
       ),
     );
   }
 
-  /// Compact popup shown after the first system back. The controller stays
-  /// alive, so playback continues; drag sideways to dismiss or tap to restore.
+  /// Floating controls for the minimised player. The video itself is rendered
+  /// by [_buildVideoLayer] as a small live window above the themed backdrop.
   Widget _buildMiniPlayer() {
     final p = context.palette;
-    final bottom = MediaQuery.paddingOf(context).bottom + 84.0;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: bottom,
-            child: GestureDetector(
-              onTap: () {
-                setState(() => _mini = false);
-                _resetControlsTimer();
-              },
-              onHorizontalDragEnd: (details) {
-                final velocity = details.primaryVelocity ?? 0;
-                if (velocity.abs() > 350) Navigator.of(context).pop();
-              },
-              child: Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: p.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: p.border),
-                  boxShadow: [
+    final bottom = MediaQuery.paddingOf(context).bottom + 18.0;
+    final progress = _totalSeconds > 0
+        ? (_currentSeconds / _totalSeconds).clamp(0.0, 1.0)
+        : 0.0;
+    final episodeLabel = widget.movie.isSeries
+        ? 'S$_currentSeasonNumber E$_currentEpisodeNumber • '
+        : '';
+
+    return Positioned(
+      left: 12,
+      right: 12,
+      bottom: bottom,
+      child: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if ((details.primaryVelocity ?? 0).abs() > 350) _exitPlayer();
+        },
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 9, 6, 8),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: p.tint(p.border, 0.8)),
+            boxShadow: [
+              BoxShadow(
+                color: p.shadowAt(0.34),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: p.primary,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.movie.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: p.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$episodeLabel${_formatTime(_currentSeconds)} / ${_formatTime(_totalSeconds)}',
+                          style: TextStyle(
+                            color: p.textSecondary,
+                            fontSize: 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: _isPlaying ? 'Pause' : 'Play',
+                    icon: Icon(
+                      _isPlaying
+                          ? Icons.pause_circle_filled_rounded
+                          : Icons.play_circle_fill_rounded,
+                      color: p.primary,
+                      size: 30,
+                    ),
+                    onPressed: _togglePlay,
+                  ),
+                  IconButton(
+                    tooltip: 'Back to full screen',
+                    icon: Icon(
+                      Icons.open_in_full_rounded,
+                      color: p.primary,
+                      size: 22,
+                    ),
+                    onPressed: () => _setMini(false),
+                  ),
+                  IconButton(
+                    tooltip: 'Close player',
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: p.textSecondary,
+                      size: 22,
+                    ),
+                    onPressed: _exitPlayer,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 4,
+                  backgroundColor: p.trackBg,
+                  color: p.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Positions the same video widget either full-screen or as a small rounded
+  /// floating window. Using one `Positioned` widget keeps the player texture
+  /// alive across the transition.
+  Widget _buildVideoLayer(Size size) {
+    final p = context.palette;
+    final miniBottom = MediaQuery.paddingOf(context).bottom + 116.0;
+    final canvas = ClipRect(
+      child: Transform.scale(
+        scale: _mini ? 1.0 : _zoom,
+        alignment: Alignment.center,
+        child: _buildVideoCanvas(size),
+      ),
+    );
+    // Pinch zoom lives in its own detector: Flutter rejects a single detector
+    // that mixes scale with vertical + horizontal drags. Keeping the detector
+    // mounted in both modes also preserves the video widget across toggles.
+    final video = GestureDetector(
+      onScaleStart: _mini ? null : (_) => _zoomStart = _zoom,
+      onScaleUpdate: _mini
+          ? null
+          : (details) {
+              final next = (_zoomStart * details.scale).clamp(1.0, 3.0);
+              if ((next - _zoom).abs() > 0.001) {
+                setState(() => _zoom = next);
+              }
+            },
+      child: canvas,
+    );
+
+    return Positioned(
+      left: _mini ? null : 0,
+      top: _mini ? null : 0,
+      right: _mini ? 14.0 : 0,
+      bottom: _mini ? miniBottom : 0,
+      width: _mini ? 168.0 : null,
+      height: _mini ? 96.0 : null,
+      child: GestureDetector(
+        onTap: _mini ? () => _setMini(false) : null,
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: p.background,
+            borderRadius: BorderRadius.circular(_mini ? 14 : 0),
+            border: _mini
+                ? Border.all(color: p.tint(p.onScrim, 0.22), width: 1)
+                : null,
+            boxShadow: _mini
+                ? [
                     BoxShadow(
-                      color: p.shadowAt(0.32),
+                      color: p.shadowAt(0.4),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(9),
-                      child: SmartNetworkImage(
-                        url: widget.movie.posterUrl.isNotEmpty
-                            ? widget.movie.posterUrl
-                            : widget.movie.backdropUrl,
-                        width: 52,
-                        height: 44,
-                        fit: BoxFit.cover,
-                        placeholderColor: p.background,
-                        placeholderIcon: Icons.movie_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.movie.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: p.textPrimary,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '${_formatTime(_currentSeconds)} / ${_formatTime(_totalSeconds)}',
-                            style: TextStyle(
-                              color: p.textSecondary,
-                              fontSize: 10.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: _isPlaying ? 'Pause' : 'Play',
-                      icon: Icon(
-                        _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                        color: p.primary,
-                      ),
-                      onPressed: _togglePlay,
-                    ),
-                    IconButton(
-                      tooltip: 'Full screen',
-                      icon: Icon(Icons.open_in_full_rounded, color: p.primary),
-                      onPressed: () => setState(() => _mini = false),
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      icon: Icon(Icons.close_rounded, color: p.textSecondary),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                  ]
+                : null,
           ),
-        ],
+          child: video,
+        ),
       ),
     );
   }
@@ -1398,7 +1556,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
   Widget _buildVideoCanvas(Size size) {
     if (_isVideoInitialized && _videoController != null) {
       Widget videoWidget;
-      if (_aspectRatioMode == 'Fill' || _aspectRatioMode == 'Zoom') {
+      if (_aspectRatioMode == 'Fill') {
         videoWidget = SizedBox.expand(
           child: FittedBox(
             fit: BoxFit.cover,
@@ -1414,11 +1572,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
           ),
         );
       } else {
-        final ratio = _aspectRatioMode == '16:9'
-            ? 16 / 9
-            : (_videoController!.value.aspectRatio > 0
-                  ? _videoController!.value.aspectRatio
-                  : 16 / 9);
+        final ratio = _videoController!.value.aspectRatio > 0
+            ? _videoController!.value.aspectRatio
+            : 16 / 9;
         videoWidget = Center(
           child: AspectRatio(
             aspectRatio: ratio,
@@ -1778,7 +1934,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
         child: Row(
           children: [
             IconButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => _setMini(true),
               icon: Icon(
                 Icons.arrow_back_rounded,
                 color: context.palette.onScrim,
@@ -1991,33 +2147,47 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Aspect Ratio Selector
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        if (_aspectRatioMode == 'Fit') {
-                          _aspectRatioMode = '16:9';
-                        } else if (_aspectRatioMode == '16:9') {
-                          _aspectRatioMode = 'Zoom';
-                        } else if (_aspectRatioMode == 'Zoom') {
-                          _aspectRatioMode = 'Fill';
-                        } else {
-                          _aspectRatioMode = 'Fit';
-                        }
-                      });
-                    },
-                    icon: Icon(
-                      Icons.aspect_ratio_rounded,
-                      color: context.palette.onScrim,
-                      size: 18,
-                    ),
-                    label: Text(
-                      _aspectRatioMode,
-                      style: TextStyle(
-                        color: context.palette.onScrim,
-                        fontSize: 12,
+                  // Fit / Fill toggle — pinch on the video to zoom freely.
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _zoom = 1.0;
+                            _aspectRatioMode =
+                                _aspectRatioMode == 'Fit' ? 'Fill' : 'Fit';
+                          });
+                        },
+                        icon: Icon(
+                          _aspectRatioMode == 'Fit'
+                              ? Icons.crop_free_rounded
+                              : Icons.aspect_ratio_rounded,
+                          color: context.palette.onScrim,
+                          size: 19,
+                        ),
+                        label: Text(
+                          _aspectRatioMode == 'Fit' ? 'Fit' : 'Fill',
+                          style: TextStyle(
+                            color: context.palette.onScrim,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (_zoom > 1.01)
+                        GestureDetector(
+                          onTap: () => setState(() => _zoom = 1.0),
+                          child: Text(
+                            'Zoom ${(_zoom * 100).round()}% · reset',
+                            style: TextStyle(
+                              color: context.palette.primary,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
 
                   SizedBox(width: 8),
@@ -2460,10 +2630,11 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDrawerState) {
-            final activeSeason = widget.movie.seasons.firstWhere(
+            final seasons = _pickerSeasons();
+            final activeSeason = seasons.firstWhere(
               (s) => s.seasonNumber == _currentSeasonNumber,
-              orElse: () => widget.movie.seasons.isNotEmpty
-                  ? widget.movie.seasons.first
+              orElse: () => seasons.isNotEmpty
+                  ? seasons.first
                   : MovieSeason(
                       seasonNumber: 1,
                       title: 'Season 1',
@@ -2503,7 +2674,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: widget.movie.seasons.map((s) {
+                      children: seasons.map((s) {
                         final isSel = s.seasonNumber == _currentSeasonNumber;
                         return Padding(
                           padding: EdgeInsets.only(right: 8),
@@ -2526,89 +2697,171 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
 
                   // Episode List
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: activeSeason.episodes.length,
-                      itemBuilder: (context, idx) {
-                        final ep = activeSeason.episodes[idx];
-                        final isSelected =
-                            ep.episodeNumber == _currentEpisodeNumber;
-
-                        return Container(
-                          margin: EdgeInsets.only(bottom: 10),
-                          child: Material(
-                            color: isSelected
-                                ? context.palette.secondary.withValues(alpha: 0.2)
-                                : context.palette.tint(context.palette.border, 0.26),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              leading: Container(
-                                width: 60,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(6),
-                                  image: ep.thumbnailUrl.isNotEmpty
-                                      ? DecorationImage(
-                                          image: NetworkImage(ep.thumbnailUrl),
-                                          fit: BoxFit.cover,
-                                        )
-                                      : null,
+                    child: activeSeason.episodes.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.video_library_outlined,
+                                  size: 38,
                                   color: context.palette.textSecondary,
                                 ),
-                                child: isSelected
-                                    ? Center(
-                                        child: Icon(
-                                          Icons.play_arrow_rounded,
-                                          color: context.palette.onScrim,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              title: Text(
-                                'E${ep.episodeNumber}: ${ep.title}',
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? context.palette.secondary
-                                      : context.palette.card,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${ep.duration} • ${ep.synopsis}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: context.palette.textSecondary,
-                                ),
-                              ),
-                              onTap: () {
-                                setState(() {
-                                  _currentEpisodeNumber = ep.episodeNumber;
-                                  _currentSeconds = 0;
-                                  if (ep.sources.isNotEmpty) {
-                                    _currentSource = ep.sources.first;
-                                  }
-                                });
-                                _saveProgress();
-                                Navigator.pop(ctx);
-                                _initVideoPlayer();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Playing Season $_currentSeasonNumber Episode ${ep.episodeNumber}',
-                                    ),
-                                    behavior: SnackBarBehavior.floating,
+                                const SizedBox(height: 10),
+                                Text(
+                                  'No episodes available',
+                                  style: TextStyle(
+                                    color: context.palette.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
                                   ),
-                                );
-                              },
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Download an episode of this season to see it here.',
+                                  style: TextStyle(
+                                    color: context.palette.textSecondary,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
                             ),
+                          )
+                        : ListView.builder(
+                            itemCount: activeSeason.episodes.length,
+                            itemBuilder: (context, idx) {
+                              final ep = activeSeason.episodes[idx];
+                              final isSelected =
+                                  ep.episodeNumber == _currentEpisodeNumber;
+                              final p = context.palette;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 9),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? p.selectedBg
+                                      : p.tint(p.border, 0.18),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? p.primary
+                                        : p.tint(p.border, 0.4),
+                                  ),
+                                ),
+                                child: ListTile(
+                                  leading: Container(
+                                    width: 56,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      image: ep.thumbnailUrl.isNotEmpty
+                                          ? DecorationImage(
+                                              image: NetworkImage(
+                                                ep.thumbnailUrl,
+                                              ),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null,
+                                      color: p.trackBg,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: ep.thumbnailUrl.isEmpty
+                                        ? Text(
+                                            '${ep.episodeNumber}',
+                                            style: TextStyle(
+                                              color: p.textSecondary,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                  title: Text(
+                                    'E${ep.episodeNumber.toString().padLeft(2, '0')}'
+                                    '${ep.title.isNotEmpty ? ' · ${ep.title}' : ''}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: p.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    ep.synopsis.isNotEmpty
+                                        ? ep.synopsis
+                                        : (widget.downloadedEpisodes.isEmpty
+                                            ? 'Online stream'
+                                            : 'Downloaded episode'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: p.textSecondary,
+                                    ),
+                                  ),
+                                  trailing: isSelected
+                                      ? Icon(
+                                          Icons.play_circle_fill_rounded,
+                                          color: p.primary,
+                                          size: 26,
+                                        )
+                                      : Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: p.textSecondary,
+                                        ),
+                                  onTap: () {
+                                    _saveProgress();
+                                    DownloadTask? task;
+                                    for (final t in widget.downloadedEpisodes) {
+                                      final n = EpisodeParser.episode(t.title) ??
+                                          EpisodeParser.episode(
+                                            t.savePath ?? '',
+                                          );
+                                      final s = EpisodeParser.season(
+                                            t.seriesSeason ?? '',
+                                          ) ??
+                                          EpisodeParser.season(t.title) ??
+                                          EpisodeParser.season(t.savePath ?? '') ??
+                                          1;
+                                      if (n == ep.episodeNumber &&
+                                          s == activeSeason.seasonNumber) {
+                                        task = t;
+                                        break;
+                                      }
+                                    }
+                                    final history = task == null
+                                        ? null
+                                        : WatchHistoryService.instance
+                                            .getProgress(task.id);
+                                    setState(() {
+                                      _activeDownloadTaskId = task?.id;
+                                      _currentSeasonNumber =
+                                          activeSeason.seasonNumber;
+                                      _currentEpisodeNumber = ep.episodeNumber;
+                                      _currentSeconds = history?.positionSeconds ?? 0;
+                                      _totalSeconds = history != null &&
+                                              history.totalSeconds > 0
+                                          ? history.totalSeconds
+                                          : _totalSeconds;
+                                      if (ep.sources.isNotEmpty) {
+                                        _currentSource = ep.sources.first;
+                                      }
+                                    });
+                                    Navigator.pop(ctx);
+                                    _initVideoPlayer();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Playing S$_currentSeasonNumber E$_currentEpisodeNumber · ${ep.title}',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
                   ),
                 ],
               ),

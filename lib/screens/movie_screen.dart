@@ -54,7 +54,6 @@ class _MovieScreenState extends State<MovieScreen> {
   int _page = 1;
   bool _loading = false;
   bool _preloading = false;
-  DateTime? _lastHistoryRebuild;
   List<Widget>? _carouselCache;
   String? _carouselCacheKey;
   bool _hasMore = true;

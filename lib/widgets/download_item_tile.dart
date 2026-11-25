@@ -15,13 +15,23 @@ import '../services/vault_service.dart';
 import '../services/virtual_folder_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
+import '../utils/episode_parser.dart';
 import 'image_viewer_dialog.dart';
 import 'remote_image.dart';
 
 class DownloadItemTile extends StatelessWidget {
   final DownloadTask task;
 
-  const DownloadItemTile({super.key, required this.task});
+  /// Dedicated series-episode presentation used on the downloaded title page.
+  /// Keeps all the same actions but shows watch progress inside the card with
+  /// a large percentage instead of a detached bar underneath it.
+  final bool episodeMode;
+
+  const DownloadItemTile({
+    super.key,
+    required this.task,
+    this.episodeMode = false,
+  });
 
   void _play(BuildContext context) {
     final path = task.savePath ?? '';
@@ -30,12 +40,17 @@ class DownloadItemTile extends StatelessWidget {
       // Downloaded movies/series always open in the app's cinema player, with
       // the exact position the user last left — including per-episode history.
       final history = WatchHistoryService.instance.getProgress(task.id);
-      final season = history?.seasonNumber ??
-          int.tryParse(
-            RegExp(r'\d+').firstMatch(task.seriesSeason ?? '')?.group(0) ?? '',
-          ) ??
-          1;
-      final episode = history?.episodeNumber ?? 1;
+      // The file name is the source of truth — watch history may be missing
+      // (first play) or stale, and in both cases the header must still show
+      // the real episode the user tapped.
+      final parsedSeason = EpisodeParser.season(task.seriesSeason ?? '') ??
+          EpisodeParser.season(task.title) ??
+          EpisodeParser.season(task.savePath ?? '');
+      final parsedEpisode = EpisodeParser.episode(task.title) ??
+          EpisodeParser.episode(task.seriesEpisodeUrl ?? '') ??
+          EpisodeParser.episode(task.savePath ?? '');
+      final season = parsedSeason ?? history?.seasonNumber ?? 1;
+      final episode = parsedEpisode ?? history?.episodeNumber ?? 1;
       final source = MovieSource(
         serverName: 'Downloaded',
         resolution: task.formatLabel.isNotEmpty ? task.formatLabel : 'Original',
@@ -77,6 +92,7 @@ class DownloadItemTile extends StatelessWidget {
             initialEpisode: episode,
             initialPositionSeconds: history?.positionSeconds ?? 0,
             downloadTaskId: task.id,
+            downloadedEpisodes: DownloadManager.instance.downloadedSiblings(task),
             liveSources: [source],
           ),
         ),
@@ -703,6 +719,287 @@ class DownloadItemTile extends StatelessWidget {
     );
   }
 
+  /// A richer episode card for the downloaded-series page. Watch progress is
+  /// part of the card itself (no detached bar) and the percentage is large.
+  Widget _buildEpisodeCard(BuildContext context, bool isDark) {
+    final p = context.palette;
+    final episodeNumber = EpisodeParser.episode(task.title) ??
+        EpisodeParser.episode(task.savePath ?? '');
+    final episodeName = EpisodeParser.episodeName(task.title);
+    final hasNumber = episodeNumber != null;
+
+    return AnimatedBuilder(
+      animation: WatchHistoryService.instance,
+      builder: (context, _) {
+        final history = WatchHistoryService.instance.getProgress(task.id);
+        final ratio = history == null || history.totalSeconds <= 0
+            ? 0.0
+            : (history.positionSeconds / history.totalSeconds).clamp(0.0, 1.0);
+        final finished = ratio >= 0.95;
+        final percentLabel = finished ? 'Watched' : '${(ratio * 100).round()}%';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: p.card,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: p.tint(p.border, isDark ? 0.65 : 0.9),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: p.shadowAt(isDark ? 0.30 : 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => _play(context),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 6, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: task.thumbnailUrl.isNotEmpty
+                                  ? SmartNetworkImage(
+                                      url: task.thumbnailUrl,
+                                      width: 96,
+                                      height: 64,
+                                      fit: BoxFit.cover,
+                                      placeholderColor: p.background,
+                                      placeholderIcon: Icons.movie_rounded,
+                                    )
+                                  : Container(
+                                      width: 96,
+                                      height: 64,
+                                      color: p.trackBg,
+                                      child: Icon(
+                                        Icons.movie_rounded,
+                                        color: p.textSecondary,
+                                        size: 24,
+                                      ),
+                                    ),
+                            ),
+                            Positioned.fill(
+                              child: Center(
+                                child: Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: p.scrimAt(0.55),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: p.tint(p.onScrim, 0.45),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: p.onScrim,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                hasNumber
+                                    ? 'Episode ${episodeNumber.toString().padLeft(2, '0')}'
+                                    : task.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: p.textPrimary,
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              if (hasNumber &&
+                                  episodeName.isNotEmpty &&
+                                  episodeName.toLowerCase() != 'episode')
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    episodeName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: p.textSecondary,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 7),
+                              Wrap(
+                                spacing: 5,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  _buildQualityBadge(task.formatLabel, task.isAudio),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: p.trackBg,
+                                      borderRadius: BorderRadius.circular(5),
+                                    ),
+                                    child: Text(
+                                      task.category.toUpperCase().isEmpty
+                                          ? 'VIDEO'
+                                          : task.category.toUpperCase(),
+                                      style: TextStyle(
+                                        color: p.textSecondary,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  if (task.ext.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: p.trackBg,
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      child: Text(
+                                        task.ext.toUpperCase(),
+                                        style: TextStyle(
+                                          color: p.textSecondary,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 5),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.cloud_outlined,
+                                    size: 12,
+                                    color: p.textSecondary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      _cleanSourceLabel(),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: p.textSecondary,
+                                        fontSize: 10.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              tooltip: 'Lock into Secret Vault',
+                              icon: Icon(
+                                Icons.lock_outline_rounded,
+                                color: p.primary,
+                                size: 20,
+                              ),
+                              onPressed: () => _handleLockTap(context),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.more_vert_rounded,
+                                color: p.textSecondary,
+                                size: 19,
+                              ),
+                              onPressed: () => _showActionSheet(context),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          finished
+                              ? Icons.check_circle_rounded
+                              : Icons.play_arrow_rounded,
+                          size: 14,
+                          color: ratio > 0 ? p.success : p.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          finished
+                              ? 'Completed'
+                              : ratio > 0
+                                  ? 'Continue watching'
+                                  : 'Not watched yet',
+                          style: TextStyle(
+                            color: ratio > 0 ? p.success : p.textSecondary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          percentLabel,
+                          style: TextStyle(
+                            color: ratio > 0 ? p.success : p.textSecondary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: ratio,
+                        minHeight: 7,
+                        backgroundColor: p.trackBg,
+                        color: p.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -724,6 +1021,10 @@ class DownloadItemTile extends StatelessWidget {
     final isVideo = !task.isAudio && !task.isImageTask;
     final thumbWidth = isVideo ? 86.0 : 64.0;
     final thumbHeight = isVideo ? 58.0 : 64.0;
+
+    if (episodeMode && isDone && isVideo) {
+      return _buildEpisodeCard(context, isDark);
+    }
 
     Color statusDotColor = context.palette.success;
     String statusLabel = 'ACTIVE';

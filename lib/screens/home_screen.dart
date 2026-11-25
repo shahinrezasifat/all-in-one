@@ -14,7 +14,6 @@ import '../services/search_service.dart';
 import '../services/speech_service.dart';
 import '../services/live_score_service.dart';
 import '../services/trending_engine_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../widgets/analyze_download_flow.dart';
 import '../widgets/bookmark_editor_sheet.dart';
@@ -843,8 +842,6 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-
             final videoFormats = [
               {
                 'label': '4K Ultra HD (2160p MP4)',
@@ -1164,10 +1161,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategoryChips() {
-    return const SizedBox.shrink();
-  }
-
   Widget _buildPromoCards() {
     return const SizedBox.shrink();
   }
@@ -1176,7 +1169,6 @@ class _HomeScreenState extends State<HomeScreen> {
     required bool showingResults,
     required Color accent,
   }) {
-    final theme = Theme.of(context);
     final p = context.palette;
 
     return Padding(
