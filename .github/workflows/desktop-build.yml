@@ -15,6 +15,11 @@ on:
           - both
           - windows
           - linux
+      run_checks:
+        description: Run analysis, tests, and desktop smoke checks
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,6 +29,7 @@ env:
 
 jobs:
   verify:
+    if: inputs.run_checks
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -49,7 +55,7 @@ jobs:
 
   windows:
     needs: verify
-    if: inputs.platform != 'linux'
+    if: ${{ always() && inputs.platform != 'linux' && (!inputs.run_checks || needs.verify.result == 'success') }}
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
@@ -71,6 +77,13 @@ jobs:
           flutter build windows --release --no-pub
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $folder = (Resolve-Path 'build/windows/x64/runner/Release').Path
+          $tag = git describe --tags --exact-match
+          Compress-Archive -Path "$folder/*" -DestinationPath "all-in-one-$tag-windows-x64.zip"
+      - name: Smoke test Windows app launch
+        if: inputs.run_checks
+        shell: pwsh
+        run: |
+          $folder = (Resolve-Path 'build/windows/x64/runner/Release').Path
           $app = Start-Process -FilePath (Join-Path $folder 'snaptube_pure.exe') -WorkingDirectory $folder -PassThru
           try {
             Start-Sleep -Seconds 15
@@ -79,8 +92,6 @@ jobs:
           } finally {
             if (!$app.HasExited) { Stop-Process -Id $app.Id }
           }
-          $tag = git describe --tags --exact-match
-          Compress-Archive -Path "$folder/*" -DestinationPath "all-in-one-$tag-windows-x64.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64
@@ -89,7 +100,7 @@ jobs:
 
   linux:
     needs: verify
-    if: inputs.platform != 'windows'
+    if: ${{ always() && inputs.platform != 'windows' && (!inputs.run_checks || needs.verify.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -110,6 +121,12 @@ jobs:
           flutter pub get --enforce-lockfile
           flutter build linux --release --no-pub
           bundle=build/linux/x64/release/bundle
+          tag="$(git describe --tags --exact-match)"
+          tar -czf "all-in-one-$tag-linux-x64.tar.gz" -C "$bundle" .
+      - name: Smoke test Linux app launch
+        if: inputs.run_checks
+        run: |
+          bundle=build/linux/x64/release/bundle
           LIBGL_ALWAYS_SOFTWARE=1 GDK_BACKEND=x11 NO_AT_BRIDGE=1 xvfb-run -a -s '-screen 0 1280x800x24' dbus-run-session -- bash -s "$bundle" <<'EOF'
           set -euo pipefail
           "$1/snaptube_pure" > desktop-smoke.log 2>&1 &
@@ -123,8 +140,6 @@ jobs:
           sleep 5
           kill -0 "$pid" || { cat desktop-smoke.log; exit 1; }
           EOF
-          tag="$(git describe --tags --exact-match)"
-          tar -czf "all-in-one-$tag-linux-x64.tar.gz" -C "$bundle" .
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x64

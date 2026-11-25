@@ -7,7 +7,7 @@
 <p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
 <p align="center">
-  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/split-all-in-one-v1.0.12-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.12 for ARM64" width="300"></a>
+  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.13/split-all-in-one-v1.0.13-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.13 for ARM64" width="300"></a>
 </p>
 
 <p align="center">
@@ -59,10 +59,10 @@ The format picker and progress screen use Blender’s *Big Buck Bunny*. The comp
 
 | Android APK | Download size | Device |
 | --- | ---: | --- |
-| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/split-all-in-one-v1.0.12-arm64-v8a.apk) | ~87 MB | Most modern Android phones and tablets |
-| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/split-all-in-one-v1.0.12-armeabi-v7a.apk) | ~87 MB | Older 32-bit ARM devices |
-| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/split-all-in-one-v1.0.12-x86_64.apk) | ~90 MB | Compatible Intel or AMD Android devices and emulators |
-| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/all-in-one-v1.0.12.apk) | ~230 MB | Contains all three CPU architectures in one installer |
+| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.13/split-all-in-one-v1.0.13-arm64-v8a.apk) | ~83 MB | Most modern Android phones and tablets |
+| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.13/split-all-in-one-v1.0.13-armeabi-v7a.apk) | ~83 MB | Older 32-bit ARM devices |
+| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.13/split-all-in-one-v1.0.13-x86_64.apk) | ~85 MB | Compatible Intel or AMD Android devices and emulators |
+| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.13/all-in-one-v1.0.13.apk) | ~219 MB | Contains all three CPU architectures in one installer |
 
 Each architecture-specific APK includes the app and the media engines for its CPU. The listed size is the APK download size. Installed storage usage can be higher.
 
@@ -74,10 +74,10 @@ Each architecture-specific APK includes the app and the media engines for its CP
 
 | Platform | Package | Run |
 | --- | --- | --- |
-| Windows 10/11 x64 | [Download Windows installer (.exe)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/all-in-one-v1.0.12-windows-x64-setup.exe) | Run the installer and open **All in One** from the Start menu |
-| Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.12/all-in-one-v1.0.12-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
+| Windows 10/11 x64 | [Download Windows x64 package (.zip)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.13/all-in-one-v1.0.13-windows-x64.zip) | Extract the archive and run `snaptube_pure.exe` |
+| Linux x64 | [Portable tar.gz](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.13/all-in-one-v1.0.13-linux-x64.tar.gz) | Extract the archive and run `./snaptube_pure` |
 
-Windows Setup installs the app for the current user. Setup may request administrator access to install the Visual C++ Runtime. If WebView2 is missing, its installer requires an internet connection. [Microsoft Visual C++ Runtime](https://aka.ms/vc14/vc_redist.x64.exe) · [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+The Windows app requires the Microsoft Visual C++ Runtime and WebView2 Runtime. [Microsoft Visual C++ Runtime](https://aka.ms/vc14/vc_redist.x64.exe) · [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
 
 Linux was tested on Ubuntu 24.04 x64. The desktop bundle uses GTK 3, WebKitGTK 4.1, and JSON-GLib from the distribution. On Ubuntu 24.04, install them with `sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 libjson-glib-1.0-0`.
 
