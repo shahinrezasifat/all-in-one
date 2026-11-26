@@ -250,6 +250,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _selectTab(int index) {
     HapticFeedback.selectionClick();
     setState(() => _navTapTicks[index]++);
+    // Home is the browser's host tab. Keep the open site alive until the user
+    // explicitly exits the browser with its own close control.
+    if (_isBrowserActive && index == 0) return;
     if (!_isBrowserActive && _currentIndex == index) return;
     _pushSection(_AppSection(index));
     _applySection(_sectionHistory.last);

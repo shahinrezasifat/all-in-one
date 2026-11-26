@@ -16,6 +16,10 @@ class WatchHistoryItem {
   final String sourceUrl;
   final String quality;
   final String audioTrack;
+  final bool isDownloaded;
+  final bool isAdultSource;
+  final String repositoryId;
+  final String providerId;
 
   const WatchHistoryItem({
     required this.movieId,
@@ -31,7 +35,21 @@ class WatchHistoryItem {
     required this.sourceUrl,
     this.quality = '1080p',
     this.audioTrack = 'Default',
+    this.isDownloaded = false,
+    this.isAdultSource = false,
+    this.repositoryId = '',
+    this.providerId = '',
   });
+
+  /// Older releases did not persist playback origin. Local file URLs and
+  /// paths still identify downloaded items in their existing history records.
+  bool get isDownloadedMedia {
+    if (isDownloaded) return true;
+    final source = sourceUrl.trim();
+    return source.startsWith('/') ||
+        source.toLowerCase().startsWith('file://') ||
+        RegExp(r'^[a-z]:[\\/]', caseSensitive: false).hasMatch(source);
+  }
 
   double get progress => totalSeconds > 0 ? (positionSeconds / totalSeconds).clamp(0.0, 1.0) : 0.0;
 
@@ -71,6 +89,10 @@ class WatchHistoryItem {
     'sourceUrl': sourceUrl,
     'quality': quality,
     'audioTrack': audioTrack,
+    'isDownloaded': isDownloaded,
+    'isAdultSource': isAdultSource,
+    'repositoryId': repositoryId,
+    'providerId': providerId,
   };
 
   factory WatchHistoryItem.fromJson(Map<String, dynamic> json) => WatchHistoryItem(
@@ -87,6 +109,10 @@ class WatchHistoryItem {
     sourceUrl: json['sourceUrl'] as String? ?? '',
     quality: json['quality'] as String? ?? '1080p',
     audioTrack: json['audioTrack'] as String? ?? 'Default',
+    isDownloaded: json['isDownloaded'] as bool? ?? false,
+    isAdultSource: json['isAdultSource'] as bool? ?? false,
+    repositoryId: json['repositoryId'] as String? ?? '',
+    providerId: json['providerId'] as String? ?? '',
   );
 }
 
@@ -143,6 +169,10 @@ class WatchHistoryService extends ChangeNotifier {
     required String sourceUrl,
     String quality = '1080p',
     String audioTrack = 'Default',
+    bool isDownloaded = false,
+    bool isAdultSource = false,
+    String repositoryId = '',
+    String providerId = '',
   }) async {
     // If completed (more than 95%), we can either keep or reset
     final item = WatchHistoryItem(
@@ -159,6 +189,10 @@ class WatchHistoryService extends ChangeNotifier {
       sourceUrl: sourceUrl,
       quality: quality,
       audioTrack: audioTrack,
+      isDownloaded: isDownloaded,
+      isAdultSource: isAdultSource,
+      repositoryId: repositoryId,
+      providerId: providerId,
     );
 
     _history.removeWhere((h) => h.movieId == movieId);

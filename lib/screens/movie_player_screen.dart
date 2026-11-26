@@ -11,6 +11,7 @@ import '../models/movie_model.dart';
 import '../models/video_item.dart';
 import '../services/download_manager.dart';
 import '../services/extractor_service.dart';
+import '../services/movie_repository_service.dart';
 import '../services/permission_service.dart';
 import '../services/playback_controls.dart';
 import '../services/player_service.dart';
@@ -904,6 +905,21 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
     // Never record a trailer watch as movie progress, and live TV has no
     // seekable progress to remember.
     if (widget.trailerOnly || widget.isLiveTv) return;
+    final repositoryId = _currentSource.repoId.isNotEmpty
+        ? _currentSource.repoId
+        : widget.movie.repoId;
+    final providerId = _currentSource.providerId.isNotEmpty
+        ? _currentSource.providerId
+        : widget.movie.providerId;
+    final repository = MovieRepositoryService.instance.repositories
+        .where((repo) => repo.id == repositoryId)
+        .firstOrNull;
+    final isAdultSource = repository?.isAdult == true ||
+        (repository?.providers.any(
+              (provider) =>
+                  provider.id == providerId && provider.isAdult,
+            ) ??
+            false);
     WatchHistoryService.instance.saveProgress(
       movieId: _activeDownloadTaskId ?? widget.movie.id,
       title: widget.movie.title,
@@ -917,6 +933,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen>
       sourceUrl: _currentSource.downloadUrl,
       quality: _currentQuality,
       audioTrack: _currentAudioTrack,
+      isDownloaded: _activeDownloadTaskId != null,
+      isAdultSource: isAdultSource,
+      repositoryId: repositoryId,
+      providerId: providerId,
     );
   }
 

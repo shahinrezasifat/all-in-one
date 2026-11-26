@@ -119,6 +119,20 @@ class _MovieScreenState extends State<MovieScreen> {
   bool _isAdult(_Source source) =>
       source.repo.isAdult || source.provider.isAdult;
 
+  bool _isAdultHistoryItem(WatchHistoryItem item) {
+    if (item.isAdultSource) return true;
+    if (item.repositoryId.isEmpty || item.providerId.isEmpty) return false;
+    final repository = _repository.repositories
+        .where((repo) => repo.id == item.repositoryId)
+        .firstOrNull;
+    if (repository?.isAdult == true) return true;
+    return repository?.providers.any(
+          (provider) =>
+              provider.id == item.providerId && provider.isAdult,
+        ) ??
+        false;
+  }
+
   Iterable<_Source> get _movieSources {
     final supported = _engine.catalogSources.where(
       (source) => CloudStreamRuntime.canRun(source.provider),
@@ -1287,7 +1301,10 @@ class _MovieScreenState extends State<MovieScreen> {
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
     final bannerMovies = _isLiveTvMode ? <MovieItem>[] : _bannerMovies();
-    final history = WatchHistoryService.instance.history;
+    final history = WatchHistoryService.instance.history.where((item) {
+      if (item.isDownloadedMedia) return false;
+      return settings.showAdultRepositories || !_isAdultHistoryItem(item);
+    }).toList();
     final visible = _visibleItems;
     final filtered = _category != null || _genre != null;
     final topPadding = MediaQuery.paddingOf(context).top;
