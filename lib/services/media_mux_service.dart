@@ -2,9 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_session.dart';
-import 'package:ffmpeg_kit_flutter_new_min/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -39,10 +36,16 @@ class MediaMuxService {
   static const MethodChannel _channel = MethodChannel(
     'snaptube_pure/media_mux',
   );
+  static const MethodChannel _ffmpegChannel = MethodChannel(
+    'snaptube_pure/ffmpeg_exec',
+  );
 
-  /// Native mux passes report progress against their output path token.
+  /// Native passes report progress against an opaque token so parallel
+  /// conversions never overwrite each other's slider.
   final Map<String, ConvertProgress> _nativeProgressHooks = {};
+  final Map<String, ConvertProgress> _ffmpegProgressHooks = {};
   bool _handlerInstalled = false;
+  bool _ffmpegHandlerInstalled = false;
 
   void _installNativeProgressHandler() {
     if (_handlerInstalled) return;
@@ -53,6 +56,19 @@ class MediaMuxService {
         final p =
             ((call.arguments as Map?)?['progress'] as num?)?.toDouble() ?? 0;
         _nativeProgressHooks[token]?.call(p.clamp(0.0, 1.0));
+      }
+    });
+  }
+
+  void _installFfmpegProgressHandler() {
+    if (_ffmpegHandlerInstalled) return;
+    _ffmpegHandlerInstalled = true;
+    _ffmpegChannel.setMethodCallHandler((call) async {
+      if (call.method == 'ffmpegProgress') {
+        final token = (call.arguments as Map?)?['token']?.toString() ?? '';
+        final p =
+            ((call.arguments as Map?)?['progress'] as num?)?.toDouble() ?? 0;
+        _ffmpegProgressHooks[token]?.call(p.clamp(0.0, 1.0));
       }
     });
   }
@@ -103,24 +119,24 @@ class MediaMuxService {
             return const MuxResult(success: true);
           }
         } on MissingPluginException {
-          // No native handler registered - fall through to ffmpeg
+          // No native handler registered - fall through to the FFmpeg CLI.
         } catch (e) {
           debugPrint(
-            'Native MediaMuxer failed: $e. Falling back to FFmpegKit...',
+            'Native MediaMuxer failed: $e. Falling back to FFmpeg CLI...',
           );
         } finally {
           _nativeProgressHooks.remove(outputPath);
         }
       }
 
-      if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+      if (Platform.isAndroid) {
         final durationMs = await durationMsOf(videoPath);
         final lower = outputPath.toLowerCase();
         final isMp4 =
             lower.endsWith('.mp4') ||
             lower.endsWith('.m4v') ||
             lower.endsWith('.mov');
-        final ffmpegKitArgs = <String>[
+        final args = <String>[
           '-y',
           '-v',
           'error',
@@ -137,12 +153,12 @@ class MediaMuxService {
           if (isMp4) ...['-strict', '-2', '-movflags', '+faststart'],
           outputPath,
         ];
-        final kitOk = await _runFfmpegKit(
-          ffmpegKitArgs,
+        final ok = await _runBundledFfmpeg(
+          args,
           durationMsHint: durationMs,
           onProgress: onProgress,
         );
-        if (kitOk && _isNonEmptyFile(outputPath)) {
+        if (ok && _isNonEmptyFile(outputPath)) {
           onProgress?.call(1.0);
           return const MuxResult(success: true);
         }
@@ -239,17 +255,12 @@ class MediaMuxService {
       outPath,
     ];
 
-    final binary = Platform.isAndroid || Platform.isIOS || Platform.isMacOS
-        ? null
-        : await _ffmpegBinary();
-    if (!(Platform.isAndroid || Platform.isIOS || Platform.isMacOS) &&
-        binary == null) {
-      return null;
-    }
+    final binary = Platform.isAndroid ? null : await _ffmpegBinary();
+    if (!Platform.isAndroid && binary == null) return null;
 
     Future<bool> run(List<String> args) async {
-      if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-        return _runFfmpegKit(
+      if (Platform.isAndroid) {
+        return _runBundledFfmpeg(
           args,
           durationMsHint: durationMs,
           onProgress: onProgress,
@@ -331,8 +342,8 @@ class MediaMuxService {
     ];
     final durationMs = await durationMsOf(inputPath);
 
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      final ok = await _runFfmpegKit(
+    if (Platform.isAndroid) {
+      final ok = await _runBundledFfmpeg(
         args,
         durationMsHint: durationMs,
         onProgress: onProgress,
@@ -356,59 +367,50 @@ class MediaMuxService {
     return null;
   }
 
-  /// Runs the bundled FFmpeg-Kit asynchronously so [onProgress] ticks while
-  /// the encode works: statistics carry the processed media time, which the
-  /// caller's duration hint turns into a real 0..1 slider value. Without a
-  /// known duration the slider still creeps on wall-clock against a rolling
-  /// maximum, and snaps to 1 the moment ffmpeg reports success.
-  Future<bool> _runFfmpegKit(
+  /// Runs youtubedl-android's bundled FFmpeg executable through the native
+  /// channel. Its `-progress pipe:1` output carries processed media time,
+  /// which the caller's duration hint turns into a real 0..1 slider value.
+  /// Uses a unique token so parallel conversions cannot share progress.
+  Future<bool> _runBundledFfmpeg(
     List<String> args, {
     required int? durationMsHint,
     ConvertProgress? onProgress,
   }) async {
-    final completer = Completer<bool>();
-    int highestTimeMs = 0;
-    final startedAt = DateTime.now();
+    _installFfmpegProgressHandler();
+    final token = 'ffmpeg_${DateTime.now().microsecondsSinceEpoch}_'
+        '${args.hashCode}';
+    if (onProgress != null) _ffmpegProgressHooks[token] = onProgress;
+    final runArgs = <String>[
+      '-hide_banner',
+      '-loglevel',
+      'info',
+      '-nostdin',
+      '-progress',
+      'pipe:1',
+      ...args.where((a) => a != '-v' && a != 'error'),
+    ];
     try {
-      // Per-session callback: two parallel conversions must not overwrite (or
-      // clear) each other's progress reporting.
-      final session = await FFmpegSession.create(args, null, null, (stat) {
-        final t = stat.getTime();
-        if (t > highestTimeMs) highestTimeMs = t;
-        final total = durationMsHint ?? 0;
-        if (total > 0) {
-          onProgress?.call((t / total).clamp(0.0, 0.995));
-        } else {
-          // No duration available — creep toward (but never reach) 1.0 on
-          // wall-clock so the slider honestly moves while the work runs.
-          final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
-          final guess = (highestTimeMs > 0)
-              ? highestTimeMs / (highestTimeMs + elapsed)
-              : elapsed / (elapsed + 15000.0);
-          onProgress?.call(guess.clamp(0.0, 0.99));
-        }
-      });
-      unawaited(
-        FFmpegKitConfig.ffmpegExecute(session)
-            .then((_) async {
-              final code = await session.getReturnCode();
-              final success = ReturnCode.isSuccess(code);
-              if (!success) {
-                final logs = (await session.getAllLogsAsString())?.trim() ?? '';
-                debugPrint('FFmpegKit failed: $logs');
-              }
-              if (!completer.isCompleted) completer.complete(success);
-            })
-            .catchError((Object error) {
-              debugPrint('FFmpegKit crashed: $error');
-              if (!completer.isCompleted) completer.complete(false);
-            }),
-      );
-    } catch (e) {
-      debugPrint('FFmpegKit crashed: $e');
+      final ok =
+          await _ffmpegChannel.invokeMethod<bool>('run', {
+            'args': runArgs,
+            'token': token,
+            'durationMs': durationMsHint ?? 0,
+          }) ??
+          false;
+      if (!ok) debugPrint('Bundled FFmpeg exited non-zero: ${args.join(' ')}');
+      return ok;
+    } on MissingPluginException catch (e) {
+      debugPrint('FFmpeg channel unavailable: $e');
       return false;
+    } on PlatformException catch (e) {
+      debugPrint('FFmpeg failed: ${e.message}');
+      return false;
+    } catch (e) {
+      debugPrint('FFmpeg crashed: $e');
+      return false;
+    } finally {
+      _ffmpegProgressHooks.remove(token);
     }
-    return completer.future;
   }
 
   /// Desktop ffmpeg with `-progress pipe:1`: out_time_ms lines drive the

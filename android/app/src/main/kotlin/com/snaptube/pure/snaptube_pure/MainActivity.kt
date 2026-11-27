@@ -37,6 +37,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
 import io.flutter.plugin.common.MethodChannel
+import com.snaptube.pure.snaptube_pure.ffmpeg.FfmpegRunner
 import com.snaptube.pure.snaptube_pure.mpv.MpvBridge
 import java.io.File
 import java.nio.ByteBuffer
@@ -231,6 +232,9 @@ class MainActivity : FlutterActivity() {
 
         // libmpv player surface + control/event channels (same engine mpvEx uses).
         MpvBridge.register(flutterEngine, applicationContext)
+        // FFmpeg CLI used by media conversions. Kept separate from FFmpegKit:
+        // mpv and FFmpegKit ship incompatible libav*.so symbol versions.
+        FfmpegRunner.register(flutterEngine, applicationContext)
 
         val app = applicationContext
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "snaptube_pure/background")

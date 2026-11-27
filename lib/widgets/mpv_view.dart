@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/mpv_controller.dart';
+import '../theme/app_palette.dart';
 
 /// Hosts the libmpv native surface.
 ///
@@ -32,8 +33,14 @@ class MpvVideoView extends StatelessWidget {
         ),
       );
     }
+    final p = context.palette;
     return AndroidView(
       viewType: 'snaptube_pure/mpv_view',
+      creationParams: <String, Object?>{
+        'subBackColor':
+            '#${p.videoScrim.withValues(alpha: .5).toARGB32().toRadixString(16).padLeft(8, '0')}',
+        'subColor': '#${p.onVideoScrim.toARGB32().toRadixString(16).padLeft(8, '0')}',
+      },
       creationParamsCodec: const StandardMessageCodec(),
       onPlatformViewCreated: (_) {
         controller.markReady();

@@ -6,7 +6,6 @@
 
 #include "generated_plugin_registrant.h"
 
-#include <ffmpeg_kit_flutter_new_min/f_fmpeg_kit_flutter_plugin.h>
 #include <flutter_js/flutter_js_plugin.h>
 #include <fullscreen_window/fullscreen_window_plugin.h>
 #include <fvp/fvp_plugin.h>
@@ -14,9 +13,6 @@
 #include <webview_win_floating/webview_win_floating_plugin.h>
 
 void fl_register_plugins(FlPluginRegistry* registry) {
-  g_autoptr(FlPluginRegistrar) ffmpeg_kit_flutter_new_min_registrar =
-      fl_plugin_registry_get_registrar_for_plugin(registry, "FFmpegKitFlutterPlugin");
-  f_fmpeg_kit_flutter_plugin_register_with_registrar(ffmpeg_kit_flutter_new_min_registrar);
   g_autoptr(FlPluginRegistrar) flutter_js_registrar =
       fl_plugin_registry_get_registrar_for_plugin(registry, "FlutterJsPlugin");
   flutter_js_plugin_register_with_registrar(flutter_js_registrar);

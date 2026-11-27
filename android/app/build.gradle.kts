@@ -66,23 +66,16 @@ android {
             useLegacyPackaging = true
             // youtubedl-android ships compressed payloads as *.zip.so — not ELF.
             doNotStrip += listOf("**/*.zip.so")
-            // libmpv (mpv-android AAR) bundles libc++_shared.so, and so do other
-            // native plugins (fvp). Keep the first copy instead of failing the
-            // APK merge — both are the same NDK runtime.
-            // mpv-android and FFmpegKit both package FFmpeg shared objects.
-            // Keep mpv's copies so libmpv and its linked codec libraries stay
-            // from the same build; FFmpegKit invokes the shared FFmpeg CLI.
-            pickFirsts += listOf(
-                "**/libc++_shared.so",
-                "**/libavcodec.so",
-                "**/libavdevice.so",
-                "**/libavfilter.so",
-                "**/libavformat.so",
-                "**/libavutil.so",
-                "**/libswresample.so",
-                "**/libswscale.so",
-                "**/libpostproc.so",
-            )
+            // libmpv and other native plugins bundle libc++_shared.so. Keep
+            // the first copy instead of failing the APK merge — both are the
+            // same NDK runtime.
+            //
+            // IMPORTANT: never pickFirst the libav*.so files. mpv's copies
+            // export LIBAVCODEC_63/LIBAVFORMAT_63 while the bundled FFmpeg CLI
+            // (youtubedl-android) links against the versioned .so.61 files.
+            // FFmpegKit was removed because its JNI library needs
+            // LIBAVCODEC_62 and crashed the app at startup when mpv's libs won.
+            pickFirsts += listOf("**/libc++_shared.so")
         }
     }
 
@@ -138,4 +131,9 @@ dependencies {
     // (bundles libmpv + FFmpeg .so for all four ABIs; the JitPack build of the
     // same coordinate omits the native libraries).
     implementation("io.github.marlboro-advance:mpv-android:1.0.0")
+    // FfmpegRunner initialises youtubedl-android's bundled FFmpeg package
+    // directly, so the dependency must be on this module's compile classpath
+    // (the Flutter plugin declares it as `implementation`, which is not
+    // exposed to consumers). Same version as the plugin — no duplicate libs.
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
 }

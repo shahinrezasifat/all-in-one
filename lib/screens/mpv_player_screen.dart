@@ -74,6 +74,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
   String? _videoErrorMessage;
 
   final MpvController _mpv = MpvController();
+  String? _lastSubtitleBackColor;
 
   // Server failover engine
   bool _isAnalyzingServers = false;
@@ -814,6 +815,15 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final p = context.palette;
+    // Keep native subtitle styling derived from the active app theme instead
+    // of a fixed black colour. The four-byte Flutter colour format matches
+    // mpv's #AARRGGBB option format.
+    final subtitleBack =
+        '#${p.videoScrim.withValues(alpha: .5).toARGB32().toRadixString(16).padLeft(8, '0')}';
+    if (_lastSubtitleBackColor != subtitleBack) {
+      _lastSubtitleBackColor = subtitleBack;
+      unawaited(_mpv.setOption('sub-back-color', subtitleBack));
+    }
     return PopScope<Object?>(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -900,7 +910,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   decoration: BoxDecoration(
-                    color: p.shadowAt(0.8),
+                    color: p.videoScrimAt(0.8),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -910,7 +920,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                         _seekDeltaSeconds >= 0
                             ? Icons.fast_forward_rounded
                             : Icons.fast_rewind_rounded,
-                        color: p.onScrim,
+                        color: p.onVideoScrim,
                         size: 28,
                       ),
                       const SizedBox(width: 10),
@@ -940,7 +950,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                     setState(() => _isLocked = false);
                     _resetControlsTimer();
                   },
-                  icon: Icon(Icons.lock_rounded, color: p.onScrim, size: 30),
+                  icon: Icon(Icons.lock_rounded, color: p.onVideoScrim, size: 30),
                 ),
               ),
             if (_mini) _buildMiniPlayer(),
@@ -965,9 +975,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: Colors.black,
+            color: p.videoScrim,
             borderRadius: BorderRadius.circular(_mini ? 14 : 0),
-            border: _mini ? Border.all(color: p.tint(p.onScrim, 0.22)) : null,
+            border: _mini ? Border.all(color: p.tint(p.onVideoScrim, 0.22)) : null,
           ),
           child: ClipRect(
             child: GestureDetector(
@@ -1002,7 +1012,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     final p = context.palette;
     if (_videoErrorMessage != null) {
       return Container(
-        color: Colors.black,
+        color: p.videoScrim,
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -1014,7 +1024,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                 Text(
                   _videoErrorMessage!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: p.onScrim, fontSize: 12.5),
+                  style: TextStyle(color: p.onVideoScrim, fontSize: 12.5),
                 ),
                 const SizedBox(height: 14),
                 Wrap(
@@ -1037,7 +1047,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       icon: const Icon(Icons.dns_rounded, size: 16),
                       label: const Text('Choose server'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: p.onScrim,
+                        foregroundColor: p.onVideoScrim,
                       ),
                     ),
                   ],
@@ -1050,7 +1060,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     }
     if (_isAnalyzingServers) {
       return Container(
-        color: p.shadowAt(0.76),
+        color: p.videoScrimAt(0.76),
         child: Center(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -1061,12 +1071,12 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(color: p.primary, strokeWidth: 3),
+                CircularProgressIndicator(color: p.videoAccent, strokeWidth: 3),
                 const SizedBox(height: 10),
                 Text(
                   'Auto Server Analyzer',
                   style: TextStyle(
-                    color: p.onScrim,
+                    color: p.textPrimary,
                     fontWeight: FontWeight.w900,
                     fontSize: 14,
                   ),
@@ -1099,10 +1109,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: p.shadowAt(0.65),
+            color: p.videoScrimAt(0.65),
             shape: BoxShape.circle,
           ),
-          child: CircularProgressIndicator(color: p.primary, strokeWidth: 3.5),
+          child: CircularProgressIndicator(color: p.videoAccent, strokeWidth: 3.5),
         ),
       );
     }
@@ -1111,10 +1121,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: p.shadowAt(0.6),
+            color: p.videoScrimAt(0.6),
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.play_arrow_rounded, color: p.onScrim, size: 48),
+          child: Icon(Icons.play_arrow_rounded, color: p.onVideoScrim, size: 48),
         ),
       );
     }
@@ -1145,7 +1155,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: p.tint(p.border, 0.8)),
             boxShadow: [
-              BoxShadow(color: p.shadowAt(0.34), blurRadius: 20, offset: const Offset(0, 8)),
+              BoxShadow(color: p.videoScrimAt(0.34), blurRadius: 20, offset: const Offset(0, 8)),
             ],
           ),
           child: Column(
@@ -1230,7 +1240,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [p.shadowAt(0.85), Colors.transparent],
+          colors: [p.videoScrimAt(0.85), Colors.transparent],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -1241,7 +1251,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
           children: [
             IconButton(
               onPressed: () => _setMini(true),
-              icon: Icon(Icons.arrow_back_rounded, color: p.onScrim, size: 26),
+              icon: Icon(Icons.arrow_back_rounded, color: p.onVideoScrim, size: 26),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -1254,7 +1264,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: p.onScrim,
+                      color: p.onVideoScrim,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -1264,7 +1274,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       'Season $_currentSeasonNumber • Episode $_currentEpisodeNumber: '
                       '${_getCurrentEpisodeTitle()}',
                       style: TextStyle(
-                        color: p.tint(p.onScrim, 0.7),
+                        color: p.tint(p.onVideoScrim, 0.7),
                         fontSize: 12,
                       ),
                     ),
@@ -1313,7 +1323,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                           _showControls = false;
                         });
                       },
-                      icon: Icon(Icons.lock_open_rounded, color: p.onScrim),
+                      icon: Icon(Icons.lock_open_rounded, color: p.onVideoScrim),
                     ),
                   ],
                 ),
@@ -1339,18 +1349,18 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: p.onScrim.withValues(alpha: 0.18),
+            color: p.onVideoScrim.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: p.onScrim, size: 16),
+              Icon(icon, color: p.onVideoScrim, size: 16),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: p.onScrim,
+                  color: p.onVideoScrim,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -1368,7 +1378,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.transparent, p.shadowAt(0.9)],
+          colors: [Colors.transparent, p.videoScrimAt(0.9)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -1382,7 +1392,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               children: [
                 Text(
                   _formatTime(_currentSeconds),
-                  style: TextStyle(color: p.onScrim, fontSize: 12),
+                  style: TextStyle(color: p.onVideoScrim, fontSize: 12),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1392,9 +1402,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       thumbShape: const RoundSliderThumbShape(
                         enabledThumbRadius: 6,
                       ),
-                      activeTrackColor: p.primary,
-                      inactiveTrackColor: p.tint(p.onScrim, 0.24),
-                      thumbColor: p.primary,
+                      activeTrackColor: p.videoAccent,
+                      inactiveTrackColor: p.tint(p.onVideoScrim, 0.24),
+                      thumbColor: p.videoAccent,
                     ),
                     child: Slider(
                       value: _currentSeconds.clamp(
@@ -1410,7 +1420,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                 const SizedBox(width: 8),
                 Text(
                   widget.isLiveTv ? 'LIVE' : _formatTime(_totalSeconds),
-                  style: TextStyle(color: p.onScrim, fontSize: 12),
+                  style: TextStyle(color: p.onVideoScrim, fontSize: 12),
                 ),
               ],
             ),
@@ -1427,13 +1437,13 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                     },
                     icon: Icon(
                       Icons.crop_free_rounded,
-                      color: p.onScrim,
+                      color: p.onVideoScrim,
                       size: 19,
                     ),
                     label: Text(
                       'Fit',
                       style: TextStyle(
-                        color: p.onScrim,
+                        color: p.onVideoScrim,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1446,7 +1456,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       IconButton(
                         icon: Icon(
                           Icons.replay_10_rounded,
-                          color: p.onScrim,
+                          color: p.onVideoScrim,
                           size: 28,
                         ),
                         onPressed: () => _skip(-10),
@@ -1454,7 +1464,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       const SizedBox(width: 10),
                       Container(
                         decoration: BoxDecoration(
-                          gradient: p.primaryGradient,
+                          color: p.videoAccent,
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -1472,7 +1482,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       IconButton(
                         icon: Icon(
                           Icons.forward_10_rounded,
-                          color: p.onScrim,
+                          color: p.onVideoScrim,
                           size: 28,
                         ),
                         onPressed: () => _skip(10),
@@ -1488,13 +1498,13 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                           onPressed: _showSeasonEpisodeDrawer,
                           icon: Icon(
                             Icons.video_library_outlined,
-                            color: p.onScrim,
+                            color: p.onVideoScrim,
                             size: 15,
                           ),
                           label: Text(
                             'S$_currentSeasonNumber E$_currentEpisodeNumber',
                             style: TextStyle(
-                              color: p.onScrim,
+                              color: p.onVideoScrim,
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                             ),
@@ -1505,7 +1515,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                         child: Text(
                           '${_mpv.speed}x',
                           style: TextStyle(
-                            color: p.onScrim,
+                            color: p.onVideoScrim,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1513,7 +1523,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       if (!widget.trailerOnly)
                         IconButton(
                           tooltip: 'Download',
-                          icon: Icon(Icons.download_rounded, color: p.onScrim),
+                          icon: Icon(Icons.download_rounded, color: p.onVideoScrim),
                           onPressed: _downloadCurrent,
                         ),
                       IconButton(
@@ -1522,7 +1532,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                           _isFullScreen
                               ? Icons.fullscreen_exit_rounded
                               : Icons.fullscreen_rounded,
-                          color: p.onScrim,
+                          color: p.onVideoScrim,
                           size: 26,
                         ),
                         onPressed: _toggleFullScreen,
@@ -1543,17 +1553,17 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: p.shadowAt(0.7),
+        color: p.videoScrimAt(0.7),
         shape: BoxShape.circle,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: p.onScrim, size: 32),
+          Icon(icon, color: p.onVideoScrim, size: 32),
           Text(
             label,
             style: TextStyle(
-              color: p.onScrim,
+              color: p.onVideoScrim,
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
@@ -1578,13 +1588,13 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
           width: 170,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
-            color: p.shadowAt(0.75),
+            color: p.videoScrimAt(0.75),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: p.onScrim, size: 34),
+              Icon(icon, color: p.onVideoScrim, size: 34),
               const SizedBox(height: 10),
               Text(
                 label,
@@ -1597,8 +1607,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               const SizedBox(height: 6),
               LinearProgressIndicator(
                 value: value,
-                backgroundColor: p.tint(p.onScrim, 0.12),
-                valueColor: AlwaysStoppedAnimation<Color>(p.primary),
+                backgroundColor: p.tint(p.onVideoScrim, 0.12),
+                valueColor: AlwaysStoppedAnimation<Color>(p.videoAccent),
                 minHeight: 5,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -1606,7 +1616,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               Text(
                 percentage,
                 style: TextStyle(
-                  color: p.onScrim,
+                  color: p.onVideoScrim,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -1641,7 +1651,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .65),
@@ -1679,7 +1689,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     final p = context.palette;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1719,7 +1729,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .7),
@@ -1804,7 +1814,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       builder: (ctx) => SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -1885,7 +1895,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     showDialog<void>(
       context: ctx,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: p.card,
+        backgroundColor: p.surface,
         title: Text(
           audio ? 'Audio delay (seconds)' : 'Subtitle delay (seconds)',
           style: TextStyle(color: p.textPrimary),
@@ -1916,7 +1926,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1942,13 +1952,13 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       Text(
                         '${widget.movie.title} • Episodes',
                         style: TextStyle(
-                          color: p.onScrim,
+                          color: p.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
                       IconButton(
-                        icon: Icon(Icons.close_rounded, color: p.onScrim),
+                        icon: Icon(Icons.close_rounded, color: p.textSecondary),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -2133,7 +2143,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     final p = context.palette;
     showModalBottomSheet(
       context: context,
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -2272,7 +2282,6 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                               SnackBar(
                                 content: Text('Switched to ${source.serverName}'),
                                 behavior: SnackBarBehavior.floating,
-                                backgroundColor: p.primary,
                               ),
                             );
                           }

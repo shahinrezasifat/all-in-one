@@ -36,6 +36,16 @@ import 'package:fvp/fvp.dart' as fvp;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Keep a trace of fatal errors in release builds too, so a startup crash is
+  // diagnosable with `adb logcat` instead of the app simply disappearing.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('Fatal Flutter error: ${details.exceptionAsString()}');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Fatal async error: $error\n$stack');
+    return false;
+  };
   if (!kIsWeb && Platform.isAndroid) {
     // Keep the status bar, hide the bottom system navigation/gesture bar. The
     // app draws its own floating navigation pill, so the extra system "shape"
@@ -82,7 +92,17 @@ void main() {
   SettingsService.instance.ready.then((_) {});
   VaultService.instance.ready.then((_) {});
   PreferenceService.instance.ready.then((_) {});
-  StorageService.instance.ensureLoaded().then((_) {});
+  // StorageService and DownloadManager historically persisted the chosen
+  // location under separate keys. Reconcile them once at startup: an explicit
+  // user choice always wins, otherwise apply the selected storage device so
+  // the Settings chip and the real download path agree.
+  StorageService.instance.ensureLoaded().then((_) async {
+    if (await DownloadManager.instance.hasSavedLocation()) return;
+    if (!StorageService.instance.hasUserSelection) return;
+    await DownloadManager.instance.setDownloadDirectory(
+      StorageService.instance.current.appFolder,
+    );
+  });
   // Always-on personalized trending engine: remembers searched channels, keeps
   // a non-repeating candidate pool warm and refreshes it on a timer/lifecycle.
   TrendingEngineService.instance.startBackground();

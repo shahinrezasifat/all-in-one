@@ -53,6 +53,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.shadow,
     required this.scrim,
     required this.onScrim,
+    required this.videoScrim,
+    required this.onVideoScrim,
+    required this.videoAccent,
   });
 
   final bool isDark;
@@ -102,6 +105,18 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// Content drawn on top of [scrim] overlays.
   final Color onScrim;
 
+  /// Neutral dark overlay used by the video player HUD. It is intentionally
+  /// dark in both modes so controls stay legible over arbitrary video frames,
+  /// while its content/accent colors still follow the active app theme.
+  final Color videoScrim;
+
+  /// Icons and labels drawn on top of [videoScrim].
+  final Color onVideoScrim;
+
+  /// Player progress dot, seek bar and active controls. Always the brand
+  /// green so it remains visible on the dark video scrim in light mode.
+  final Color videoAccent;
+
   // ── Semantic aliases ──────────────────────────────────────────────────
 
   /// General errors use the existing neutral UI role.
@@ -148,6 +163,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// Scrim/overlay at the given opacity.
   Color scrimAt(double alpha) => scrim.withValues(alpha: alpha);
 
+  /// Video HUD overlay at the given opacity.
+  Color videoScrimAt(double alpha) => videoScrim.withValues(alpha: alpha);
+
   /// Brand call-to-action gradient — the only gradient shape allowed.
   LinearGradient get primaryGradient => LinearGradient(
         colors: [primary, secondary],
@@ -172,6 +190,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     shadow: AppHex.lightPrimary,
     scrim: AppHex.lightPrimary,
     onScrim: AppHex.lightCard, // #FFFFFF
+    videoScrim: AppHex.lightTextPrimary,
+    onVideoScrim: AppHex.lightCard,
+    videoAccent: AppHex.lightAccent,
   );
 
   static const AppPalette dark = AppPalette(
@@ -191,6 +212,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     shadow: AppHex.darkBackground,
     scrim: AppHex.darkBackground,
     onScrim: AppHex.darkTextPrimary, // #F5F2EC
+    videoScrim: AppHex.darkBackground,
+    onVideoScrim: AppHex.darkTextPrimary,
+    videoAccent: AppHex.darkPrimary,
   );
 
   /// Never throws: falls back to the palette matching the theme brightness,
@@ -231,6 +255,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? shadow,
     Color? scrim,
     Color? onScrim,
+    Color? videoScrim,
+    Color? onVideoScrim,
+    Color? videoAccent,
   }) {
     return AppPalette(
       isDark: isDark ?? this.isDark,
@@ -249,6 +276,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       shadow: shadow ?? this.shadow,
       scrim: scrim ?? this.scrim,
       onScrim: onScrim ?? this.onScrim,
+      videoScrim: videoScrim ?? this.videoScrim,
+      onVideoScrim: onVideoScrim ?? this.onVideoScrim,
+      videoAccent: videoAccent ?? this.videoAccent,
     );
   }
 
@@ -272,6 +302,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       shadow: Color.lerp(shadow, other.shadow, t)!,
       scrim: Color.lerp(scrim, other.scrim, t)!,
       onScrim: Color.lerp(onScrim, other.onScrim, t)!,
+      videoScrim: Color.lerp(videoScrim, other.videoScrim, t)!,
+      onVideoScrim: Color.lerp(onVideoScrim, other.onVideoScrim, t)!,
+      videoAccent: Color.lerp(videoAccent, other.videoAccent, t)!,
     );
   }
 }

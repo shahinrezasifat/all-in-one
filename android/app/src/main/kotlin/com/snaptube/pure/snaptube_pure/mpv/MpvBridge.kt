@@ -89,7 +89,7 @@ object MpvBridge {
             VIEW_TYPE,
             object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
                 override fun create(context: Context, viewId: Int, args: Any?): PlatformView =
-                    MpvPlatformView(context, viewId)
+                    MpvPlatformView(context, viewId, args)
             },
         )
     }
@@ -114,14 +114,28 @@ object MpvBridge {
         }
     }
 
-    private class MpvPlatformView(private val context: Context, private val viewId: Int) :
-        PlatformView {
+    private class MpvPlatformView(
+        private val context: Context,
+        private val viewId: Int,
+        private val args: Any?,
+    ) : PlatformView {
         private val view = MpvPlayerView(context)
 
         init {
             val configDir = File(context.filesDir, "mpv").apply { mkdirs() }
             val cacheDir = File(context.cacheDir, "mpv").apply { mkdirs() }
             view.initialize(configDir.absolutePath, cacheDir.absolutePath)
+            // Creation params carry the active Flutter theme so subtitle
+            // colours change with light/dark/system mode instead of being a
+            // fixed black box baked into the native player.
+            val params = args as? Map<*, *>
+            listOf("sub-back-color" to "subBackColor", "sub-color" to "subColor")
+                .forEach { (option, key) ->
+                    val color = params?.get(key) as? String
+                    if (!color.isNullOrEmpty()) {
+                        MPVLib.setOptionString(option, color)
+                    }
+                }
             activeView = view
             if (!observerAdded) {
                 MPVLib.addObserver(observer)

@@ -192,10 +192,12 @@ class DownloadManager extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      // A user-selected path is authoritative even when the folder is not
+      // present yet (e.g. an SD card that was not mounted at boot). The
+      // directory tree is (re)created just below; never silently fall back to
+      // internal storage here — that is what made downloads ignore Settings.
       String? savedPath = prefs.getString('custom_download_path');
-      if (savedPath != null &&
-          savedPath.isNotEmpty &&
-          Directory(savedPath).existsSync()) {
+      if (savedPath != null && savedPath.isNotEmpty) {
         _downloadDirectory = savedPath;
       } else {
         if (Platform.isAndroid) {
@@ -269,16 +271,48 @@ class DownloadManager extends ChangeNotifier {
         notifyListeners();
       };
 
+  /// True when the user has explicitly chosen a download location. Permission
+  /// grants and app resumes must never override such a choice.
+  Future<bool> hasSavedLocation() async {
+    await ready;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final path = prefs.getString('custom_download_path');
+      if (path != null && path.isNotEmpty) return true;
+      return prefs.getString('custom_download_root_v1') != null ||
+          prefs.getString('selected_storage_id_v1') != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> setDownloadDirectory(String path) async {
     await ready;
-    _downloadDirectory = path;
+    final normalized = path.trim();
+    if (normalized.isEmpty) return;
+    _downloadDirectory = normalized;
+    try {
+      final root = Directory(normalized);
+      if (!root.existsSync()) root.createSync(recursive: true);
+      for (final name in const ['Videos', 'Music', 'Movies']) {
+        Directory('$normalized/$name').createSync(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('Could not create chosen download folder: $e');
+    }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('custom_download_path', path);
+    await prefs.setString('custom_download_path', normalized);
     notifyListeners();
   }
 
+  /// Legacy one-time migration to the public Download folder. It must only
+  /// run for installs that never chose a location — otherwise it overwrites
+  /// the user's selection every time a permission is granted or the app is
+  /// resumed, and downloads silently go back to internal storage.
   Future<bool> upgradeToPublicStorage() async {
     if (!Platform.isAndroid) return false;
+    await ready;
+    if (await hasSavedLocation()) return false;
     try {
       const publicPath = '/storage/emulated/0/Download/SnapTube';
       final dir = Directory(publicPath);

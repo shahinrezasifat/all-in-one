@@ -332,7 +332,7 @@ class SettingsScreen extends StatelessWidget {
       final selected = await storage.select(location);
       await downloads.setDownloadDirectory(selected.appFolder);
       final moved = await storage.migrateLegacyFolder(
-        newRoot: selected.downloadRoot,
+        newRoot: selected.appFolder,
         relocateTasks: downloads.relocateTasks,
       );
       if (!context.mounted) return;
@@ -507,6 +507,31 @@ class SettingsScreen extends StatelessWidget {
   ) {
     void chooseFolder() => _pickDownloadFolder(context, downloadMgr, storage);
 
+    Future<void> verifyLocation() async {
+      final root = downloadMgr.downloadDirectory;
+      final probe = File(
+        '$root/.all-in-one-write-test-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      String message;
+      try {
+        await probe.writeAsString('ok');
+        final readable = await probe.readAsString() == 'ok';
+        if (probe.existsSync()) probe.deleteSync();
+        message = readable
+            ? 'Verified · downloads save to $root'
+            : 'Write check failed at $root';
+      } catch (error) {
+        message = 'Cannot write to $root · $error';
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message, maxLines: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(14),
       child: Row(
@@ -532,10 +557,21 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _textPillButton(
-            label: 'Choose folder',
-            color: accent,
-            onTap: chooseFolder,
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _textPillButton(
+                label: 'Choose folder',
+                color: accent,
+                onTap: chooseFolder,
+              ),
+              const SizedBox(height: 4),
+              _textPillButton(
+                label: 'Verify',
+                color: secondaryText,
+                onTap: verifyLocation,
+              ),
+            ],
           ),
         ],
       ),

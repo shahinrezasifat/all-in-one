@@ -64,7 +64,8 @@ class MpvPlayerView(context: Context) :
         // Subtitles: mpv handles them natively, no external renderer needed.
         MPVLib.setOptionString("sub-auto", "exact")
         MPVLib.setOptionString("sub-font-size", "48")
-        MPVLib.setOptionString("sub-back-color", "#80000000")
+        // Subtitle colours are supplied by Flutter through the platform-view
+        // creation params (see MpvBridge) so they follow the app theme.
     }
 
     override fun postInitOptions() {

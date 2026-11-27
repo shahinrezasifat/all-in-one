@@ -47,6 +47,7 @@ class StorageService extends ChangeNotifier {
   static const MethodChannel _channel = MethodChannel('snaptube_pure/storage');
   static const String _keySelectedId = 'selected_storage_id_v1';
   static const String _keyCustomRoot = 'custom_download_root_v1';
+  static const String _keyCustomUri = 'custom_download_uri_v1';
   static const String _keyLegacyMigrated = 'legacy_downloads_migrated_v2';
 
   List<StorageLocation> _locations = [];
@@ -59,6 +60,18 @@ class StorageService extends ChangeNotifier {
   List<StorageLocation> get locations => List.unmodifiable(_locations);
 
   String? _customRootCache;
+  String? _customUriCache;
+
+  /// The SAF tree URI granted by Android, when the folder came from the
+  /// system picker. Kept so a reboot cannot lose the grant; raw paths alone
+  /// are not writable on many SD-card providers.
+  String? get customUri => _customUriCache;
+
+  /// Whether the user explicitly picked a storage device or folder. Used at
+  /// startup so the legacy public-storage migration cannot override it.
+  bool get hasUserSelection =>
+      (_selectedId != null && _selectedId!.isNotEmpty) ||
+      (_customRootCache != null && _customRootCache!.isNotEmpty);
 
   Future<void> ensureLoaded() async {
     if (_loaded) return;
@@ -66,6 +79,7 @@ class StorageService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _selectedId = prefs.getString(_keySelectedId);
       _customRootCache = prefs.getString(_keyCustomRoot);
+      _customUriCache = prefs.getString(_keyCustomUri);
       _locations = await _discover();
     } catch (error) {
       debugPrint('Storage discovery failed: $error');
@@ -147,6 +161,30 @@ class StorageService extends ChangeNotifier {
         }
       } catch (error) {
         debugPrint('Download directory discovery failed: $error');
+      }
+      // path_provider does not report every removable volume. Add native
+      // volumes that were not seen above so an SD card is actually selectable
+      // instead of silently falling back to internal storage.
+      for (final volume in nativeVolumes) {
+        final id = volume['id'] as String?;
+        final path = volume['downloadPath'] as String?;
+        if (id == null || id.isEmpty || path == null || path.isEmpty) continue;
+        if (locations.any(
+          (location) => location.id == id || location.downloadRoot == path,
+        )) {
+          continue;
+        }
+        final internal = id == 'internal';
+        locations.add(
+          StorageLocation(
+            id: id,
+            label: (volume['label'] as String?)?.trim().isNotEmpty == true
+                ? volume['label'] as String
+                : (internal ? 'Internal storage' : 'SD card'),
+            kind: internal ? StorageKind.internal : StorageKind.external,
+            downloadRoot: path,
+          ),
+        );
       }
     } else {
       String root = Directory.systemTemp.path;
@@ -234,9 +272,16 @@ class StorageService extends ChangeNotifier {
       if (result == null) return null;
       final path = result['path'] as String?;
       if (path == null || path.isEmpty) return null;
+      final uri = result['uri'] as String?;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyCustomRoot, path);
+      if (uri != null && uri.isNotEmpty) {
+        await prefs.setString(_keyCustomUri, uri);
+      } else {
+        await prefs.remove(_keyCustomUri);
+      }
       _customRootCache = path;
+      _customUriCache = uri;
       _locations = await _discover();
       await select(
         _locations.firstWhere(
