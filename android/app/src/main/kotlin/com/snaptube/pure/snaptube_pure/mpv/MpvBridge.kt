@@ -122,6 +122,19 @@ object MpvBridge {
         private val view = MpvPlayerView(context)
 
         init {
+            // A stale view from a previous engine (hot restart) can still be
+            // around. Tear it down before creating the new global MPVLib
+            // instance; otherwise mpv reports "already initialized" and a
+            // later double-destroy aborts the process (SIGABRT in FORTIFY).
+            val previous = activeView
+            if (previous != null && previous !== view) {
+                previous.safeDestroy()
+                if (observerAdded) {
+                    MPVLib.removeObserver(observer)
+                    observerAdded = false
+                }
+                activeView = null
+            }
             val configDir = File(context.filesDir, "mpv").apply { mkdirs() }
             val cacheDir = File(context.cacheDir, "mpv").apply { mkdirs() }
             view.initialize(configDir.absolutePath, cacheDir.absolutePath)
@@ -146,13 +159,17 @@ object MpvBridge {
         override fun getView(): View = view
 
         override fun dispose() {
-            if (activeView === view) activeView = null
-            if (observerAdded) {
-                MPVLib.removeObserver(observer)
-                observerAdded = false
+            val owned = activeView === view
+            if (owned) {
+                activeView = null
+                if (observerAdded) {
+                    MPVLib.removeObserver(observer)
+                    observerAdded = false
+                }
             }
+            // Never tear down an MPVLib instance that belongs to a newer view.
             try {
-                view.destroy()
+                view.safeDestroy()
             } catch (_: Exception) {
             }
         }

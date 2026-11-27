@@ -7,7 +7,7 @@
 <p align="center">Download web videos, stream movies from integrated sources, and keep personal media in a PIN- or fingerprint-protected Vault.</p>
 
 <p align="center">
-  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.16/split-all-in-one-v1.0.16-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.16 for ARM64" width="300"></a>
+  <a href="https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.17/split-all-in-one-v1.0.17-arm64-v8a.apk"><img src="docs/media/download-android.png" alt="Download Android APK v1.0.17 for ARM64" width="300"></a>
 </p>
 
 <p align="center">
@@ -59,10 +59,10 @@ The format picker and progress screen use Blender’s *Big Buck Bunny*. The comp
 
 | Android APK | Download size | Device |
 | --- | ---: | --- |
-| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.16/split-all-in-one-v1.0.16-arm64-v8a.apk) | ~83 MB | Most modern Android phones and tablets |
-| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.16/split-all-in-one-v1.0.16-armeabi-v7a.apk) | ~83 MB | Older 32-bit ARM devices |
-| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.16/split-all-in-one-v1.0.16-x86_64.apk) | ~85 MB | Compatible Intel or AMD Android devices and emulators |
-| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.16/all-in-one-v1.0.16.apk) | ~219 MB | Contains all three CPU architectures in one installer |
+| [ARM64 (arm64-v8a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.17/split-all-in-one-v1.0.17-arm64-v8a.apk) | ~83 MB | Most modern Android phones and tablets |
+| [ARM 32-bit (armeabi-v7a)](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.17/split-all-in-one-v1.0.17-armeabi-v7a.apk) | ~83 MB | Older 32-bit ARM devices |
+| [x86_64](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.17/split-all-in-one-v1.0.17-x86_64.apk) | ~85 MB | Compatible Intel or AMD Android devices and emulators |
+| [Universal](https://github.com/shahinrezasifat/all-in-one/releases/download/v1.0.17/all-in-one-v1.0.17.apk) | ~219 MB | Contains all three CPU architectures in one installer |
 
 Each architecture-specific APK includes the app and the media engines for its CPU. The listed size is the APK download size. Installed storage usage can be higher.
 

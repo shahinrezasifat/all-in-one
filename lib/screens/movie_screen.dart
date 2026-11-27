@@ -1207,8 +1207,9 @@ class _MovieScreenState extends State<MovieScreen> {
     _genre = null;
   });
 
-  /// Section-based catalog rows (like a modern streaming app): trending,
-  /// language buckets, series, personalised and coming-soon rows.
+  /// Rows come straight from the selected source's own `catalogGroups`.
+  /// No invented trending / language / recommendation buckets: if the source
+  /// provides no sections, this page shows none.
   List<Widget> _catalogCarousels(List<WatchHistoryItem> history) {
     // Fixture catalogs in widget tests are tiny; carousels would duplicate
     // their only titles and break exact-count assertions.
@@ -1218,79 +1219,45 @@ class _MovieScreenState extends State<MovieScreen> {
     if (_carouselCacheKey == cacheKey && _carouselCache != null) {
       return _carouselCache!;
     }
-    // Only titles loaded from the CURRENTLY SELECTED source are allowed here.
-    // The previously used master catalog mixed unrelated demo titles into the
-    // rows, which then had no playable detailUrl.
-    final all = _items.where((movie) => !movie.isLiveTv).toList();
-    if (all.isEmpty) return const [];
+    // Use the filtered list so the language/category chips visibly affect the
+    // rows too — previously the hardcoded rows ignored them entirely.
+    final sections = <String, List<MovieItem>>{};
+    for (final movie in _visibleItems) {
+      if (movie.isLiveTv) continue;
+      final label = movie.catalogGroups.isNotEmpty
+          ? movie.catalogGroups.first.trim()
+          : '';
+      if (label.isEmpty) continue;
+      sections.putIfAbsent(label, () => []).add(movie);
+    }
+    if (sections.isEmpty) {
+      _carouselCacheKey = cacheKey;
+      _carouselCache = const [];
+      return const [];
+    }
 
-    final byRating = [...all]..sort((a, b) => b.rating.compareTo(a.rating));
-    final hindi = all
-        .where((m) => MovieCard.languageOf(m) == 'Hindi')
-        .toList();
-    final english = all
-        .where((m) => MovieCard.languageOf(m) == 'English')
-        .toList();
-    final series = all.where((m) => m.isSeries).toList();
-    final nextYear = DateTime.now().year + 1;
-    final soon = all.where((m) => m.year >= nextYear).toList();
-    final recommended = history.isEmpty
-        ? <MovieItem>[]
-        : _repository.getRecommendedForYou(all, limit: 12);
     VoidCallback seeAll([String tab = 'All']) => _source == null
         ? () => FilterScreen.show(context, initialGenre: _genre)
         : () => SourceLibraryScreen.show(
               context,
               repoId: _source!.repo.id,
               providerId: _source!.provider.id,
-              title: _source!.provider.name,
-              initialTab: tab,
+              title: tab == 'All' ? _source!.provider.name : tab,
+              initialTab: 'All',
+              // Section carousels pass their own catalog-group label here so
+              // "All" opens exactly that section instead of the full library.
+              initialSection: tab == 'All' ? null : tab,
             );
 
     final result = [
-      if (byRating.isNotEmpty)
-        SectionCarousel(
-          title: 'Trending now',
-          movies: byRating.take(14).toList(),
-          onOpen: _openMovie,
-          onSeeAll: seeAll(),
-        ),
-      if (hindi.isNotEmpty)
-        SectionCarousel(
-          title: 'Bollywood & Hindi',
-          movies: hindi.take(14).toList(),
-          onOpen: _openMovie,
-          onSeeAll: seeAll('Movies'),
-        ),
-      if (english.isNotEmpty)
-        SectionCarousel(
-          title: 'Hollywood',
-          movies: english.take(14).toList(),
-          onOpen: _openMovie,
-          onSeeAll: seeAll('Movies'),
-        ),
-      if (series.isNotEmpty)
-        SectionCarousel(
-          title: 'Top Series',
-          movies: series.take(14).toList(),
-          onOpen: _openMovie,
-          onSeeAll: seeAll('Series'),
-        ),
-      if (recommended.isNotEmpty)
-        SectionCarousel(
-          title: 'Because you watched',
-          movies: recommended,
-          onOpen: _openMovie,
-          onSeeAll: seeAll(),
-        ),
-      if (soon.isNotEmpty)
-        SectionCarousel(
-          title: 'Coming Soon',
-          movies: soon.take(14).toList(),
-          onOpen: _openMovie,
-          onSeeAll: seeAll(),
-          soonDates: {for (final m in soon) m.detailUrl: '${m.year}'},
-        ),
+      for (final entry in sections.entries)
+        if (entry.value.isNotEmpty)
+          SectionCarousel(
+            title: entry.key,
+            movies: entry.value.take(14).toList(),
+            onOpen: _openMovie,
+            onSeeAll: seeAll(entry.key),
+          ),
     ];
     _carouselCacheKey = cacheKey;
     _carouselCache = result;
@@ -1406,7 +1373,9 @@ class _MovieScreenState extends State<MovieScreen> {
                                       'anime' => 'Anime',
                                       _ => 'Filtered Titles',
                                     })
-                              : 'Trending Now',
+                              : (_source != null
+                                  ? 'All from ${_source!.provider.name}'
+                                  : 'All titles'),
                           showSeeAll: filtered,
                         ),
                       ),

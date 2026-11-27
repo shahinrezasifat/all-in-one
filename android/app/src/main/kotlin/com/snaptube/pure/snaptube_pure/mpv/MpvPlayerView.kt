@@ -1,6 +1,7 @@
 package com.snaptube.pure.snaptube_pure.mpv
 
 import android.content.Context
+import android.view.SurfaceHolder
 import java.io.File
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPVLib
@@ -17,6 +18,28 @@ import `is`.xyz.mpv.MPVLib.MpvFormat
  */
 class MpvPlayerView(context: Context) :
     BaseMPVView(context, context.resources.getLayout(android.R.layout.simple_list_item_1)) {
+
+    /**
+     * BaseMPVView.destroy() always tears down the *global* MPVLib instance,
+     * even when this view no longer owns it (e.g. a stale platform view is
+     * disposed after a newer one was created during a hot restart). Calling
+     * it twice aborts the process with "pthread_mutex_lock called on a
+     * destroyed mutex", so make teardown idempotent.
+     */
+    private var destroyed = false
+
+    fun safeDestroy() {
+        if (destroyed) return
+        destroyed = true
+        destroy()
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        // A disposed view can still receive a late callback after a hot
+        // restart; detaching its surface would kill the *new* player.
+        if (destroyed) return
+        super.surfaceDestroyed(holder)
+    }
 
     override fun initOptions() {
         // Copy the AAR's CA bundle so https streams (HLS CDNs, etc.) verify.

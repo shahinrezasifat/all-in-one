@@ -337,7 +337,7 @@ class _YtDlpDownloadSheetState extends State<YtDlpDownloadSheet> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     fontSize: 11.5,
-                    color: context.palette.onPrimary),
+                    color: context.palette.textSecondary),
               ),
             ),
           SizedBox(height: 20),

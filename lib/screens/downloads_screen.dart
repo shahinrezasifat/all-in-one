@@ -96,7 +96,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           children: [
             Text(
               'Enter folder name to create a real directory on disk:',
-              style: TextStyle(fontSize: 12, color: context.palette.onPrimary),
+              style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
             ),
             SizedBox(height: 12),
             TextField(
@@ -182,15 +182,22 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   _openedFolderType == null &&
                   _openedWebsite == null
               ? Padding(
-                  padding: EdgeInsets.only(bottom: 76.0),
+                  // The floating nav pill is 68px tall and sits above the
+                  // system gesture inset. Keep the folder action clear of it
+                  // instead of overlapping the Settings tab.
+                  padding: const EdgeInsets.only(bottom: 112, right: 8),
                   child: FloatingActionButton(
+                    mini: true,
                     backgroundColor: context.palette.primary,
-                    foregroundColor: context.palette.card,
-                    shape: CircleBorder(),
-                    elevation: 5,
+                    foregroundColor: context.palette.onPrimary,
+                    shape: const CircleBorder(),
+                    elevation: 3,
                     tooltip: 'New Folder',
                     onPressed: _showCreateFolderDialog,
-                    child: Icon(Icons.create_new_folder_rounded, size: 28),
+                    child: const Icon(
+                      Icons.create_new_folder_rounded,
+                      size: 20,
+                    ),
                   ),
                 )
               : null,
@@ -557,7 +564,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   '${websiteFolders.length} sites',
                   style: TextStyle(
                     fontSize: 11,
-                    color: context.palette.onPrimary,
+                    color: context.palette.textSecondary,
                   ),
                 ),
                 SizedBox(width: 6),

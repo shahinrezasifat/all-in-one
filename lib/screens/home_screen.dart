@@ -200,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(height: 10),
               Text(
                 'Finding fresh videos…',
-                style: TextStyle(fontSize: 12, color: context.palette.onPrimary),
+                style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
               ),
             ],
           ),
@@ -769,45 +769,48 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(16, 12, 16, 2),
-                    child: Text(
-                      'RECENT SEARCHES',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                        color: dark
-                            ? context.palette.textSecondary
-                            : context.palette.textSecondary,
+              child: Material(
+                color: Colors.transparent,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 2),
+                      child: Text(
+                        'RECENT SEARCHES',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.1,
+                          color: dark
+                              ? context.palette.textSecondary
+                              : context.palette.textSecondary,
+                        ),
                       ),
                     ),
-                  ),
-                  for (final entry in matches)
-                    ListTile(
-                      dense: true,
-                      leading: Icon(
-                        Icons.history_rounded,
-                        size: 18,
-                        color: accent,
+                    for (final entry in matches)
+                      ListTile(
+                        dense: true,
+                        leading: Icon(
+                          Icons.history_rounded,
+                          size: 18,
+                          color: accent,
+                        ),
+                        title: Text(
+                          entry,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, color: muted),
+                        ),
+                        trailing: Icon(
+                          Icons.north_west_rounded,
+                          size: 15,
+                          color: muted,
+                        ),
+                        onTap: () => _executeSearch(entry),
                       ),
-                      title: Text(
-                        entry,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, color: muted),
-                      ),
-                      trailing: Icon(
-                        Icons.north_west_rounded,
-                        size: 15,
-                        color: muted,
-                      ),
-                      onTap: () => _executeSearch(entry),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

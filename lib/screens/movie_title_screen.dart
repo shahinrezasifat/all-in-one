@@ -9,6 +9,7 @@ import '../services/download_manager.dart';
 import '../services/permission_service.dart';
 import '../services/provider_engine/provider_engine_service.dart';
 import '../services/provider_engine/provider_models.dart';
+import '../services/watch_history_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/remote_image.dart';
 import 'mpv_player_screen.dart';
@@ -27,6 +28,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
   final _episodeFormats = <ProviderEpisode, Future<List<MovieSource>>>{};
   final _expandedEpisodes = <ProviderEpisode, bool>{};
   late Future<List<ProviderEpisode>> _episodes;
+  List<ProviderEpisode> _allEpisodes = const [];
   Future<List<MovieSource>>? _movieFormats;
   List<MovieSource> _discoveredMovieFormats = [];
   int _formatRequest = 0;
@@ -1179,8 +1181,9 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
   void _play(
     MovieSource source,
     List<MovieSource> formats,
-    ProviderEpisode? episode,
-  ) {
+    ProviderEpisode? episode, {
+    double positionSeconds = 0,
+  }) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MpvPlayerScreen(
@@ -1190,9 +1193,11 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
                 : '${widget.movie.title} · ${_episodeLabel(episode)}',
             sources: formats,
           ),
+          seriesEpisodes: _allEpisodes,
           initialSource: source,
           initialSeason: episode?.season ?? 1,
           initialEpisode: episode?.number ?? 1,
+          initialPositionSeconds: positionSeconds,
         ),
       ),
     );
@@ -1201,6 +1206,111 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
   // ---------------------------------------------------------------------------
   // Hero + section headers
   // ---------------------------------------------------------------------------
+
+  Widget _heroIconButton({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required Color background,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: color.withValues(alpha: 0.28)),
+            ),
+            child: Icon(icon, color: color, size: 17),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _heroResumePill(AppPalette p) {
+    final history = WatchHistoryService.instance.getProgress(widget.movie.id);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _resuming ? null : _resumeSeries,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            gradient: p.primaryGradient,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: p.shadowAt(0.34),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: _resuming
+              ? Center(
+                  child: SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: p.onPrimary,
+                    ),
+                  ),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.play_arrow_rounded,
+                      color: p.onPrimary,
+                      size: 17,
+                    ),
+                    const SizedBox(width: 5),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Resume',
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: p.onPrimary,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (history != null)
+                          Text(
+                            'S${history.seasonNumber} E${history.episodeNumber} · '
+                            '${history.positionFormatted}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: p.onPrimary.withValues(alpha: 0.78),
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
 
   Widget _titleHeader(bool series, {VoidCallback? downloadSeason}) {
     final movie = widget.movie;
@@ -1297,6 +1407,28 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
               ],
             ),
           ),
+          if (series)
+            Positioned(
+              right: 12,
+              bottom: 12,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _heroIconButton(
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: 'Clear watch history',
+                    color: context.palette.critical,
+                    background: context.palette.tint(
+                      context.palette.critical,
+                      0.18,
+                    ),
+                    onTap: _clearSeriesHistory,
+                  ),
+                  const SizedBox(width: 8),
+                  _heroResumePill(context.palette),
+                ],
+              ),
+            ),
           if (series)
             Positioned(
               top: 12,
@@ -1498,6 +1630,73 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
     );
   }
 
+  bool _resuming = false;
+
+  /// Clears only this series' watch history, leaving downloads untouched.
+  Future<void> _clearSeriesHistory() async {
+    final related = WatchHistoryService.instance.history
+        .where(
+          (item) =>
+              item.movieId == widget.movie.id ||
+              item.title == widget.movie.title ||
+              item.title.startsWith('${widget.movie.title} ·'),
+        )
+        .toList();
+    for (final item in related) {
+      await WatchHistoryService.instance.removeFromHistory(item.movieId);
+    }
+    if (!mounted) return;
+    setState(() {});
+    _message(
+      related.isEmpty
+          ? 'No watch history for this series'
+          : 'Watch history cleared',
+    );
+  }
+
+  Future<void> _resumeSeries() async {
+    if (_resuming) return;
+    if (_allEpisodes.isEmpty) {
+      _message('Episodes are still loading.');
+      return;
+    }
+    final history = WatchHistoryService.instance.getProgress(widget.movie.id);
+    ProviderEpisode? target;
+    if (history != null) {
+      for (final episode in _allEpisodes) {
+        if ((episode.season ?? 1) == history.seasonNumber &&
+            episode.number == history.episodeNumber) {
+          target = episode;
+          break;
+        }
+      }
+    }
+    target ??= _allEpisodes.first;
+    setState(() => _resuming = true);
+    try {
+      final formats = await _formats(target).timeout(
+        const Duration(seconds: 20),
+      );
+      if (!mounted) return;
+      if (formats.isEmpty) {
+        _message('No playable source for this episode.');
+        return;
+      }
+      _play(
+        formats.first,
+        formats,
+        target,
+        positionSeconds: history?.positionSeconds ?? 0,
+      );
+    } on TimeoutException {
+      if (mounted) _message('Timed out while loading this episode.');
+    } catch (_) {
+      if (mounted) _message('Could not resume this series.');
+    } finally {
+      if (mounted) setState(() => _resuming = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: _dark ? context.palette.background : context.palette.background,
@@ -1510,13 +1709,17 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
     ),
     body: SafeArea(
       top: false,
-      child: FutureBuilder<List<ProviderEpisode>>(
-        future: _episodes,
+      child: Column(
+        children: [
+          Expanded(
+            child: FutureBuilder<List<ProviderEpisode>>(
+              future: _episodes,
         builder: (context, snapshot) {
           final loadingEpisodes =
               widget.movie.isSeries &&
               snapshot.connectionState != ConnectionState.done;
           final episodes = snapshot.data ?? <ProviderEpisode>[];
+          _allEpisodes = episodes;
           final seasons = <int?, List<ProviderEpisode>>{};
           for (final episode in episodes) {
             seasons.putIfAbsent(episode.season, () => []).add(episode);
@@ -1644,6 +1847,8 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
             ),
           );
         },
+      )),
+        ],
       ),
     ),
   );

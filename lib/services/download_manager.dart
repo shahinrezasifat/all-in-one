@@ -13,6 +13,7 @@ import '../models/download_task.dart';
 import '../models/extract_result.dart';
 import '../models/movie_model.dart';
 import '../models/movie_source_language.dart';
+import '../utils/episode_parser.dart';
 import 'download_size_probe.dart';
 import 'extractor_service.dart';
 import 'gallery_media_service.dart';
@@ -121,6 +122,16 @@ class DownloadManager extends ChangeNotifier {
     if (seriesId != null && seriesId.isNotEmpty) {
       final byId = candidates.where((t) => t.series?.id == seriesId).toList();
       if (byId.isNotEmpty) return byId;
+    }
+    // Episodes downloaded individually have no series metadata. Fall back to
+    // the part of the title before "Season/Episode", so S01E01 and S01E02
+    // still land in the same picker.
+    final base = EpisodeParser.seriesName(task.title);
+    if (base.isNotEmpty) {
+      final byName = candidates
+          .where((t) => EpisodeParser.seriesName(t.title) == base)
+          .toList();
+      if (byName.isNotEmpty) return byName;
     }
     return candidates.where((t) => t.id == task.id).toList();
   }

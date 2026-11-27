@@ -143,7 +143,7 @@ class _StoragePermissionGateState extends State<StoragePermissionGate>
               duration: Duration(seconds: 4),
               content: Text(
                 'স্টোরেজ পারমিশন ছাড়া অ্যাপ ওপেন করা যাবে না। অনুগ্রহ করে পারমিশন দিন।',
-                style: TextStyle(color: context.palette.onPrimary, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           );

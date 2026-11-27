@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../models/download_task.dart';
@@ -93,6 +95,52 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
     return list;
   }
 
+  /// The episode the page-level Resume button should open: the most recently
+  /// watched local file, including its exact season, episode and position.
+  ({DownloadTask task, WatchHistoryItem? history})? _resumeCandidate() {
+    final playable = _currentTasks
+        .where(
+          (task) =>
+              !task.isAudioTask &&
+              !task.isImageTask &&
+              (task.savePath ?? '').isNotEmpty &&
+              File(task.savePath!).existsSync(),
+        )
+        .toList();
+    if (playable.isEmpty) return null;
+    WatchHistoryItem? best;
+    DownloadTask? bestTask;
+    for (final task in playable) {
+      final history = WatchHistoryService.instance.getProgress(task.id);
+      if (history == null) continue;
+      if (best == null || history.lastWatched.isAfter(best.lastWatched)) {
+        best = history;
+        bestTask = task;
+      }
+    }
+    bestTask ??= playable.first;
+    return (task: bestTask, history: best);
+  }
+
+  String _resumeSubtitle({
+    required DownloadTask task,
+    WatchHistoryItem? history,
+  }) {
+    final season =
+        history?.seasonNumber ??
+        EpisodeParser.season(task.seriesSeason ?? '') ??
+        EpisodeParser.season(task.title) ??
+        EpisodeParser.season(task.savePath ?? '') ??
+        1;
+    final parsedEpisode = _episode(task);
+    final episode = history?.episodeNumber ??
+        (parsedEpisode > 0 ? parsedEpisode : 1);
+    if (history != null && history.positionSeconds > 0) {
+      return 'S$season E$episode · ${history.positionFormatted}';
+    }
+    return 'S$season E$episode · Start';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -143,95 +191,18 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
             // ── Hero banner ───────────────────────────────────────────────
-            _buildHero(p, posterUrl),
+            _buildHero(p, posterUrl, currentTasks, tasks),
             const SizedBox(height: 18),
-            if (widget.isSeries && currentTasks.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: PopupMenuButton<String>(
-                  tooltip: 'Manage all downloaded episodes and seasons',
-                  onSelected: (value) {
-                    if (value == 'all') {
-                      _confirmDelete(currentTasks, 'the full series');
-                    } else if (value.startsWith('season:')) {
-                      final season = value.substring('season:'.length);
-                      _confirmDelete(
-                        currentTasks
-                            .where((task) => _seasonOf(task) == season)
-                            .toList(),
-                        season,
-                      );
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'all',
-                      child: Text('Delete all downloads'),
-                    ),
-                    for (final season in seasons)
-                      PopupMenuItem(
-                        value: 'season:$season',
-                        child: Text('Delete $season'),
-                      ),
-                  ],
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: p.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: p.border),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.download_for_offline_rounded,
-                            color: p.primary,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'All Download',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.arrow_drop_down_rounded),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-            ],
+            const SizedBox(height: 2),
             if (widget.isSeries && seasons.isNotEmpty) ...[
               _buildSectionTitle('Downloaded seasons', p),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: [
                   for (final season in seasons)
-                    ChoiceChip(
-                      label: Text(season),
-                      selected: _season == season,
-                      onSelected: (_) => setState(
-                        () => _season = _season == season ? null : season,
-                      ),
-                      selectedColor: p.primary,
-                      backgroundColor: p.card,
-                      side: BorderSide(
-                        color: _season == season ? p.primary : p.border,
-                      ),
-                      labelStyle: TextStyle(
-                        color: _season == season ? p.onPrimary : p.textPrimary,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    _seasonPill(p, season, selected: _season == season),
                 ],
               ),
               const SizedBox(height: 16),
@@ -298,6 +269,166 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
     );
   }
 
+  Widget _seasonPill(AppPalette p, String season, {required bool selected}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () =>
+            setState(() => _season = selected ? null : season),
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? p.primary : p.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? p.primary : p.border,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: p.shadowAt(0.22),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(
+                    Icons.check_rounded,
+                    size: 14,
+                    color: p.onPrimary,
+                  ),
+                ),
+              Text(
+                season,
+                style: TextStyle(
+                  color: selected ? p.onPrimary : p.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteButton(AppPalette p, List<DownloadTask> targets) {
+    return Tooltip(
+      message: 'Delete selected downloads',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _confirmDelete(targets, 'this selection'),
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: p.scrimAt(0.55),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: p.tint(p.onScrim, 0.28)),
+            ),
+            child: Icon(
+              Icons.delete_outline_rounded,
+              color: p.onScrim,
+              size: 17,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResumeButton(
+    AppPalette p,
+    ({DownloadTask task, WatchHistoryItem? history})? candidate,
+  ) {
+    final subtitle = candidate == null
+        ? 'Nothing to resume'
+        : _resumeSubtitle(
+            task: candidate.task,
+            history: candidate.history,
+          );
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: candidate == null
+            ? null
+            : () => DownloadItemTile.playTask(context, candidate.task),
+        borderRadius: BorderRadius.circular(15),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            gradient: candidate == null ? null : p.primaryGradient,
+            color: candidate == null ? p.disabledBg : null,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: candidate == null
+                ? null
+                : [
+                    BoxShadow(
+                      color: p.shadowAt(0.34),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.play_arrow_rounded,
+                color: candidate == null ? p.textSecondary : p.onPrimary,
+                size: 17,
+              ),
+              const SizedBox(width: 5),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Resume',
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: candidate == null
+                          ? p.textSecondary
+                          : p.onPrimary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: (candidate == null ? p.textSecondary : p.onPrimary)
+                          .withValues(alpha: 0.78),
+                      fontSize: 8,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmDelete(List<DownloadTask> tasks, String label) async {
     if (tasks.isEmpty) return;
     final confirmed = await showDialog<bool>(
@@ -330,29 +461,50 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
     });
   }
 
-  Widget _buildSectionTitle(String label, AppPalette p) => Text(
-    label,
-    style: TextStyle(
-      color: p.textPrimary,
-      fontSize: 13.5,
-      fontWeight: FontWeight.w800,
-    ),
+  Widget _buildSectionTitle(String label, AppPalette p) => Row(
+    children: [
+      Container(
+        width: 3,
+        height: 15,
+        decoration: BoxDecoration(
+          color: p.primary,
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          label,
+          style: TextStyle(
+            color: p.textPrimary,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.1,
+          ),
+        ),
+      ),
+    ],
   );
 
-  Widget _buildHero(AppPalette p, String posterUrl) {
+  Widget _buildHero(
+    AppPalette p,
+    String posterUrl,
+    List<DownloadTask> currentTasks,
+    List<DownloadTask> tasks,
+  ) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(26),
       child: Stack(
         children: [
           SizedBox(
-            height: 148,
+            height: 176,
             width: double.infinity,
             child: posterUrl.isNotEmpty
                 ? SmartNetworkImage(
                     url: posterUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
-                    height: 148,
+                    height: 176,
                     placeholderColor: p.card,
                     placeholderIcon: Icons.movie_rounded,
                   )
@@ -370,9 +522,57 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
             ),
           ),
           Positioned(
+            top: 14,
+            left: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: p.scrimAt(0.45),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: p.tint(p.onScrim, 0.22)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.download_done_rounded,
+                    size: 12,
+                    color: p.success,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'OFFLINE READY',
+                    style: TextStyle(
+                      color: p.onScrim,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (widget.isSeries && currentTasks.isNotEmpty)
+            Positioned(
+              right: 12,
+              bottom: 14,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildDeleteButton(
+                    p,
+                    tasks.isNotEmpty ? tasks : currentTasks,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildResumeButton(p, _resumeCandidate()),
+                ],
+              ),
+            ),
+          Positioned(
             left: 16,
-            right: 16,
-            bottom: 14,
+            right: widget.isSeries ? 158 : 16,
+            bottom: 16,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -382,9 +582,9 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: p.onScrim,
-                    fontSize: 20,
+                    fontSize: 23,
                     fontWeight: FontWeight.w900,
-                    height: 1.2,
+                    height: 1.18,
                   ),
                 ),
                 const SizedBox(height: 5),

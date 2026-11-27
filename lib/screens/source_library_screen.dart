@@ -17,6 +17,7 @@ class SourceLibraryScreen extends StatefulWidget {
     required this.providerId,
     this.title = 'All titles',
     this.initialTab = 'All',
+    this.initialSection,
   });
 
   final String repoId;
@@ -24,12 +25,17 @@ class SourceLibraryScreen extends StatefulWidget {
   final String title;
   final String initialTab;
 
+  /// A source-provided catalog section (for example a "See all" tap on a
+  /// carousel). When set, this page opens filtered to that exact section.
+  final String? initialSection;
+
   static Future<void> show(
     BuildContext context, {
     required String repoId,
     required String providerId,
     String title = 'All titles',
     String initialTab = 'All',
+    String? initialSection,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -38,6 +44,7 @@ class SourceLibraryScreen extends StatefulWidget {
           providerId: providerId,
           title: title,
           initialTab: initialTab,
+          initialSection: initialSection,
         ),
       ),
     );
@@ -55,16 +62,26 @@ class _SourceLibraryScreenState extends State<SourceLibraryScreen> {
   bool _done = false;
   int _page = 0;
   late String _tab;
+  String? _section;
   String? _error;
 
-  static const _tabs = ['All', 'Movies', 'Series', 'Anime'];
+  static const _baseTabs = ['All', 'Movies', 'Series', 'Anime'];
+
+  List<String> get _tabs =>
+      _section == null ? _baseTabs : [_section!, ..._baseTabs];
   static const _maxPages = 12;
   static const _budget = Duration(seconds: 10);
 
   @override
   void initState() {
     super.initState();
-    _tab = widget.initialTab;
+    final section = widget.initialSection?.trim();
+    if (section != null && section.isNotEmpty) {
+      _section = section;
+      _tab = section;
+    } else {
+      _tab = widget.initialTab;
+    }
     unawaited(_loadAll());
   }
 
@@ -99,7 +116,13 @@ class _SourceLibraryScreenState extends State<SourceLibraryScreen> {
   }
 
   List<MovieItem> get _visible {
+    final section = _section;
     return _all.where((movie) {
+      // A "See all" tap opens one specific source section, not the whole
+      // catalogue. Other tabs still fall back to the usual type filters.
+      if (section != null && _tab == section) {
+        return movie.catalogGroups.contains(section);
+      }
       return switch (_tab) {
         'Movies' => !movie.isSeries && !movie.isAnime,
         'Series' => movie.isSeries && !movie.isAnime,
@@ -112,7 +135,9 @@ class _SourceLibraryScreenState extends State<SourceLibraryScreen> {
   Map<String, List<MovieItem>> get _sections {
     final grouped = <String, List<MovieItem>>{};
     for (final movie in _visible) {
-      final label = movie.catalogGroups.isNotEmpty
+      final label = (_section != null && _tab == _section)
+          ? _section!
+          : movie.catalogGroups.isNotEmpty
           ? movie.catalogGroups.first
           : switch (_tab) {
               'Movies' => 'Movies',

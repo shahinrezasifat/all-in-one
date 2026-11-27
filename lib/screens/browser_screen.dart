@@ -152,6 +152,12 @@ class _BrowserScreenState extends State<BrowserScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controller?.setBackgroundColor(context.palette.card);
+  }
+
+  @override
   void dispose() {
     widget.onBackHandlerChanged?.call(null);
     _mediaWatcher?.cancel();
@@ -363,7 +369,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
       late final WebViewController controller;
       controller = WebViewController.fromPlatformCreationParams(params)
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(context.palette.card);
+        ..setBackgroundColor(const Color(0x00000000));
       controller.setUserAgent(mobileUserAgent);
       controller.setNavigationDelegate(
         NavigationDelegate(
@@ -1338,7 +1344,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
     bool isDesktop = false,
   }) {
     final surface = context.palette.card;
-    final border = isDark ? context.palette.border : context.palette.card;
     final soft = isDark
         ? context.palette.tint(context.palette.card, .07)
         : context.palette.tint(context.palette.primary, .07);
@@ -1347,7 +1352,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
       padding: EdgeInsets.fromLTRB(8, 10, 8, 10),
       decoration: BoxDecoration(
         color: surface,
-        border: Border(bottom: BorderSide(color: border)),
         boxShadow: [
           BoxShadow(
             color: context.palette.shadowAt(isDark ? .30 : .06),
@@ -1361,7 +1365,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
           _toolbarButton(
             icon: Icons.arrow_back_rounded,
             tooltip: 'Back to home',
-            color: isDark ? context.palette.card : context.palette.textPrimary,
+            color: context.palette.textPrimary,
             background: soft,
             onTap: _handleToolbarBack,
           ),

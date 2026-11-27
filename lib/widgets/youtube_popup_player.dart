@@ -1472,7 +1472,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             Text(
                               '10s',
                               style: TextStyle(
-                                color: context.palette.onPrimary,
+                                color: context.palette.onScrim,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -1504,7 +1504,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             Text(
                               '10s',
                               style: TextStyle(
-                                color: context.palette.onPrimary,
+                                color: context.palette.onScrim,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
@@ -1769,7 +1769,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                             child: Text(
                               _seekTime(preview),
                               style: TextStyle(
-                                color: context.palette.onPrimary,
+                                color: context.palette.onScrim,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w700,
                               ),

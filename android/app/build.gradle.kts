@@ -9,11 +9,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// The app uses the platform video player on Android. Avoid shipping
-// its MDK FFmpeg library under the same name as yt-dlp's FFmpeg executable.
+// fvp is only registered on desktop (see main.dart). On Android its bundled
+// native libraries collide with the ones the player needs:
+//  * libffmpeg.so clashes with youtubedl-android's FFmpeg executable, and
+//  * its older libc++_shared.so wins the APK merge, so libmpv.so cannot find
+//    __from_chars_floating_point and crashes the player on open.
+// Excluding them from fvp leaves mpv's newer libc++_shared.so as the one the
+// app ships (see the pickFirsts note below).
 project.findProject(":fvp")?.plugins?.withId("com.android.library") {
     project(":fvp").extensions.configure<LibraryExtension> {
         packaging.jniLibs.excludes.add("**/libffmpeg.so")
+        packaging.jniLibs.excludes.add("**/libc++_shared.so")
     }
 }
 
@@ -66,9 +72,9 @@ android {
             useLegacyPackaging = true
             // youtubedl-android ships compressed payloads as *.zip.so — not ELF.
             doNotStrip += listOf("**/*.zip.so")
-            // libmpv and other native plugins bundle libc++_shared.so. Keep
-            // the first copy instead of failing the APK merge — both are the
-            // same NDK runtime.
+            // fvp's copy is excluded above, so this resolves the remaining
+            // duplicate to mpv's libc++_shared.so — the only build that
+            // exports __from_chars_floating_point, which libmpv.so requires.
             //
             // IMPORTANT: never pickFirst the libav*.so files. mpv's copies
             // export LIBAVCODEC_63/LIBAVFORMAT_63 while the bundled FFmpeg CLI
@@ -129,7 +135,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     // The exact libmpv engine mpvExtended uses. Resolved from Maven Central
     // (bundles libmpv + FFmpeg .so for all four ABIs; the JitPack build of the
-    // same coordinate omits the native libraries).
+    // same coordinate omits the native libraries). Its libc++_shared.so is
+    // the one that exports the symbol libmpv needs — see the fvp exclusion.
     implementation("io.github.marlboro-advance:mpv-android:1.0.0")
     // FfmpegRunner initialises youtubedl-android's bundled FFmpeg package
     // directly, so the dependency must be on this module's compile classpath

@@ -34,7 +34,10 @@ class DownloadItemTile extends StatelessWidget {
     this.episodeMode = false,
   });
 
-  void _play(BuildContext context) {
+  /// Opens any downloaded video at its last watched position. Shared by the
+  /// episode tile and the page-level "Resume" action so both use identical
+  /// season/episode and history handling.
+  static Future<void> playTask(BuildContext context, DownloadTask task) async {
     final path = task.savePath ?? '';
     final isVideo = !task.isAudioTask && !task.isImageTask;
     if (isVideo && path.isNotEmpty && File(path).existsSync()) {
@@ -110,6 +113,8 @@ class DownloadItemTile extends StatelessWidget {
           .push<void>(MaterialPageRoute(builder: (_) => AudioPlayerScreen()));
     }
   }
+
+  void _play(BuildContext context) => playTask(context, task);
 
   void _showFolderAssignDialog(BuildContext context) {
     showDialog(

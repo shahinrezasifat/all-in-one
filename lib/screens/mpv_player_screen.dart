@@ -14,6 +14,7 @@ import '../services/permission_service.dart';
 import '../services/playback_controls.dart';
 import '../services/preference_service.dart';
 import '../services/provider_engine/provider_engine_service.dart';
+import '../services/provider_engine/provider_models.dart';
 import '../services/stream_fallback_service.dart';
 import '../services/watch_history_service.dart';
 import '../services/mpv_controller.dart';
@@ -35,6 +36,10 @@ class MpvPlayerScreen extends StatefulWidget {
   final double initialPositionSeconds;
   final String? downloadTaskId;
   final List<DownloadTask> downloadedEpisodes;
+
+  /// Full episode list resolved by the Series details screen. The player can
+  /// then offer every episode instead of only the one currently playing.
+  final List<ProviderEpisode> seriesEpisodes;
   final bool trailerOnly;
   final bool isLiveTv;
   final List<MovieSource> liveSources;
@@ -48,6 +53,7 @@ class MpvPlayerScreen extends StatefulWidget {
     this.initialPositionSeconds = 0.0,
     this.downloadTaskId,
     this.downloadedEpisodes = const [],
+    this.seriesEpisodes = const [],
     this.trailerOnly = false,
     this.isLiveTv = false,
     this.liveSources = const [],
@@ -75,6 +81,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
 
   final MpvController _mpv = MpvController();
   String? _lastSubtitleBackColor;
+
+  /// Provider episodes behind the picker entries that have no local file yet;
+  /// their stream links are resolved only when the user selects them.
+  final Map<(int, int), ProviderEpisode> _providerEpisodes = {};
 
   // Server failover engine
   bool _isAnalyzingServers = false;
@@ -119,10 +129,12 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     _currentEpisodeNumber = widget.initialEpisode;
     for (final task in widget.downloadedEpisodes) {
       if (task.id != widget.downloadTaskId) continue;
-      final parsedSeason = EpisodeParser.season(task.seriesSeason ?? '') ??
+      final parsedSeason =
+          EpisodeParser.season(task.seriesSeason ?? '') ??
           EpisodeParser.season(task.title) ??
           EpisodeParser.season(task.savePath ?? '');
-      final parsedEpisode = EpisodeParser.episode(task.title) ??
+      final parsedEpisode =
+          EpisodeParser.episode(task.title) ??
           EpisodeParser.episode(task.savePath ?? '');
       if (parsedSeason != null) _currentSeasonNumber = parsedSeason;
       if (parsedEpisode != null) _currentEpisodeNumber = parsedEpisode;
@@ -166,8 +178,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) => _failForward());
     }
     if (_mpv.isCompleted) _maybePromptCompletion();
-    if (_mpv.position > 0 &&
-        (_mpv.position - _currentSeconds).abs() >= 0.5) {
+    if (_mpv.position > 0 && (_mpv.position - _currentSeconds).abs() >= 0.5) {
       _currentSeconds = _mpv.position;
       if (_currentSeconds.toInt() % 5 == 0) _saveProgress();
     }
@@ -208,7 +219,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       if (liveUrl == null || liveUrl.isEmpty) {
         setState(() {
           _isAnalyzingServers = false;
-          _videoErrorMessage = 'No trailer available for "${widget.movie.title}".';
+          _videoErrorMessage =
+              'No trailer available for "${widget.movie.title}".';
         });
         return;
       }
@@ -236,10 +248,15 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     return h;
   }
 
-  Future<void> _loadCurrentSource({MovieSource? source, double? position}) async {
+  Future<void> _loadCurrentSource({
+    MovieSource? source,
+    double? position,
+  }) async {
     final request = ++_sourceRequest;
     final active = source ?? _currentSource;
-    final url = active.streamUrl.isNotEmpty ? active.streamUrl : active.downloadUrl;
+    final url = active.streamUrl.isNotEmpty
+        ? active.streamUrl
+        : active.downloadUrl;
     final start = position ?? _currentSeconds;
     _lastFailedSourceKey = null;
     setState(() {
@@ -253,7 +270,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       return;
     }
     final uri = Uri.tryParse(url);
-    final isRemote = uri != null &&
+    final isRemote =
+        uri != null &&
         uri.host.isNotEmpty &&
         ['http', 'https'].contains(uri.scheme);
     if (!isRemote && !File(url).existsSync()) {
@@ -300,7 +318,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       if (url.trim().isNotEmpty) unique.putIfAbsent(url.trim(), () => s);
     }
     final queue = unique.values
-        .where((s) => !_failedSourceKeys.contains(StreamFallbackService.sourceKey(s)))
+        .where(
+          (s) =>
+              !_failedSourceKeys.contains(StreamFallbackService.sourceKey(s)),
+        )
         .toList();
     setState(() {
       _isAnalyzingServers = queue.isNotEmpty;
@@ -315,7 +336,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         final source = queue[i];
         setState(() {
           _analyzedServerIndex = i + 1;
-          _analyzingStatus = 'Trying ${source.serverName.isEmpty ? 'channel stream' : source.serverName}…';
+          _analyzingStatus =
+              'Trying ${source.serverName.isEmpty ? 'channel stream' : source.serverName}…';
         });
         await _loadCurrentSource(source: source, position: 0);
         // Give libmpv a moment to report a hard failure before trying the next.
@@ -374,13 +396,16 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       if (!mounted || request != _sourceRequest) return;
       _lastProviderReports = reports;
       final queue = reports
-          .where((r) => !_failedSourceKeys.contains(
-                StreamFallbackService.sourceKey(r.source),
-              ))
+          .where(
+            (r) => !_failedSourceKeys.contains(
+              StreamFallbackService.sourceKey(r.source),
+            ),
+          )
           .toList();
       setState(() {
         _totalCandidateServers = queue.length;
-        _analyzingStatus = 'Found ${queue.length} provider server(s). Connecting...';
+        _analyzingStatus =
+            'Found ${queue.length} provider server(s). Connecting...';
       });
       for (var i = 0; i < queue.length; i++) {
         if (!mounted || request != _sourceRequest) return;
@@ -457,13 +482,15 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         (e) => e.episodeNumber == _currentEpisodeNumber,
       );
       if (index >= 0 && index + 1 < season.episodes.length) {
-        return (season: season.seasonNumber, episode: season.episodes[index + 1]);
+        return (
+          season: season.seasonNumber,
+          episode: season.episodes[index + 1],
+        );
       }
     }
-    final nextSeason = seasons
-        .where((s) => s.seasonNumber > _currentSeasonNumber)
-        .toList()
-      ..sort((a, b) => a.seasonNumber.compareTo(b.seasonNumber));
+    final nextSeason =
+        seasons.where((s) => s.seasonNumber > _currentSeasonNumber).toList()
+          ..sort((a, b) => a.seasonNumber.compareTo(b.seasonNumber));
     if (nextSeason.isNotEmpty && nextSeason.first.episodes.isNotEmpty) {
       return (
         season: nextSeason.first.seasonNumber,
@@ -481,7 +508,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       _completionPromptShown = false;
       _failedSourceKeys.clear();
       _currentSource = next.episode.sources.firstWhere(
-        (source) => source.streamUrl.isNotEmpty || source.downloadUrl.isNotEmpty,
+        (source) =>
+            source.streamUrl.isNotEmpty || source.downloadUrl.isNotEmpty,
       );
     });
     _saveProgress();
@@ -508,9 +536,11 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     }
     if (widget.downloadTaskId == null && widget.movie.isSeries) {
       final next = _nextEpisode();
-      if (next != null && next.episode.sources.any(
-        (source) => source.streamUrl.isNotEmpty || source.downloadUrl.isNotEmpty,
-      )) {
+      if (next != null &&
+          next.episode.sources.any(
+            (source) =>
+                source.streamUrl.isNotEmpty || source.downloadUrl.isNotEmpty,
+          )) {
         _completionPromptShown = true;
         _playEpisode(next);
         return;
@@ -540,7 +570,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              if (manager.completedTasks.contains(task) && task.savePath == path) {
+              if (manager.completedTasks.contains(task) &&
+                  task.savePath == path) {
                 manager.deleteTask(task);
               }
               if (mounted) Navigator.of(context).pop();
@@ -563,7 +594,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     final repository = MovieRepositoryService.instance.repositories
         .where((repo) => repo.id == repositoryId)
         .firstOrNull;
-    final isAdultSource = repository?.isAdult == true ||
+    final isAdultSource =
+        repository?.isAdult == true ||
         (repository?.providers.any(
               (provider) => provider.id == providerId && provider.isAdult,
             ) ??
@@ -588,15 +620,21 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     );
   }
 
+  /// Seasons shown by the episode picker. Online seasons and locally
+  /// downloaded episodes must be merged: returning [saved] whenever it is
+  /// non-empty used to hide every completed download whose series metadata
+  /// carried no episode sources, leaving an empty "No episodes available"
+  /// sheet even though the files were on the device.
   List<MovieSeason> _pickerSeasons() {
     final saved = widget.movie.seasons;
-    if (saved.isNotEmpty || widget.downloadedEpisodes.isEmpty) return saved;
     final groups = <int, List<MovieEpisode>>{};
     for (final task in widget.downloadedEpisodes) {
-      final number = EpisodeParser.episode(task.title) ??
+      final number =
+          EpisodeParser.episode(task.title) ??
           EpisodeParser.episode(task.savePath ?? '');
       if (number == null) continue;
-      final seasonNumber = EpisodeParser.season(task.seriesSeason ?? '') ??
+      final seasonNumber =
+          EpisodeParser.season(task.seriesSeason ?? '') ??
           EpisodeParser.season(task.title) ??
           EpisodeParser.season(task.savePath ?? '') ??
           1;
@@ -609,7 +647,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         fileSize: '',
         format: task.ext.toLowerCase(),
       );
-      groups.putIfAbsent(seasonNumber, () => []).add(
+      groups
+          .putIfAbsent(seasonNumber, () => [])
+          .add(
             MovieEpisode(
               episodeNumber: number,
               title: EpisodeParser.episodeName(task.title),
@@ -619,17 +659,108 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
             ),
           );
     }
-    return groups.entries
-        .map(
-          (e) => MovieSeason(
-            seasonNumber: e.key,
-            title: 'Season ${e.key}',
-            episodes: e.value
-              ..sort((a, b) => a.episodeNumber.compareTo(b.episodeNumber)),
+
+    final fromProvider = <int, List<MovieEpisode>>{};
+    for (final episode in widget.seriesEpisodes) {
+      final seasonNumber = episode.season ?? 1;
+      final title = episode.title.trim().isEmpty || episode.title == 'Episode'
+          ? 'Episode ${episode.number}'
+          : episode.title;
+      fromProvider
+          .putIfAbsent(seasonNumber, () => [])
+          .add(
+            MovieEpisode(
+              episodeNumber: episode.number,
+              title: title,
+              sources: const [],
+            ),
+          );
+      _providerEpisodes[(seasonNumber, episode.number)] = episode;
+    }
+
+    final merged = <int, MovieSeason>{
+      for (final season in saved)
+        season.seasonNumber: MovieSeason(
+          seasonNumber: season.seasonNumber,
+          title: season.title,
+          episodes: List<MovieEpisode>.from(season.episodes),
+        ),
+    };
+    for (final entry in groups.entries) {
+      final existing = merged[entry.key];
+      if (existing == null) {
+        merged[entry.key] = MovieSeason(
+          seasonNumber: entry.key,
+          title: 'Season ${entry.key}',
+          episodes: List<MovieEpisode>.from(entry.value),
+        );
+        continue;
+      }
+      final episodes = <int, MovieEpisode>{
+        for (final episode in existing.episodes) episode.episodeNumber: episode,
+      };
+      for (final downloaded in entry.value) {
+        // A local file always wins over a stale online link for the same
+        // episode — this is what makes the picker playable offline.
+        episodes[downloaded.episodeNumber] = downloaded;
+      }
+      merged[entry.key] = MovieSeason(
+        seasonNumber: existing.seasonNumber,
+        title: existing.title,
+        episodes: episodes.values.toList(),
+      );
+    }
+
+    for (final entry in fromProvider.entries) {
+      final existing = merged[entry.key];
+      if (existing == null) {
+        merged[entry.key] = MovieSeason(
+          seasonNumber: entry.key,
+          title: 'Season ${entry.key}',
+          episodes: List<MovieEpisode>.from(entry.value),
+        );
+        continue;
+      }
+      final episodes = <int, MovieEpisode>{
+        for (final episode in existing.episodes) episode.episodeNumber: episode,
+      };
+      for (final providerEpisode in entry.value) {
+        episodes.putIfAbsent(
+          providerEpisode.episodeNumber,
+          () => providerEpisode,
+        );
+      }
+      merged[entry.key] = MovieSeason(
+        seasonNumber: existing.seasonNumber,
+        title: existing.title,
+        episodes: episodes.values.toList(),
+      );
+    }
+
+    if (merged.isEmpty && widget.movie.isSeries) {
+      // The sheet is opened for the current episode even when no sibling is
+      // completed yet; always give it at least that one playable entry.
+      merged[_currentSeasonNumber] = MovieSeason(
+        seasonNumber: _currentSeasonNumber,
+        title: 'Season $_currentSeasonNumber',
+        episodes: [
+          MovieEpisode(
+            episodeNumber: _currentEpisodeNumber,
+            title: EpisodeParser.episodeName(widget.movie.title),
+            sources: [_currentSource],
           ),
-        )
-        .toList()
+        ],
+      );
+    }
+
+    final seasons = merged.values.toList()
       ..sort((a, b) => a.seasonNumber.compareTo(b.seasonNumber));
+    for (final season in seasons) {
+      season.episodes.sort(
+        (a, b) => a.episodeNumber.compareTo(b.episodeNumber),
+      );
+    }
+    return seasons;
   }
 
   String _getCurrentEpisodeTitle() {
@@ -658,7 +789,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
   }
 
   void _seekTo(double seconds) {
-    final target = seconds.clamp(0.0, _totalSeconds > 0 ? _totalSeconds : seconds);
+    final target = seconds.clamp(
+      0.0,
+      _totalSeconds > 0 ? _totalSeconds : seconds,
+    );
     setState(() => _currentSeconds = target);
     unawaited(_mpv.seek(target));
     _saveProgress();
@@ -846,7 +980,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                   behavior: HitTestBehavior.translucent,
                   onTap: _toggleControls,
                   onVerticalDragStart: (details) {
-                    _brightnessGesture = details.localPosition.dx >= size.width / 2;
+                    _brightnessGesture =
+                        details.localPosition.dx >= size.width / 2;
                     _firstVerticalUpdate = true;
                   },
                   onVerticalDragUpdate: _onVerticalDragUpdate,
@@ -877,13 +1012,19 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               Positioned(
                 left: 40,
                 top: size.height / 2 - 40,
-                child: _buildDoubleTapIndicator(Icons.replay_10_rounded, '-10s'),
+                child: _buildDoubleTapIndicator(
+                  Icons.replay_10_rounded,
+                  '-10s',
+                ),
               ),
             if (_showRightDoubleTap)
               Positioned(
                 right: 40,
                 top: size.height / 2 - 40,
-                child: _buildDoubleTapIndicator(Icons.forward_10_rounded, '+10s'),
+                child: _buildDoubleTapIndicator(
+                  Icons.forward_10_rounded,
+                  '+10s',
+                ),
               ),
             if (_showBrightnessHud)
               Center(
@@ -907,39 +1048,74 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               ),
             if (_showSeekHud)
               Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: p.videoScrimAt(0.8),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _seekDeltaSeconds >= 0
-                            ? Icons.fast_forward_rounded
-                            : Icons.fast_rewind_rounded,
-                        color: p.onVideoScrim,
-                        size: 28,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 14,
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        '${_seekDeltaSeconds >= 0 ? '+' : ''}${_seekDeltaSeconds.toInt()}s '
-                        '(${_formatTime(_currentSeconds + _seekDeltaSeconds)})',
-                        style: TextStyle(
-                          color: p.onPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                      decoration: BoxDecoration(
+                        color: p.videoScrimAt(0.75),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: p.onVideoScrim.withValues(alpha: 0.15),
+                          width: 1,
                         ),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _seekDeltaSeconds >= 0
+                                ? Icons.fast_forward_rounded
+                                : Icons.fast_rewind_rounded,
+                            color: p.onVideoScrim,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 10),
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text:
+                                      '${_seekDeltaSeconds >= 0 ? '+' : ''}${_seekDeltaSeconds.toInt()}s ',
+                                  style: TextStyle(
+                                    color: p.onVideoScrim,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text:
+                                      '(${_formatTime((_currentSeconds + _seekDeltaSeconds).clamp(0.0, _totalSeconds > 0 ? _totalSeconds : double.infinity))})',
+                                  style: TextStyle(
+                                    color: p.onVideoScrim.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             if (!_mini && _showControls) ...[
               Positioned(left: 0, right: 0, top: 0, child: _buildTopBar()),
-              Positioned(left: 0, right: 0, bottom: 0, child: _buildBottomBar()),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildBottomBar(),
+              ),
             ],
             if (_isLocked && !_mini)
               Positioned(
@@ -950,7 +1126,11 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                     setState(() => _isLocked = false);
                     _resetControlsTimer();
                   },
-                  icon: Icon(Icons.lock_rounded, color: p.onVideoScrim, size: 30),
+                  icon: Icon(
+                    Icons.lock_rounded,
+                    color: p.onVideoScrim,
+                    size: 30,
+                  ),
                 ),
               ),
             if (_mini) _buildMiniPlayer(),
@@ -977,7 +1157,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
           decoration: BoxDecoration(
             color: p.videoScrim,
             borderRadius: BorderRadius.circular(_mini ? 14 : 0),
-            border: _mini ? Border.all(color: p.tint(p.onVideoScrim, 0.22)) : null,
+            border: _mini
+                ? Border.all(color: p.tint(p.onVideoScrim, 0.22))
+                : null,
           ),
           child: ClipRect(
             child: GestureDetector(
@@ -1036,7 +1218,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                         if (widget.isLiveTv) {
                           unawaited(_connectLiveTv(resetFailures: true));
                         } else {
-                          unawaited(_autoAnalyzeAndConnect(resetFailures: true));
+                          unawaited(
+                            _autoAnalyzeAndConnect(resetFailures: true),
+                          );
                         }
                       },
                       icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -1112,7 +1296,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
             color: p.videoScrimAt(0.65),
             shape: BoxShape.circle,
           ),
-          child: CircularProgressIndicator(color: p.videoAccent, strokeWidth: 3.5),
+          child: CircularProgressIndicator(
+            color: p.videoAccent,
+            strokeWidth: 3.5,
+          ),
         ),
       );
     }
@@ -1124,7 +1311,11 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
             color: p.videoScrimAt(0.6),
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.play_arrow_rounded, color: p.onVideoScrim, size: 48),
+          child: Icon(
+            Icons.play_arrow_rounded,
+            color: p.onVideoScrim,
+            size: 48,
+          ),
         ),
       );
     }
@@ -1155,7 +1346,11 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: p.tint(p.border, 0.8)),
             boxShadow: [
-              BoxShadow(color: p.videoScrimAt(0.34), blurRadius: 20, offset: const Offset(0, 8)),
+              BoxShadow(
+                color: p.videoScrimAt(0.34),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
             ],
           ),
           child: Column(
@@ -1189,7 +1384,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                         ),
                         Text(
                           '$episodeLabel${_formatTime(_currentSeconds)} / ${_formatTime(_totalSeconds)}',
-                          style: TextStyle(color: p.textSecondary, fontSize: 10.5),
+                          style: TextStyle(
+                            color: p.textSecondary,
+                            fontSize: 10.5,
+                          ),
                         ),
                       ],
                     ),
@@ -1207,12 +1405,20 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                   ),
                   IconButton(
                     tooltip: 'Back to full screen',
-                    icon: Icon(Icons.open_in_full_rounded, color: p.primary, size: 22),
+                    icon: Icon(
+                      Icons.open_in_full_rounded,
+                      color: p.primary,
+                      size: 22,
+                    ),
                     onPressed: () => _setMini(false),
                   ),
                   IconButton(
                     tooltip: 'Close player',
-                    icon: Icon(Icons.close_rounded, color: p.textSecondary, size: 22),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: p.textSecondary,
+                      size: 22,
+                    ),
                     onPressed: _exitPlayer,
                   ),
                 ],
@@ -1251,7 +1457,11 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
           children: [
             IconButton(
               onPressed: () => _setMini(true),
-              icon: Icon(Icons.arrow_back_rounded, color: p.onVideoScrim, size: 26),
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: p.onVideoScrim,
+                size: 26,
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -1290,7 +1500,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                     if (!widget.isLiveTv && !widget.trailerOnly)
                       _buildHeaderAction(
                         icon: Icons.dns_rounded,
-                        label: 'Server${_lastProviderReports.isNotEmpty ? ' (${_lastProviderReports.length})' : ''}',
+                        label:
+                            'Server${_lastProviderReports.isNotEmpty ? ' (${_lastProviderReports.length})' : ''}',
                         onTap: _showServerPicker,
                       ),
                     if (!widget.trailerOnly)
@@ -1323,7 +1534,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                           _showControls = false;
                         });
                       },
-                      icon: Icon(Icons.lock_open_rounded, color: p.onVideoScrim),
+                      icon: Icon(
+                        Icons.lock_open_rounded,
+                        color: p.onVideoScrim,
+                      ),
                     ),
                   ],
                 ),
@@ -1523,11 +1737,16 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       if (!widget.trailerOnly)
                         IconButton(
                           tooltip: 'Download',
-                          icon: Icon(Icons.download_rounded, color: p.onVideoScrim),
+                          icon: Icon(
+                            Icons.download_rounded,
+                            color: p.onVideoScrim,
+                          ),
                           onPressed: _downloadCurrent,
                         ),
                       IconButton(
-                        tooltip: _isFullScreen ? 'Exit Fullscreen' : 'Fullscreen',
+                        tooltip: _isFullScreen
+                            ? 'Exit Fullscreen'
+                            : 'Fullscreen',
                         icon: Icon(
                           _isFullScreen
                               ? Icons.fullscreen_exit_rounded
@@ -1654,21 +1873,32 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       backgroundColor: p.surface,
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .65),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * .65,
+          ),
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             children: [
-              ListTile(title: Text('Available quality', style: TextStyle(color: p.textPrimary))),
+              ListTile(
+                title: Text(
+                  'Available quality',
+                  style: TextStyle(color: p.textPrimary),
+                ),
+              ),
               for (final source in sources)
                 ListTile(
                   leading: Icon(Icons.hd_outlined, color: p.primary),
-                  title: Text(source.resolution, style: TextStyle(color: p.textPrimary)),
+                  title: Text(
+                    source.resolution,
+                    style: TextStyle(color: p.textPrimary),
+                  ),
                   subtitle: Text(
                     '${source.serverName} · ${source.format.toUpperCase()}',
                     style: TextStyle(color: p.textSecondary),
                   ),
-                  trailing: source.streamUrl == _currentSource.streamUrl &&
+                  trailing:
+                      source.streamUrl == _currentSource.streamUrl &&
                           source.downloadUrl == _currentSource.downloadUrl
                       ? Icon(Icons.check_rounded, color: p.primary)
                       : null,
@@ -1698,7 +1928,11 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               padding: const EdgeInsets.all(16),
               child: Text(
                 'Playback speed',
-                style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(
+                  color: p.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
             ),
             Wrap(
@@ -1732,7 +1966,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       backgroundColor: p.surface,
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .7),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * .7,
+          ),
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -1740,18 +1976,32 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               if (_mpv.audioTracks.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text('Audio', style: TextStyle(color: p.primary, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Audio',
+                    style: TextStyle(
+                      color: p.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 for (final track in _mpv.audioTracks)
                   ListTile(
                     dense: true,
                     leading: Icon(
-                      track.selected ? Icons.check_circle_rounded : Icons.audiotrack_rounded,
+                      track.selected
+                          ? Icons.check_circle_rounded
+                          : Icons.audiotrack_rounded,
                       color: track.selected ? p.primary : p.textSecondary,
                     ),
-                    title: Text(track.label, style: TextStyle(color: p.textPrimary)),
+                    title: Text(
+                      track.label,
+                      style: TextStyle(color: p.textPrimary),
+                    ),
                     subtitle: track.language.isNotEmpty
-                        ? Text(track.language, style: TextStyle(color: p.textSecondary))
+                        ? Text(
+                            track.language,
+                            style: TextStyle(color: p.textSecondary),
+                          )
                         : null,
                     onTap: () {
                       Navigator.pop(ctx);
@@ -1763,7 +2013,13 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               if (_mpv.subtitleTracks.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text('Subtitles', style: TextStyle(color: p.primary, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Subtitles',
+                    style: TextStyle(
+                      color: p.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 ListTile(
                   dense: true,
@@ -1780,10 +2036,15 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                   ListTile(
                     dense: true,
                     leading: Icon(
-                      track.selected ? Icons.check_circle_rounded : Icons.subtitles_rounded,
+                      track.selected
+                          ? Icons.check_circle_rounded
+                          : Icons.subtitles_rounded,
                       color: track.selected ? p.primary : p.textSecondary,
                     ),
-                    title: Text(track.label, style: TextStyle(color: p.textPrimary)),
+                    title: Text(
+                      track.label,
+                      style: TextStyle(color: p.textPrimary),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       unawaited(_mpv.selectTrack('subtitle', track.id));
@@ -1839,7 +2100,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               ListTile(
                 leading: Icon(Icons.speed_rounded, color: p.primary),
                 title: Text('Speed', style: TextStyle(color: p.textPrimary)),
-                subtitle: Text('${_mpv.speed}x', style: TextStyle(color: p.textSecondary)),
+                subtitle: Text(
+                  '${_mpv.speed}x',
+                  style: TextStyle(color: p.textSecondary),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showSpeedPicker();
@@ -1847,7 +2111,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               ),
               ListTile(
                 leading: Icon(Icons.graphic_eq_rounded, color: p.primary),
-                title: Text('Equalizer / volume', style: TextStyle(color: p.textPrimary)),
+                title: Text(
+                  'Equalizer / volume',
+                  style: TextStyle(color: p.textPrimary),
+                ),
                 subtitle: Slider(
                   value: _mpv.volume.clamp(0.0, 1.5),
                   max: 1.5,
@@ -1856,7 +2123,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               ),
               ListTile(
                 leading: Icon(Icons.subtitles_rounded, color: p.primary),
-                title: Text('Subtitle delay', style: TextStyle(color: p.textPrimary)),
+                title: Text(
+                  'Subtitle delay',
+                  style: TextStyle(color: p.textPrimary),
+                ),
                 subtitle: Text(
                   'Slightly shift subtitles if they are out of sync',
                   style: TextStyle(color: p.textSecondary, fontSize: 11),
@@ -1865,7 +2135,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               ),
               ListTile(
                 leading: Icon(Icons.audiotrack_rounded, color: p.primary),
-                title: Text('Audio delay', style: TextStyle(color: p.textPrimary)),
+                title: Text(
+                  'Audio delay',
+                  style: TextStyle(color: p.textPrimary),
+                ),
                 subtitle: Text(
                   'Shift audio relative to video',
                   style: TextStyle(color: p.textSecondary, fontSize: 11),
@@ -1938,7 +2211,11 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
               (s) => s.seasonNumber == _currentSeasonNumber,
               orElse: () => seasons.isNotEmpty
                   ? seasons.first
-                  : MovieSeason(seasonNumber: 1, title: 'Season 1', episodes: []),
+                  : MovieSeason(
+                      seasonNumber: 1,
+                      title: 'Season 1',
+                      episodes: [],
+                    ),
             );
             return Container(
               height: MediaQuery.of(drawerContext).size.height * 0.8,
@@ -2015,103 +2292,155 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                               final ep = activeSeason.episodes[idx];
                               final isSelected =
                                   ep.episodeNumber == _currentEpisodeNumber;
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 9),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? p.selectedBg : p.tint(p.border, 0.18),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isSelected ? p.primary : p.tint(p.border, 0.4),
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 9),
+                                child: Material(
+                                  color: isSelected
+                                      ? p.selectedBg
+                                      : p.tint(p.border, 0.18),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? p.primary
+                                          : p.tint(p.border, 0.4),
+                                    ),
                                   ),
-                                ),
-                                child: ListTile(
-                                  leading: Container(
-                                    width: 56,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      image: ep.thumbnailUrl.isNotEmpty
-                                          ? DecorationImage(
-                                              image: NetworkImage(ep.thumbnailUrl),
-                                              fit: BoxFit.cover,
+                                  clipBehavior: Clip.antiAlias,
+                                  child: ListTile(
+                                    leading: Container(
+                                      width: 56,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        image: ep.thumbnailUrl.isNotEmpty
+                                            ? DecorationImage(
+                                                image: NetworkImage(
+                                                  ep.thumbnailUrl,
+                                                ),
+                                                fit: BoxFit.cover,
+                                              )
+                                            : null,
+                                        color: p.trackBg,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: ep.thumbnailUrl.isEmpty
+                                          ? Text(
+                                              '${ep.episodeNumber}',
+                                              style: TextStyle(
+                                                color: p.textSecondary,
+                                                fontWeight: FontWeight.w800,
+                                              ),
                                             )
                                           : null,
-                                      color: p.trackBg,
                                     ),
-                                    alignment: Alignment.center,
-                                    child: ep.thumbnailUrl.isEmpty
-                                        ? Text(
-                                            '${ep.episodeNumber}',
-                                            style: TextStyle(
-                                              color: p.textSecondary,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          )
-                                        : null,
-                                  ),
-                                  title: Text(
-                                    'E${ep.episodeNumber.toString().padLeft(2, '0')}'
-                                    '${ep.title.isNotEmpty ? ' · ${ep.title}' : ''}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: p.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
+                                    title: Text(
+                                      'E${ep.episodeNumber.toString().padLeft(2, '0')}'
+                                      '${ep.title.isNotEmpty ? ' · ${ep.title}' : ''}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: p.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
                                     ),
-                                  ),
-                                  subtitle: Text(
-                                    ep.synopsis.isNotEmpty
-                                        ? ep.synopsis
-                                        : (widget.downloadedEpisodes.isEmpty
-                                            ? 'Online stream'
-                                            : 'Downloaded episode'),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: p.textSecondary,
+                                    subtitle: Text(
+                                      ep.synopsis.isNotEmpty
+                                          ? ep.synopsis
+                                          : (widget.downloadedEpisodes.isEmpty
+                                                ? 'Online stream'
+                                                : 'Downloaded episode'),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: p.textSecondary,
+                                      ),
                                     ),
-                                  ),
-                                  trailing: Icon(
-                                    isSelected
-                                        ? Icons.play_circle_fill_rounded
-                                        : Icons.chevron_right_rounded,
-                                    color: isSelected ? p.primary : p.textSecondary,
-                                  ),
-                                  onTap: () {
-                                    _saveProgress();
-                                    DownloadTask? task;
-                                    for (final t in widget.downloadedEpisodes) {
-                                      final n = EpisodeParser.episode(t.title) ??
-                                          EpisodeParser.episode(t.savePath ?? '');
-                                      final s = EpisodeParser.season(t.seriesSeason ?? '') ??
-                                          EpisodeParser.season(t.title) ??
-                                          EpisodeParser.season(t.savePath ?? '') ??
-                                          1;
-                                      if (n == ep.episodeNumber &&
-                                          s == activeSeason.seasonNumber) {
-                                        task = t;
-                                        break;
+                                    trailing: Icon(
+                                      isSelected
+                                          ? Icons.play_circle_fill_rounded
+                                          : Icons.chevron_right_rounded,
+                                      color: isSelected
+                                          ? p.primary
+                                          : p.textSecondary,
+                                    ),
+                                    onTap: () async {
+                                      _saveProgress();
+                                      if (!mounted || !ctx.mounted) return;
+                                      if (ep.sources.isEmpty) {
+                                        final providerEpisode =
+                                            _providerEpisodes[(
+                                              activeSeason.seasonNumber,
+                                              ep.episodeNumber,
+                                            )];
+                                        if (providerEpisode != null) {
+                                          final formats =
+                                              await ProviderEngineService
+                                                  .instance
+                                                  .episodeDownloadFormats(
+                                                    widget.movie,
+                                                    providerEpisode,
+                                                  );
+                                          if (!mounted ||
+                                              !ctx.mounted ||
+                                              formats.isEmpty) {
+                                            return;
+                                          }
+                                          setState(
+                                            () =>
+                                                _currentSource = formats.first,
+                                          );
+                                        }
                                       }
-                                    }
-                                    final history = task == null
-                                        ? null
-                                        : WatchHistoryService.instance
-                                            .getProgress(task.id);
-                                    setState(() {
-                                      _currentSeasonNumber =
-                                          activeSeason.seasonNumber;
-                                      _currentEpisodeNumber = ep.episodeNumber;
-                                      _currentSeconds = history?.positionSeconds ?? 0;
-                                      _failedSourceKeys.clear();
-                                      if (ep.sources.isNotEmpty) {
-                                        _currentSource = ep.sources.first;
+                                      DownloadTask? task;
+                                      for (final t
+                                          in widget.downloadedEpisodes) {
+                                        final n =
+                                            EpisodeParser.episode(t.title) ??
+                                            EpisodeParser.episode(
+                                              t.savePath ?? '',
+                                            );
+                                        final s =
+                                            EpisodeParser.season(
+                                              t.seriesSeason ?? '',
+                                            ) ??
+                                            EpisodeParser.season(t.title) ??
+                                            EpisodeParser.season(
+                                              t.savePath ?? '',
+                                            ) ??
+                                            1;
+                                        if (n == ep.episodeNumber &&
+                                            s == activeSeason.seasonNumber) {
+                                          task = t;
+                                          break;
+                                        }
                                       }
-                                    });
-                                    Navigator.pop(ctx);
-                                    unawaited(_loadCurrentSource(position: _currentSeconds));
-                                  },
+                                      final history = task == null
+                                          ? null
+                                          : WatchHistoryService.instance
+                                                .getProgress(task.id);
+                                      setState(() {
+                                        _currentSeasonNumber =
+                                            activeSeason.seasonNumber;
+                                        _currentEpisodeNumber =
+                                            ep.episodeNumber;
+                                        _currentSeconds =
+                                            history?.positionSeconds ?? 0;
+                                        _failedSourceKeys.clear();
+                                        if (ep.sources.isNotEmpty) {
+                                          _currentSource = ep.sources.first;
+                                        }
+                                      });
+                                      Navigator.pop(ctx);
+                                      unawaited(
+                                        _loadCurrentSource(
+                                          position: _currentSeconds,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               );
                             },
@@ -2130,16 +2459,16 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     final reports = _lastProviderReports.isNotEmpty
         ? _lastProviderReports
         : widget.movie.sources
-            .map(
-              (s) => ProviderStreamReport(
-                source: s,
-                reachable: true,
-                validStream: false,
-                latencyMs: 0,
-                statusText: 'Untested',
-              ),
-            )
-            .toList();
+              .map(
+                (s) => ProviderStreamReport(
+                  source: s,
+                  reachable: true,
+                  validStream: false,
+                  latencyMs: 0,
+                  statusText: 'Untested',
+                ),
+              )
+              .toList();
     final p = context.palette;
     showModalBottomSheet(
       context: context,
@@ -2150,7 +2479,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
       ),
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .8),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * .8,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2202,7 +2533,8 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                     final isSelected =
                         StreamFallbackService.sourceKey(source) ==
                         StreamFallbackService.sourceKey(_currentSource);
-                    final isDead = report.reachable && !report.validStream ||
+                    final isDead =
+                        report.reachable && !report.validStream ||
                         _failedSourceKeys.contains(
                           StreamFallbackService.sourceKey(source),
                         );
@@ -2260,7 +2592,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: isDead ? p.tint(p.error, 0.8) : p.textSecondary,
+                            color: isDead
+                                ? p.tint(p.error, 0.8)
+                                : p.textSecondary,
                             fontSize: 11,
                           ),
                         ),
@@ -2280,7 +2614,9 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Switched to ${source.serverName}'),
+                                content: Text(
+                                  'Switched to ${source.serverName}',
+                                ),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
@@ -2304,11 +2640,14 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
         : widget.movie.title;
     final hasPerm = await PermissionService.instance.hasStoragePermission();
     if (!hasPerm) {
-      final granted = await PermissionService.instance.requestStoragePermission();
+      final granted = await PermissionService.instance
+          .requestStoragePermission();
       if (!granted) {
         if (mounted && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Storage permission required to download.')),
+            const SnackBar(
+              content: Text('Storage permission required to download.'),
+            ),
           );
         }
         return;
