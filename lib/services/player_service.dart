@@ -5,13 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:video_player/video_player.dart';
 
 import '../models/download_task.dart';
 import '../models/extract_result.dart';
 import '../models/video_item.dart';
 import 'extractor_service.dart';
 import 'media_mux_service.dart';
+import 'mpv_controller.dart';
 import 'playback_controls.dart';
 import 'stream_fallback_service.dart';
 
@@ -19,7 +19,13 @@ enum PlayerViewState { hidden, minimized, expanded }
 
 class PlayerService extends ChangeNotifier {
   static final PlayerService instance = PlayerService._();
-  PlayerService._();
+
+  /// The one and only playback engine: libmpv (mpvExtended's engine).
+  final MpvController mpv = MpvController();
+
+  PlayerService._() {
+    mpv.addListener(_engineListener);
+  }
 
   PlayerViewState _viewState = PlayerViewState.hidden;
   bool _isPlaying = false;
@@ -45,11 +51,9 @@ class PlayerService extends ChangeNotifier {
   double _volume = 0.8;
   Timer? _playbackTimer;
 
-  // Real playback engine. video_player decodes audio-only streams too, so the
-  // same controller drives music playback. The Timer simulation below is kept
-  // ONLY as a fallback for platforms/streams where no native engine exists
-  // (e.g. Linux desktop, where initialize() throws UnimplementedError).
-  VideoPlayerController? _engine;
+  // libmpv drives all video playback. The Timer simulation below is kept ONLY
+  // as a fallback for platforms with no native engine (desktop), and Android
+  // audio-only playback still uses its dedicated background service.
   bool _engineActive = false;
   final _playbackControls = PlaybackControls();
   static const _background = MethodChannel('snaptube_pure/background');
@@ -137,9 +141,7 @@ class PlayerService extends ChangeNotifier {
   double get playbackSpeed => _playbackSpeed;
   double get volume => _volume;
   bool get isAdFree => true; // 100% Ad-Free Pure Experience
-  VideoPlayerController? get engine => _engine;
-  bool get isEngineActive =>
-      _engineActive && _engine != null && _engine!.value.isInitialized;
+  bool get isEngineActive => _engineActive;
   bool get isLooping => _isLooping;
   bool get isAudioOnly => _isAudioOnly;
   bool get isAudioView => _isAudio || _isAudioOnly;
@@ -336,62 +338,26 @@ class PlayerService extends ChangeNotifier {
     if (Platform.isAndroid && isAudioView) {
       return _startBackgroundAudio(media, headers, request);
     }
+    if (!_hasNativeEngine) return false;
 
-    final options = isAudioView
-        ? VideoPlayerOptions(allowBackgroundPlayback: true)
-        : null;
-    final mediaUri = media.startsWith('http') ? Uri.tryParse(media) : null;
-    if (media.startsWith('http') &&
-        (mediaUri == null ||
-            !const ['http', 'https'].contains(mediaUri.scheme) ||
-            mediaUri.host.isEmpty)) {
-      return false;
-    }
-    final controller = mediaUri != null
-        ? VideoPlayerController.networkUrl(
-            mediaUri,
-            httpHeaders: headers,
-            formatHint: switch (_sourceMimeType) {
-              'application/x-mpegURL' => VideoFormat.hls,
-              'application/dash+xml' => VideoFormat.dash,
-              _ => null,
-            },
-            videoPlayerOptions: options,
-          )
-        : VideoPlayerController.file(File(media), videoPlayerOptions: options);
-    _engine = controller;
-    try {
-      await controller.initialize().timeout(const Duration(seconds: 20));
-      if (request != _playbackRequest) return false;
-      await controller.setVolume(_volume);
-      await controller.setPlaybackSpeed(_playbackSpeed);
-      await controller.setLooping(_isLooping);
-      if (_currentSeconds > 0) {
-        await controller.seekTo(
-          Duration(milliseconds: (_currentSeconds * 1000).round()),
-        );
-      }
-      if (request != _playbackRequest) return false;
-      final duration = controller.value.duration.inMilliseconds / 1000.0;
-      if (duration > 0) _totalSeconds = duration;
-      controller.addListener(_engineListener);
-      if (_isPlaying) await controller.play();
-      if (request != _playbackRequest) return false;
-      _engineActive = true;
-      _lastNotifiedSecond = -1;
-      _playbackTimer?.cancel();
-      notifyListeners();
-      return true;
-    } catch (error) {
-      if (request != _playbackRequest) return false;
-      debugPrint('Playback engine failed: $error');
-      await _disposeEngine();
-      if (request == _playbackRequest && !_hasNativeEngine && _isPlaying) {
-        _startTimer();
-      }
-      notifyListeners();
-      return false;
-    }
+    // libmpv detects HLS/DASH/progressive files itself, so no format hint or
+    // pre-initialisation is needed. It also receives the provider's headers.
+    _engineActive = false;
+    await mpv.load(
+      path: media,
+      headers: headers,
+      position: _currentSeconds,
+      isLive: false,
+    );
+    if (request != _playbackRequest) return false;
+    await mpv.setVolume(_volume);
+    await mpv.setSpeed(_playbackSpeed);
+    await mpv.setOption('loop-file', _isLooping ? 'inf' : 'no');
+    _engineActive = true;
+    _lastNotifiedSecond = -1;
+    _playbackTimer?.cancel();
+    notifyListeners();
+    return true;
   }
 
   Future<bool> _startBackgroundAudio(
@@ -481,32 +447,38 @@ class PlayerService extends ChangeNotifier {
     }
   }
 
-  /// True on platforms where video_player has a real engine (ExoPlayer /
-  /// AVPlayer). Desktop has none, so playback there legitimately falls back.
-  bool get _hasNativeEngine => Platform.isAndroid || Platform.isIOS;
+  /// libmpv is an Android player (mpvExtended is Android-only). On desktop the
+  /// UI falls back to a timer, on iOS playback is explicitly unavailable.
+  bool get _hasNativeEngine =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   void _engineListener() {
-    final controller = _engine;
-    if (controller == null || !controller.value.isInitialized) return;
+    if (!_engineActive) return;
+    final controller = mpv;
 
     unawaited(
       _playbackControls.keepScreenOn(
-        !isAudioView &&
-            !controller.value.hasError &&
-            controller.value.isPlaying,
+        !isAudioView && controller.error == null && controller.isPlaying,
       ),
     );
-    _currentSeconds = controller.value.position.inMilliseconds / 1000.0;
-    final dur = controller.value.duration.inMilliseconds / 1000.0;
+    _currentSeconds = controller.position;
+    final dur = controller.duration;
     if (dur > 0) _totalSeconds = dur;
+    if (controller.error != null) {
+      _isPlaying = false;
+      _resolveError = true;
+      notifyListeners();
+      return;
+    }
 
     bool playingChanged = false;
-    if (!controller.value.isPlaying &&
+    if (!controller.isPlaying &&
         _isPlaying &&
+        _totalSeconds > 0 &&
         _currentSeconds >= _totalSeconds - 0.5) {
       if (_isLooping) {
         seek(0);
-        controller.play();
+        unawaited(controller.play());
         _isPlaying = true;
         notifyListeners();
         return;
@@ -517,15 +489,13 @@ class PlayerService extends ChangeNotifier {
       if (_queue.length > 1) {
         Timer(const Duration(milliseconds: 200), playNext);
       }
-    } else if (_isPlaying != controller.value.isPlaying) {
-      _isPlaying = controller.value.isPlaying;
+    } else if (_isPlaying != controller.isPlaying) {
+      _isPlaying = controller.isPlaying;
       playingChanged = true;
     }
 
-    // video_player emits position updates far more often than the UI needs
-    // (can be dozens of times per second). Rebuilding on every tick causes
-    // heavy layout churn; only notify when the visible second or play state
-    // actually changes (~1/s), which keeps the tree stable.
+    // libmpv emits position updates far more often than the UI needs. Rebuild
+    // only when the visible second or the play state actually changes.
     final wholeSeconds = _currentSeconds ~/ 1;
     if (playingChanged || wholeSeconds != _lastNotifiedSecond) {
       _lastNotifiedSecond = wholeSeconds;
@@ -542,14 +512,9 @@ class PlayerService extends ChangeNotifier {
       unawaited(_stopBackgroundAudio());
     }
     unawaited(_playbackControls.keepScreenOn(false));
-    final controller = _engine;
-    _engine = null;
-    if (controller != null) {
-      controller.removeListener(_engineListener);
-      try {
-        await controller.dispose();
-      } catch (_) {}
-    }
+    // The mpv controller is a singleton owned by PlayerService: pause it but
+    // never dispose it here (the native surface is owned by the visible view).
+    unawaited(mpv.pause());
   }
 
   Future<void> _stopBackgroundAudio() async {
@@ -756,13 +721,11 @@ class PlayerService extends ChangeNotifier {
     _isPlaying = !_isPlaying;
     if (_nativeAudio) {
       unawaited(_controlBackgroundAudio('play', _isPlaying ? 1 : 0));
-    } else if (_engineActive &&
-        _engine != null &&
-        _engine!.value.isInitialized) {
+    } else if (_engineActive) {
       if (_isPlaying) {
-        _engine!.play();
+        unawaited(mpv.play());
       } else {
-        _engine!.pause();
+        unawaited(mpv.pause());
       }
     } else if (!_hasNativeEngine) {
       if (_isPlaying) {
@@ -780,10 +743,8 @@ class PlayerService extends ChangeNotifier {
       unawaited(
         _controlBackgroundAudio('position', (_currentSeconds * 1000).round()),
       );
-    } else if (_engineActive &&
-        _engine != null &&
-        _engine!.value.isInitialized) {
-      _engine!.seekTo(Duration(milliseconds: (_currentSeconds * 1000).toInt()));
+    } else if (_engineActive) {
+      unawaited(mpv.seek(_currentSeconds));
     }
     notifyListeners();
   }
@@ -792,10 +753,8 @@ class PlayerService extends ChangeNotifier {
     _playbackSpeed = speed;
     if (_nativeAudio) {
       unawaited(_controlBackgroundAudio('speed', speed));
-    } else if (_engineActive &&
-        _engine != null &&
-        _engine!.value.isInitialized) {
-      _engine!.setPlaybackSpeed(speed);
+    } else if (_engineActive) {
+      unawaited(mpv.setSpeed(speed));
     }
     notifyListeners();
   }
@@ -804,10 +763,8 @@ class PlayerService extends ChangeNotifier {
     _volume = vol.clamp(0.0, 1.0);
     if (_nativeAudio) {
       unawaited(_controlBackgroundAudio('volume', _volume));
-    } else if (_engineActive &&
-        _engine != null &&
-        _engine!.value.isInitialized) {
-      _engine!.setVolume(_volume);
+    } else if (_engineActive) {
+      unawaited(mpv.setVolume(_volume));
     }
     notifyListeners();
   }
@@ -816,8 +773,8 @@ class PlayerService extends ChangeNotifier {
     _isLooping = !_isLooping;
     if (_nativeAudio) {
       unawaited(_controlBackgroundAudio('loop', _isLooping ? 1 : 0));
-    } else if (_engineActive && _engine != null) {
-      _engine!.setLooping(_isLooping);
+    } else if (_engineActive) {
+      unawaited(mpv.setOption('loop-file', _isLooping ? 'inf' : 'no'));
     }
     notifyListeners();
   }
@@ -898,6 +855,7 @@ class PlayerService extends ChangeNotifier {
     _isPlaying = false;
     _isResolving = false;
     _resolveError = false;
+    mpv.cancelPendingNotifications();
     _title = '';
     _originalMediaUrl = '';
     _currentItem = null;

@@ -6,11 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snaptube_pure/screens/movie_screen.dart';
-import 'package:snaptube_pure/screens/movie_player_screen.dart';
+import 'package:snaptube_pure/screens/mpv_player_screen.dart';
 import 'package:snaptube_pure/widgets/home_banner.dart';
-
-// The video player plugin exposes its platform contract for test fakes.
-import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 void main() {
   testWidgets(
@@ -73,11 +70,6 @@ void main() {
         ];
       });
 
-      final previousPlayer = VideoPlayerPlatform.instance;
-      final player = _LiveVideoPlatform();
-      VideoPlayerPlatform.instance = player;
-      addTearDown(() => VideoPlayerPlatform.instance = previousPlayer);
-
       await tester.pumpWidget(const MaterialApp(home: MovieScreen()));
       await tester.pumpAndSettle();
       expect(find.text('Live TV'), findsOneWidget);
@@ -95,16 +87,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump();
-      // Live TV is routed through the shared player with isLiveTv enabled.
-      expect(find.byType(MoviePlayerScreen), findsOneWidget);
+      // Live TV is routed through the shared libmpv player with isLiveTv.
+      expect(find.byType(MpvPlayerScreen), findsOneWidget);
       expect(
-        tester
-            .widget<MoviePlayerScreen>(find.byType(MoviePlayerScreen))
-            .isLiveTv,
+        tester.widget<MpvPlayerScreen>(find.byType(MpvPlayerScreen)).isLiveTv,
         isTrue,
       );
-      expect(player.createRequests, 1);
-      expect(player.playRequests, 1);
       expect(find.textContaining('Download'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
@@ -134,60 +122,4 @@ void main() {
       }
     },
   );
-}
-
-class _LiveVideoPlatform extends VideoPlayerPlatform {
-  int playRequests = 0;
-  int createRequests = 0;
-
-  @override
-  Future<void> init() async {}
-
-  @override
-  Future<void> setPreventsDisplaySleepDuringVideoPlayback(
-    int playerId,
-    bool preventsDisplaySleepDuringVideoPlayback,
-  ) async {}
-
-  @override
-  Future<void> seekTo(int playerId, Duration position) async {}
-
-  @override
-  Future<Duration> getPosition(int playerId) async => Duration.zero;
-
-  @override
-  Future<int?> createWithOptions(VideoCreationOptions options) async =>
-      ++createRequests;
-
-  @override
-  Stream<VideoEvent> videoEventsFor(int playerId) => Stream.value(
-    VideoEvent(
-      eventType: VideoEventType.initialized,
-      size: const Size(640, 360),
-      duration: Duration.zero,
-    ),
-  );
-
-  @override
-  Future<void> setLooping(int playerId, bool looping) async {}
-
-  @override
-  Future<void> pause(int playerId) async {}
-
-  @override
-  Future<void> setVolume(int playerId, double volume) async {}
-
-  @override
-  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
-
-  @override
-  Future<void> play(int playerId) async {
-    playRequests++;
-  }
-
-  @override
-  Future<void> dispose(int playerId) async {}
-
-  @override
-  Widget buildViewWithOptions(VideoViewOptions options) => const SizedBox();
 }

@@ -11,7 +11,7 @@ import '../services/provider_engine/provider_engine_service.dart';
 import '../services/provider_engine/provider_models.dart';
 import '../theme/app_palette.dart';
 import '../widgets/remote_image.dart';
-import 'movie_player_screen.dart';
+import 'mpv_player_screen.dart';
 
 class MovieTitleScreen extends StatefulWidget {
   const MovieTitleScreen({super.key, required this.movie});
@@ -1183,7 +1183,7 @@ class _MovieTitleScreenState extends State<MovieTitleScreen> {
   ) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => MoviePlayerScreen(
+        builder: (_) => MpvPlayerScreen(
           movie: widget.movie.copyWith(
             title: episode == null
                 ? widget.movie.title

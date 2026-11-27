@@ -85,9 +85,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
       );
       if (!mounted) return;
       if (added) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => ZangetsuProvidersHubScreen()),
-        );
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => ZangetsuProvidersHubScreen()));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not add the repository.')),
@@ -199,12 +199,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
       final uri = Uri.tryParse(t);
       final local =
           uri != null &&
-          {
-            'localhost',
-            '127.0.0.1',
-            '[::1]',
-            '10.0.2.2',
-          }.contains(uri.host);
+          {'localhost', '127.0.0.1', '[::1]', '10.0.2.2'}.contains(uri.host);
       if (!local) t = t.replaceFirst('http://', 'https://');
     } else if (!t.startsWith('https://')) {
       if (t.contains('.') && !t.contains(' ')) {
@@ -472,9 +467,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
   /// video/audio starts, pop up the download button automatically.
   void _startMediaWatcher() {
     _mediaWatcher?.cancel();
-    _mediaWatcher = Timer.periodic(Duration(milliseconds: 1500), (
-      _,
-    ) async {
+    _mediaWatcher = Timer.periodic(Duration(milliseconds: 1500), (_) async {
       final c = _controller;
       if (c == null || !mounted) return;
       c
@@ -707,12 +700,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
           .runJavaScriptReturningResult(_mediaHarvestJs)
           .timeout(Duration(seconds: 5));
       final text = _decodeJsResult(raw);
-      if (text.isEmpty)
-        return _HarvestedMedia(title: '', poster: '', urls: []);
+      if (text.isEmpty) return _HarvestedMedia(title: '', poster: '', urls: []);
 
       final data = jsonDecode(text);
-      if (data is! Map)
-        return _HarvestedMedia(title: '', poster: '', urls: []);
+      if (data is! Map) return _HarvestedMedia(title: '', poster: '', urls: []);
 
       final urls = (data['urls'] is List)
           ? (data['urls'] as List)
@@ -920,7 +911,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: context.palette.success),
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: context.palette.success,
+                ),
                 SizedBox(width: 8),
                 Expanded(child: Text('Anti-adblock bypassed & page unlocked!')),
               ],
@@ -1115,15 +1109,15 @@ class _BrowserScreenState extends State<BrowserScreen> {
             children: [
               Text(
                 title,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13.5,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
               ),
               SizedBox(height: 2),
               Text(
                 desc,
-                style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.palette.textSecondary,
+                ),
               ),
             ],
           ),
@@ -1167,7 +1161,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 SizedBox(height: 6),
                 Text(
                   'Choose the viewport size for browsing sites.',
-                  style: TextStyle(fontSize: 12.5, color: context.palette.textSecondary),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: context.palette.textSecondary,
+                  ),
                 ),
                 SizedBox(height: 14),
                 _buildViewportOption(
@@ -1224,7 +1221,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       leading: Icon(
         width == 0 ? Icons.desktop_windows_rounded : Icons.smartphone_rounded,
-        color: selected ? context.palette.primary : context.palette.textSecondary,
+        color: selected
+            ? context.palette.primary
+            : context.palette.textSecondary,
       ),
       title: Text(
         title,
@@ -1262,10 +1261,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
         color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: context.palette.shadowAt(0.15),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: context.palette.shadowAt(0.15), blurRadius: 10),
         ],
       ),
       child: Material(
@@ -1301,10 +1297,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
         color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: context.palette.shadowAt(0.15),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: context.palette.shadowAt(0.15), blurRadius: 10),
         ],
       ),
       child: Material(
@@ -1327,10 +1320,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 SizedBox(width: 6),
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
                 ),
                 SizedBox(width: 4),
                 Icon(Icons.arrow_drop_down_rounded, size: 18),
@@ -1398,7 +1388,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 tooltip: isEnabled
                     ? 'AdBlocker Active ($count blocked)'
                     : 'AdBlocker Disabled',
-                color: isEnabled ? context.palette.success : context.palette.textSecondary,
+                color: isEnabled
+                    ? context.palette.success
+                    : context.palette.textSecondary,
                 background: isEnabled
                     ? context.palette.tint(context.palette.success, .12)
                     : soft,
@@ -1688,7 +1680,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 padding: EdgeInsets.only(bottom: 20),
                 child: Text(
                   'Web engine unavailable: $_engineError',
-                  style: TextStyle(fontSize: 12, color: context.palette.primary),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.palette.primary,
+                  ),
                   textAlign: TextAlign.center,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -1703,10 +1698,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: context.palette.primary,
                     foregroundColor: context.palette.background,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 12,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -1720,10 +1712,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 ),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -1738,10 +1727,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 ),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -1762,8 +1748,12 @@ class _BrowserScreenState extends State<BrowserScreen> {
   }
 
   Widget _buildAddressBar(bool isDark, Color brandColor) {
-    final field = isDark ? context.palette.textSecondary : context.palette.background;
-    final border = isDark ? context.palette.border : context.palette.card;
+    final field = isDark
+        ? context.palette.tint(context.palette.card, .12)
+        : context.palette.background;
+    final border = isDark
+        ? context.palette.border
+        : context.palette.tint(context.palette.primary, .18);
     final hint = context.palette.textSecondary;
     final actionColor = context.palette.textSecondary;
 
@@ -1799,7 +1789,8 @@ class _BrowserScreenState extends State<BrowserScreen> {
                   focusNode: _addressFocus,
                   style: TextStyle(
                     fontSize: 12.5,
-                    color: isDark ? context.palette.card : context.palette.textPrimary,
+                    color: context.palette.textPrimary,
+                    fontWeight: FontWeight.w600,
                   ),
                   textInputAction: TextInputAction.go,
                   decoration: InputDecoration(

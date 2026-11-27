@@ -10,6 +10,8 @@ import '../services/player_service.dart';
 import 'audio_player_screen.dart';
 import '../services/vault_service.dart';
 import '../theme/app_palette.dart';
+import '../widgets/remote_image.dart';
+import '../widgets/media_details_dialog.dart';
 
 class VaultScreen extends StatefulWidget {
   /// `standalone` is true when pushed as a route from a download tile; in that
@@ -69,7 +71,8 @@ class _VaultScreenState extends State<VaultScreen> {
   // Theme helpers
   // ---------------------------------------------------------------------------
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
-  Color get _accent => _dark ? context.palette.primary : context.palette.primary;
+  Color get _accent =>
+      _dark ? context.palette.primary : context.palette.primary;
   Color get _accentSoft => _accent.withValues(alpha: .12);
   Color get _secondaryText =>
       _dark ? context.palette.textSecondary : context.palette.textSecondary;
@@ -105,7 +108,9 @@ class _VaultScreenState extends State<VaultScreen> {
             decoration: BoxDecoration(
               color:
                   color ??
-                  (_dark ? context.palette.tint(context.palette.card, 0.086) : context.palette.tint(context.palette.card, 0.659)),
+                  (_dark
+                      ? context.palette.tint(context.palette.card, 0.086)
+                      : context.palette.tint(context.palette.card, 0.659)),
               borderRadius: borderRadius,
               border: Border.all(
                 color: _dark
@@ -137,8 +142,16 @@ class _VaultScreenState extends State<VaultScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: _dark
-              ? [context.palette.background, context.palette.background, context.palette.background]
-              : [context.palette.background, context.palette.tint(context.palette.primary, 0.04), context.palette.background],
+              ? [
+                  context.palette.background,
+                  context.palette.background,
+                  context.palette.background,
+                ]
+              : [
+                  context.palette.background,
+                  context.palette.tint(context.palette.primary, 0.04),
+                  context.palette.background,
+                ],
         ),
       ),
       child: Stack(
@@ -396,7 +409,10 @@ class _VaultScreenState extends State<VaultScreen> {
                         SizedBox(height: 16),
                         _glass(
                           blur: 8,
-                          color: context.palette.tint(context.palette.error, .10),
+                          color: context.palette.tint(
+                            context.palette.error,
+                            .10,
+                          ),
                           padding: EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 10,
@@ -447,7 +463,10 @@ class _VaultScreenState extends State<VaultScreen> {
                             _errorMessage = null;
                             _enteredPin = '';
                           }),
-                          icon: const Icon(Icons.lock_outline_rounded, size: 15),
+                          icon: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 15,
+                          ),
                           label: const Text('Try password instead'),
                         ),
                       ],
@@ -523,7 +542,11 @@ class _VaultScreenState extends State<VaultScreen> {
           child: Center(
             child: Text(
               digit,
-              style: TextStyle(color: context.palette.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: context.palette.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -823,12 +846,174 @@ class _VaultScreenState extends State<VaultScreen> {
                           ),
                         ),
                       ),
-                    for (final item in files) _buildVaultTile(item, vault),
+                    if (files.any(_isVaultVideo))
+                      _buildVaultVideoGrid(
+                        files.where(_isVaultVideo).toList(),
+                        vault,
+                      ),
+                    for (final item in files.where(
+                      (item) => !_isVaultVideo(item),
+                    ))
+                      _buildVaultTile(item, vault),
                   ],
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  bool _isVaultVideo(VaultItem item) => !item.isAudio && !item.isImage;
+
+  Widget _buildVaultVideoGrid(List<VaultItem> videos, VaultService vault) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.only(bottom: 10),
+      itemCount: videos.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: .78,
+      ),
+      itemBuilder: (context, index) =>
+          _buildVaultVideoTile(videos[index], vault),
+    );
+  }
+
+  Widget _buildVaultVideoTile(VaultItem item, VaultService vault) {
+    final theme = Theme.of(context);
+    final busy = _busyItems.contains(item.id);
+    return _glass(
+      blur: 14,
+      padding: EdgeInsets.all(8),
+      borderRadius: BorderRadius.circular(20),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: busy ? null : () => _openItem(item),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (item.thumbnailUrl.isNotEmpty)
+                        SmartNetworkImage(
+                          url: item.thumbnailUrl,
+                          fit: BoxFit.cover,
+                          placeholderColor: _accentSoft,
+                          placeholderIcon: Icons.movie_rounded,
+                          accentColor: _accent,
+                        )
+                      else
+                        Container(
+                          color: _accentSoft,
+                          child: Icon(
+                            Icons.movie_rounded,
+                            color: _accent,
+                            size: 34,
+                          ),
+                        ),
+                      Positioned(
+                        left: 8,
+                        bottom: 8,
+                        child: Icon(
+                          Icons.play_circle_fill_rounded,
+                          color: Colors.white,
+                          size: 30,
+                          shadows: [
+                            Shadow(color: Colors.black54, blurRadius: 8),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: busy
+                            ? Container(
+                                padding: EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              )
+                            : PopupMenuButton<String>(
+                                tooltip: 'File options',
+                                icon: Icon(
+                                  Icons.more_vert_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                color: context.palette.card,
+                                onSelected: (action) {
+                                  if (action == 'details') {
+                                    _showItemDetails(item);
+                                  } else {
+                                    _updateItem(
+                                      vault,
+                                      item,
+                                      restore: action == 'restore',
+                                    );
+                                  }
+                                },
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'details',
+                                    child: Text('Details'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'restore',
+                                    child: Text('Restore to Downloads'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                item.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                '${item.ext.replaceAll('.', '').toUpperCase()} · '
+                '${(item.fileSize / (1024 * 1024)).toStringAsFixed(1)} MB',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: _secondaryText,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -863,7 +1048,20 @@ class _VaultScreenState extends State<VaultScreen> {
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: _accent.withValues(alpha: .18)),
               ),
-              child: Icon(icon, color: _accent, size: 22),
+              child: !item.isAudio && item.thumbnailUrl.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: SmartNetworkImage(
+                        url: item.thumbnailUrl,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        placeholderColor: _accentSoft,
+                        placeholderIcon: icon,
+                        accentColor: _accent,
+                      ),
+                    )
+                  : Icon(icon, color: _accent, size: 22),
             ),
             title: Text(
               item.title,
@@ -876,10 +1074,7 @@ class _VaultScreenState extends State<VaultScreen> {
             subtitle: Row(
               children: [
                 Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2,
-                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
                     color: _accentSoft,
                     borderRadius: BorderRadius.circular(6),
@@ -911,22 +1106,50 @@ class _VaultScreenState extends State<VaultScreen> {
                       color: _accent,
                     ),
                   )
-                : PopupMenuButton<bool>(
+                : PopupMenuButton<String>(
                     tooltip: 'File options',
                     color: _dark ? context.palette.card : context.palette.card,
-                    onSelected: (restore) =>
-                        _updateItem(vault, item, restore: restore),
+                    onSelected: (action) {
+                      if (action == 'details') {
+                        _showItemDetails(item);
+                      } else {
+                        _updateItem(vault, item, restore: action == 'restore');
+                      }
+                    },
                     itemBuilder: (_) => [
+                      PopupMenuItem(value: 'details', child: Text('Details')),
                       PopupMenuItem(
-                        value: true,
+                        value: 'restore',
                         child: Text('Restore to Downloads'),
                       ),
-                      PopupMenuItem(value: false, child: Text('Delete')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
                     ],
                   ),
           ),
         ),
       ),
+    );
+  }
+
+  void _showItemDetails(VaultItem item) {
+    final record = item.downloadRecord ?? const <String, dynamic>{};
+    final originalUrl = record['originalUrl']?.toString() ?? '';
+    showMediaDetails(
+      context,
+      title: item.title,
+      creator: record['author']?.toString() ?? '',
+      platform: originalUrl.isEmpty
+          ? ''
+          : (Uri.tryParse(originalUrl)?.host ?? ''),
+      sourceUrl: originalUrl,
+      channelUrl: record['channelUrl']?.toString() ?? '',
+      filePath: item.vaultPath,
+      format:
+          '${item.ext.replaceAll('.', '').toUpperCase()}${(record['formatLabel']?.toString().isNotEmpty ?? false) ? ' · ${record['formatLabel']}' : ''}',
+      fileSize: item.fileSize,
+      downloadedAt:
+          DateTime.tryParse(record['completedAt']?.toString() ?? '') ??
+          item.addedAt,
     );
   }
 
@@ -949,9 +1172,8 @@ class _VaultScreenState extends State<VaultScreen> {
     );
     PlayerService.instance.playVideoItem(video, isAudio: item.isAudio);
     if (item.isAudio && ModalRoute.of(context)?.isFirst == false) {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => AudioPlayerScreen()),
-      );
+      Navigator.of(context)
+          .push<void>(MaterialPageRoute(builder: (_) => AudioPlayerScreen()));
     }
   }
 

@@ -18,7 +18,7 @@ import '../widgets/home_banner.dart';
 import '../widgets/section_carousel.dart';
 import '../widgets/movie_card.dart';
 import '../widgets/remote_image.dart';
-import 'movie_player_screen.dart';
+import 'mpv_player_screen.dart';
 import 'movie_title_screen.dart';
 import 'zangetsu_providers_hub_screen.dart';
 
@@ -473,7 +473,7 @@ class _MovieScreenState extends State<MovieScreen> {
             ];
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => MoviePlayerScreen(
+          builder: (_) => MpvPlayerScreen(
             movie: movie,
             initialSource: playable.first,
             isLiveTv: true,

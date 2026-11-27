@@ -66,6 +66,23 @@ android {
             useLegacyPackaging = true
             // youtubedl-android ships compressed payloads as *.zip.so — not ELF.
             doNotStrip += listOf("**/*.zip.so")
+            // libmpv (mpv-android AAR) bundles libc++_shared.so, and so do other
+            // native plugins (fvp). Keep the first copy instead of failing the
+            // APK merge — both are the same NDK runtime.
+            // mpv-android and FFmpegKit both package FFmpeg shared objects.
+            // Keep mpv's copies so libmpv and its linked codec libraries stay
+            // from the same build; FFmpegKit invokes the shared FFmpeg CLI.
+            pickFirsts += listOf(
+                "**/libc++_shared.so",
+                "**/libavcodec.so",
+                "**/libavdevice.so",
+                "**/libavfilter.so",
+                "**/libavformat.so",
+                "**/libavutil.so",
+                "**/libswresample.so",
+                "**/libswscale.so",
+                "**/libpostproc.so",
+            )
         }
     }
 
@@ -117,4 +134,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.9.2")
     implementation("com.github.recloudstream.cloudstream:library:v4.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    // The exact libmpv engine mpvExtended uses. Resolved from Maven Central
+    // (bundles libmpv + FFmpeg .so for all four ABIs; the JitPack build of the
+    // same coordinate omits the native libraries).
+    implementation("io.github.marlboro-advance:mpv-android:1.0.0")
 }

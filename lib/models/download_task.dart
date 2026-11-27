@@ -47,6 +47,7 @@ class DownloadTask {
   final bool isAudio;
   final String category; // 'video', 'audio', 'movie'
   final String originalUrl;
+  final String channelUrl;
   String? streamUrl;
   bool payloadVerified;
   final bool isHls;
@@ -159,8 +160,11 @@ class DownloadTask {
     return totalBytes + audio;
   }
 
-  bool get hasDownloadProgress => displayTotalBytes > 0 ||
-      nativeProgress != null || isConverting || status == DownloadStatus.completed;
+  bool get hasDownloadProgress =>
+      displayTotalBytes > 0 ||
+      nativeProgress != null ||
+      isConverting ||
+      status == DownloadStatus.completed;
   double speedBytesPerSec;
   double? nativeProgress;
   String? savePath;
@@ -182,6 +186,7 @@ class DownloadTask {
     required this.isAudio,
     String? category,
     required this.originalUrl,
+    this.channelUrl = '',
     this.streamUrl,
     this.payloadVerified = false,
     this.preferredFormatId,
@@ -305,6 +310,7 @@ class DownloadTask {
     'isAudio': isAudio,
     'category': category,
     'originalUrl': originalUrl,
+    'channelUrl': channelUrl,
     'streamUrl': streamUrl,
     'audioStreamUrl': audioStreamUrl,
     'audioExt': audioExt,
@@ -344,6 +350,7 @@ class DownloadTask {
       isAudio: json['isAudio'] ?? false,
       category: json['category'],
       originalUrl: json['originalUrl'] ?? '',
+      channelUrl: json['channelUrl'] as String? ?? '',
       streamUrl: json['streamUrl'],
       audioStreamUrl: json['audioStreamUrl'],
       audioExt: json['audioExt'],

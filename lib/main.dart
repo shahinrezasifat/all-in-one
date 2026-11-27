@@ -178,6 +178,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   void dispose() {
+    _homeHoldTimer?.cancel();
+    _homeHintTimer?.cancel();
     DownloadManager.instance.removeListener(_onDownloadCountChanged);
     super.dispose();
   }
@@ -202,6 +204,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   SiteModel? _activeBrowserSite;
   Future<bool> Function()? _browserBackHandler;
   DateTime? _lastBackAt;
+  Timer? _homeHoldTimer;
+  Timer? _homeHintTimer;
+  int _browserBackCount = 0;
+  bool _showHomeHoldHint = false;
+  bool _homeHoldTriggered = false;
+  bool _homeHintShownForSession = false;
 
   /// Top of this list is the section currently on screen.
   final List<_AppSection> _sectionHistory = [
@@ -218,41 +226,85 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   void _applySection(_AppSection section) {
     setState(() {
-      _activeBrowserSite = section.site;
+      if (section.isBrowser) _activeBrowserSite = section.site;
       _currentIndex = section.isBrowser ? 0 : section.index;
     });
   }
 
   void _navigateToSearch(String query) {
+    _activeBrowserSite = null;
+    _sectionHistory
+      ..clear()
+      ..add(_AppSection(0));
     setState(() {
       _searchQuery = query;
-      _activeBrowserSite = null;
       _currentIndex = 0; // Merged Home & Explore
     });
   }
 
   void _openBrowser(SiteModel site) {
+    _browserBackCount = 0;
+    _homeHintShownForSession = false;
     _pushSection(_AppSection(_AppSection.browser, site: site));
     _applySection(_sectionHistory.last);
   }
 
   /// Explicit browser arrow / Exit: always land on Home, wherever we came from.
   void _closeBrowser() {
-    while (_sectionHistory.isNotEmpty && _sectionHistory.last.isBrowser) {
-      _sectionHistory.removeLast();
-    }
-    if (_sectionHistory.isEmpty || !_sectionHistory.last.isHome) {
-      _sectionHistory.add(_AppSection(0));
-    }
+    _homeHoldTimer?.cancel();
+    _homeHintTimer?.cancel();
+    _showHomeHoldHint = false;
+    _browserBackCount = 0;
+    _homeHintShownForSession = false;
+    _activeBrowserSite = null;
+    _sectionHistory
+      ..clear()
+      ..add(_AppSection(0));
     _applySection(_sectionHistory.last);
+  }
+
+  void _startHomeHold() {
+    if (!_isBrowserActive) return;
+    _homeHoldTimer?.cancel();
+    _homeHoldTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted || !_isBrowserActive) return;
+      _homeHoldTriggered = true;
+      _closeBrowser();
+    });
+  }
+
+  void _cancelHomeHold() {
+    _homeHoldTimer?.cancel();
+    _homeHoldTimer = null;
+  }
+
+  void _showBrowserExitHint() {
+    if (_homeHintShownForSession || !_isBrowserActive || !mounted) return;
+    _homeHintShownForSession = true;
+    _homeHintTimer?.cancel();
+    setState(() => _showHomeHoldHint = true);
+    _homeHintTimer = Timer(const Duration(seconds: 7), () {
+      if (mounted) setState(() => _showHomeHoldHint = false);
+    });
   }
 
   void _selectTab(int index) {
     HapticFeedback.selectionClick();
     setState(() => _navTapTicks[index]++);
-    // Home is the browser's host tab. Keep the open site alive until the user
-    // explicitly exits the browser with its own close control.
-    if (_isBrowserActive && index == 0) return;
+    // Home restores the browser after visiting another section. A two-second
+    // Home hold is the explicit action that ends the browser session.
+    if (_isBrowserActive && index == 0) {
+      final browserAt = _sectionHistory.lastIndexWhere((s) => s.isBrowser);
+      if (browserAt >= 0) {
+        _sectionHistory.removeRange(browserAt + 1, _sectionHistory.length);
+        _applySection(_sectionHistory.last);
+      } else {
+        _applySection(
+          _AppSection(_AppSection.browser, site: _activeBrowserSite),
+        );
+      }
+      return;
+    }
     if (!_isBrowserActive && _currentIndex == index) return;
     _pushSection(_AppSection(index));
     _applySection(_sectionHistory.last);
@@ -260,14 +312,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   Future<void> _handleSystemBack() async {
     // The browser gets the first chance to step back through its own pages.
-    if (_isBrowserActive) {
+    if (_isBrowserActive && _currentIndex == 0) {
       final handled = await _browserBackHandler?.call() ?? false;
-      if (handled) return;
+      if (handled) {
+        _browserBackCount++;
+        if (_browserBackCount >= 8) _showBrowserExitHint();
+        return;
+      }
     }
 
     // Otherwise walk back through the sections the user actually visited.
     if (_sectionHistory.length > 1) {
-      _sectionHistory.removeLast();
+      final leaving = _sectionHistory.removeLast();
+      if (leaving.isBrowser && _isBrowserActive) {
+        _closeBrowser();
+        return;
+      }
       _applySection(_sectionHistory.last);
       return;
     }
@@ -276,8 +336,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     // before leaving the app, with a short hint on the first press.
     final now = DateTime.now();
     final previous = _lastBackAt;
-    if (previous == null ||
-        now.difference(previous) > Duration(seconds: 2)) {
+    if (previous == null || now.difference(previous) > Duration(seconds: 2)) {
       _lastBackAt = now;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -341,9 +400,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           children: [
             _buildSideRail(),
             VerticalDivider(thickness: 1, width: 1),
-            Expanded(
-              child: Stack(children: [content, YouTubePopupPlayer()]),
-            ),
+            Expanded(child: Stack(children: [content, YouTubePopupPlayer()])),
           ],
         ),
       );
@@ -368,16 +425,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           extendBody: true,
           body: Stack(
             fit: StackFit.expand,
-            children: [
-              content,
-              YouTubePopupPlayer(miniPlayerBottom: 104),
-            ],
+            children: [content, YouTubePopupPlayer(miniPlayerBottom: 104)],
           ),
           bottomNavigationBar: ListenableBuilder(
             listenable: PlayerService.instance,
-            builder: (context, child) => PlayerService.instance.isExpanded
-                ? SizedBox.shrink()
-                : child!,
+            builder: (context, child) =>
+                PlayerService.instance.isExpanded ? SizedBox.shrink() : child!,
             child: SafeArea(
               top: false,
               child: Padding(
@@ -588,80 +641,133 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return Expanded(
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _selectTab(index),
-          borderRadius: BorderRadius.circular(18),
-          splashColor: p.tint(p.primary, 0.08),
-          highlightColor: p.tint(p.primary, 0.04),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Stack(
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.none,
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      key: ValueKey<String>('nav_tap_${index}_${_navTapTicks[index]}'),
-                      tween: Tween<double>(begin: 0.72, end: 1.0),
-                      duration: const Duration(milliseconds: 460),
-                      curve: Curves.easeOutBack,
-                      builder: (context, scale, child) =>
-                          _navTapTicks[index] == 0
-                              ? child!
-                              : Transform.scale(scale: scale, child: child),
-                      child: _navIcon(
-                        icon,
-                        activeIcon,
-                        selected,
-                        p.textSecondary,
-                        showBadge,
-                      ),
-                    ),
-                    if (index == 3 && _downloadPulseTick > 0)
-                      TweenAnimationBuilder<double>(
-                        key: ValueKey<String>('nav_pulse_${_downloadPulseTick}'),
-                        tween: Tween<double>(begin: 0, end: 1),
-                        duration: const Duration(milliseconds: 850),
-                        builder: (context, t, _) {
-                          // Down during the first half, then spring back up.
-                          final down = t < 0.5
-                              ? Curves.easeIn.transform(t * 2) * 14.0
-                              : Curves.easeOut.transform((1 - t) * 2) * 14.0;
-                          final fade = t < 0.5 ? 1.0 : (1 - t) * 2;
-                          return Opacity(
-                            opacity: fade.clamp(0.0, 1.0),
-                            child: Transform.translate(
-                              offset: Offset(0, down),
-                              child: Icon(
-                                Icons.arrow_downward_rounded,
-                                size: 16,
-                                color: p.primary,
+        child: Listener(
+          onPointerDown: index == 0 ? (_) => _startHomeHold() : null,
+          onPointerUp: index == 0 ? (_) => _cancelHomeHold() : null,
+          onPointerCancel: index == 0 ? (_) => _cancelHomeHold() : null,
+          child: InkWell(
+            onTap: () {
+              if (index == 0 && _homeHoldTriggered) {
+                _homeHoldTriggered = false;
+                return;
+              }
+              _selectTab(index);
+            },
+            borderRadius: BorderRadius.circular(18),
+            splashColor: p.tint(p.primary, 0.08),
+            highlightColor: p.tint(p.primary, 0.04),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (index == 0 && _showHomeHoldHint)
+                        Positioned(
+                          bottom: 58,
+                          left: -8,
+                          width: 182,
+                          child: IgnorePointer(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 9,
+                              ),
+                              decoration: BoxDecoration(
+                                color: p.card,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: p.primary.withValues(alpha: .42),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: p.shadowAt(.24),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                'To return Home, press and hold Home for 2 seconds.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: p.textPrimary,
+                                  fontSize: 10.5,
+                                  height: 1.25,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        ),
+                      TweenAnimationBuilder<double>(
+                        key: ValueKey<String>(
+                          'nav_tap_${index}_${_navTapTicks[index]}',
+                        ),
+                        tween: Tween<double>(begin: 0.72, end: 1.0),
+                        duration: const Duration(milliseconds: 460),
+                        curve: Curves.easeOutBack,
+                        builder: (context, scale, child) =>
+                            _navTapTicks[index] == 0
+                            ? child!
+                            : Transform.scale(scale: scale, child: child),
+                        child: _navIcon(
+                          icon,
+                          activeIcon,
+                          selected,
+                          p.textSecondary,
+                          showBadge,
+                        ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  style: TextStyle(
-                    color: selected ? p.textPrimary : p.textSecondary,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 11,
-                    letterSpacing: 0.1,
+                      if (index == 3 && _downloadPulseTick > 0)
+                        TweenAnimationBuilder<double>(
+                          key: ValueKey<String>(
+                            'nav_pulse_${_downloadPulseTick}',
+                          ),
+                          tween: Tween<double>(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 850),
+                          builder: (context, t, _) {
+                            // Down during the first half, then spring back up.
+                            final down = t < 0.5
+                                ? Curves.easeIn.transform(t * 2) * 14.0
+                                : Curves.easeOut.transform((1 - t) * 2) * 14.0;
+                            final fade = t < 0.5 ? 1.0 : (1 - t) * 2;
+                            return Opacity(
+                              opacity: fade.clamp(0.0, 1.0),
+                              child: Transform.translate(
+                                offset: Offset(0, down),
+                                child: Icon(
+                                  Icons.arrow_downward_rounded,
+                                  size: 16,
+                                  color: p.primary,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
                   ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 3),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    style: TextStyle(
+                      color: selected ? p.textPrimary : p.textSecondary,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 11,
+                      letterSpacing: 0.1,
+                    ),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -713,14 +819,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 right: -3,
                 top: -4,
                 child: Container(
-                  constraints: BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 3,
-                    vertical: 1,
-                  ),
+                  constraints: BoxConstraints(minWidth: 16, minHeight: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                   decoration: BoxDecoration(
                     color: p.secondary,
                     borderRadius: BorderRadius.circular(8),

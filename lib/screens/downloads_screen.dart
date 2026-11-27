@@ -7,7 +7,7 @@ import '../models/movie_model.dart';
 import '../services/download_manager.dart';
 import '../services/player_service.dart';
 import '../services/watch_history_service.dart';
-import 'movie_player_screen.dart';
+import 'mpv_player_screen.dart';
 import '../services/virtual_folder_service.dart';
 import '../theme/app_palette.dart';
 import '../utils/episode_parser.dart';
@@ -59,9 +59,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   );
 
   int _episodeNumber(DownloadTask task) =>
-      int.tryParse(
-        _numberedEpisode.firstMatch(task.title)?.group(1) ?? '',
-      ) ??
+      int.tryParse(_numberedEpisode.firstMatch(task.title)?.group(1) ?? '') ??
       0;
 
   String? _seriesTitle(DownloadTask task) =>
@@ -81,7 +79,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Icon(Icons.create_new_folder_rounded, color: context.palette.primary),
+            Icon(
+              Icons.create_new_folder_rounded,
+              color: context.palette.primary,
+            ),
             SizedBox(width: 8),
             Text(
               'Create Real Folder',
@@ -189,10 +190,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     elevation: 5,
                     tooltip: 'New Folder',
                     onPressed: _showCreateFolderDialog,
-                    child: Icon(
-                      Icons.create_new_folder_rounded,
-                      size: 28,
-                    ),
+                    child: Icon(Icons.create_new_folder_rounded, size: 28),
                   ),
                 )
               : null,
@@ -206,10 +204,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     height: 48,
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0x1AFFFFFF) : Colors.black.withValues(alpha: 0.05),
+                      color: isDark
+                          ? const Color(0x1AFFFFFF)
+                          : Colors.black.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(26),
                       border: Border.all(
-                        color: isDark ? const Color(0x22FFFFFF) : Colors.black12,
+                        color: isDark
+                            ? const Color(0x22FFFFFF)
+                            : Colors.black12,
                         width: 1,
                       ),
                     ),
@@ -230,7 +232,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                 borderRadius: BorderRadius.circular(22),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: context.palette.primary.withValues(alpha: 0.35),
+                                    color: context.palette.primary.withValues(
+                                      alpha: 0.35,
+                                    ),
                                     blurRadius: 12,
                                     offset: const Offset(0, 3),
                                   ),
@@ -247,7 +251,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             Expanded(
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onTap: () => setState(() => _activeTabIndex = 0),
+                                onTap: () =>
+                                    setState(() => _activeTabIndex = 0),
                                 child: Center(
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -280,8 +285,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                           decoration: BoxDecoration(
                                             color: _activeTabIndex == 0
                                                 ? context.palette.onPrimary
-                                                : context.palette.primary.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(10),
+                                                : context.palette.primary
+                                                      .withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
                                           ),
                                           child: Text(
                                             '${activeList.length}',
@@ -303,7 +311,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             Expanded(
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onTap: () => setState(() => _activeTabIndex = 1),
+                                onTap: () =>
+                                    setState(() => _activeTabIndex = 1),
                                 child: Center(
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -336,8 +345,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                           decoration: BoxDecoration(
                                             color: _activeTabIndex == 1
                                                 ? context.palette.onPrimary
-                                                : context.palette.primary.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(10),
+                                                : context.palette.primary
+                                                      .withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
                                           ),
                                           child: Text(
                                             '${completedList.length}',
@@ -543,7 +555,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 SizedBox(width: 6),
                 Text(
                   '${websiteFolders.length} sites',
-                  style: TextStyle(fontSize: 11, color: context.palette.onPrimary),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: context.palette.onPrimary,
+                  ),
                 ),
                 SizedBox(width: 6),
                 IconButton(
@@ -690,7 +705,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               padding: EdgeInsets.all(24),
               margin: EdgeInsets.only(top: 20, bottom: 16),
               decoration: BoxDecoration(
-                color: isDark ? context.palette.card : context.palette.textSecondary,
+                color: isDark
+                    ? context.palette.card
+                    : context.palette.textSecondary,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -710,7 +727,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   SizedBox(height: 6),
                   Text(
                     'Downloaded videos and files will automatically be organized into website and channel folders here.',
-                    style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.palette.textSecondary,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -733,10 +753,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       return;
     }
     final history = WatchHistoryService.instance.getProgress(task.id);
-    final parsedSeason = EpisodeParser.season(task.seriesSeason ?? '') ??
+    final parsedSeason =
+        EpisodeParser.season(task.seriesSeason ?? '') ??
         EpisodeParser.season(task.title) ??
         EpisodeParser.season(task.savePath ?? '');
-    final parsedEpisode = EpisodeParser.episode(task.title) ??
+    final parsedEpisode =
+        EpisodeParser.episode(task.title) ??
         EpisodeParser.episode(task.seriesEpisodeUrl ?? '') ??
         EpisodeParser.episode(task.savePath ?? '');
     final season = parsedSeason ?? history?.seasonNumber ?? 1;
@@ -775,7 +797,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           );
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => MoviePlayerScreen(
+        builder: (_) => MpvPlayerScreen(
           movie: movie,
           initialSource: source,
           initialSeason: season,
@@ -814,7 +836,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         onTap: seriesTitle == null
             ? () => _openDownloadedTask(context, task)
             : showFiles,
-        onLongPress: showFiles,
+        onLongPress: () => _confirmDeleteMovieGroup(tasks, title),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -900,6 +922,34 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         : Tooltip(message: 'Episodes', child: card);
   }
 
+  Future<void> _confirmDeleteMovieGroup(
+    List<DownloadTask> tasks,
+    String title,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete downloaded title?'),
+        content: Text('Delete all downloaded files for "$title"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(
+              foregroundColor: context.palette.critical,
+            ),
+            child: const Text('Delete downloads'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await DownloadManager.instance.deleteTasks(tasks);
+  }
+
   // Website Channels View: Shows channels inside the opened website
   Widget _buildWebsiteChannelsView(DownloadManager manager, bool isDark) {
     final website = _openedWebsite!;
@@ -920,7 +970,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           Container(
             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: isDark ? context.palette.card : context.palette.textSecondary,
+              color: isDark
+                  ? context.palette.card
+                  : context.palette.textSecondary,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1002,10 +1054,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   isSeries ? 'Seasons' : '$website Channels (চ্যানেল ফোল্ডার)',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -1097,7 +1146,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: isDark ? context.palette.card : context.palette.textSecondary,
+              color: isDark
+                  ? context.palette.card
+                  : context.palette.textSecondary,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1374,7 +1425,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: isDark ? context.palette.card : context.palette.textSecondary,
+              color: isDark
+                  ? context.palette.card
+                  : context.palette.textSecondary,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1499,7 +1552,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             ? Icon(
                 icon,
                 size: 14,
-                color: isSelected ? context.palette.onPrimary : context.palette.primary,
+                color: isSelected
+                    ? context.palette.onPrimary
+                    : context.palette.primary,
               )
             : null,
         label: Text('$label ($count)'),
@@ -1508,12 +1563,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         labelStyle: TextStyle(
           color: isSelected
               ? context.palette.onPrimary
-              : (isDark ? context.palette.textSecondary : context.palette.textPrimary),
+              : (isDark
+                    ? context.palette.textSecondary
+                    : context.palette.textPrimary),
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           fontSize: 12,
         ),
         backgroundColor: context.palette.card,
-        side: BorderSide(color: isSelected ? context.palette.primary : context.palette.border),
+        side: BorderSide(
+          color: isSelected ? context.palette.primary : context.palette.border,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onSelected: (val) {
           if (val) {
@@ -1573,10 +1632,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       child: Icon(icon, color: color, size: 24),
                     ),
                     Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
@@ -1608,7 +1664,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: context.palette.textSecondary),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: context.palette.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -1669,11 +1728,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               color: accent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              Icons.speed_rounded,
-              color: accent,
-              size: 20,
-            ),
+            child: Icon(Icons.speed_rounded, color: accent, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1699,12 +1754,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
-                        color: isAnyDownloading ? Colors.greenAccent : Colors.amberAccent,
+                        color: isAnyDownloading
+                            ? Colors.greenAccent
+                            : Colors.amberAccent,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: (isAnyDownloading ? Colors.greenAccent : Colors.amberAccent)
-                                .withValues(alpha: 0.6),
+                            color:
+                                (isAnyDownloading
+                                        ? Colors.greenAccent
+                                        : Colors.amberAccent)
+                                    .withValues(alpha: 0.6),
                             blurRadius: 6,
                           ),
                         ],
@@ -1744,15 +1804,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               borderRadius: BorderRadius.circular(16),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: isAnyDownloading
                       ? accent
                       : accent.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: accent.withValues(alpha: 0.35),
-                  ),
+                  border: Border.all(color: accent.withValues(alpha: 0.35)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/download_task.dart';
+import '../services/download_manager.dart';
 import '../services/watch_history_service.dart';
 import '../theme/app_palette.dart';
 import '../utils/episode_parser.dart';
@@ -29,11 +30,8 @@ class DownloadedTitlePage extends StatefulWidget {
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => DownloadedTitlePage(
-          title: title,
-          tasks: tasks,
-          isSeries: isSeries,
-        ),
+        builder: (_) =>
+            DownloadedTitlePage(title: title, tasks: tasks, isSeries: isSeries),
       ),
     );
   }
@@ -45,6 +43,10 @@ class DownloadedTitlePage extends StatefulWidget {
 class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
   String? _season;
   String? _language;
+  final Set<String> _removedIds = {};
+
+  List<DownloadTask> get _currentTasks =>
+      widget.tasks.where((task) => !_removedIds.contains(task.id)).toList();
 
   int _episode(DownloadTask task) =>
       EpisodeParser.episode(task.title) ??
@@ -52,7 +54,8 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
       0;
 
   String _seasonOf(DownloadTask task) {
-    final explicit = EpisodeParser.season(task.title) ??
+    final explicit =
+        EpisodeParser.season(task.title) ??
         EpisodeParser.season(task.seriesSeason ?? '') ??
         EpisodeParser.season(task.savePath ?? '');
     if (explicit != null) return 'Season $explicit';
@@ -64,14 +67,12 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
   String _languageOf(DownloadTask task) {
     final explicit = task.seriesLanguage?.trim();
     if (explicit != null && explicit.isNotEmpty) return explicit;
-    final match = RegExp(
-      r'\[([A-Za-z]+)\]',
-    ).firstMatch(task.title)?.group(1);
+    final match = RegExp(r'\[([A-Za-z]+)\]').firstMatch(task.title)?.group(1);
     return match ?? 'Original';
   }
 
   List<DownloadTask> get _filtered {
-    var list = List<DownloadTask>.from(widget.tasks);
+    var list = List<DownloadTask>.from(_currentTasks);
     if (_season != null) {
       list = list.where((t) => _seasonOf(t) == _season).toList();
     }
@@ -83,7 +84,7 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
   }
 
   List<String> get _seasons {
-    final list = widget.tasks.map(_seasonOf).toSet().toList();
+    final list = _currentTasks.map(_seasonOf).toSet().toList();
     list.sort((a, b) {
       final x = EpisodeParser.season(a) ?? 0;
       final y = EpisodeParser.season(b) ?? 0;
@@ -102,12 +103,13 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
   Widget build(BuildContext context) {
     final p = context.palette;
     final seasons = _seasons;
-    final languages = widget.tasks.map(_languageOf).toSet().toList()..sort();
+    final currentTasks = _currentTasks;
+    final languages = currentTasks.map(_languageOf).toSet().toList()..sort();
     final tasks = _filtered;
-    final posterUrl = widget.tasks.isNotEmpty
-        ? (widget.tasks.first.thumbnailUrl.isNotEmpty
-            ? widget.tasks.first.thumbnailUrl
-            : widget.tasks.first.series?.posterUrl ?? '')
+    final posterUrl = currentTasks.isNotEmpty
+        ? (currentTasks.first.thumbnailUrl.isNotEmpty
+              ? currentTasks.first.thumbnailUrl
+              : currentTasks.first.series?.posterUrl ?? '')
         : '';
 
     return Scaffold(
@@ -129,7 +131,7 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
               ),
             ),
             Text(
-              '${widget.tasks.length} downloaded',
+              '${currentTasks.length} downloaded',
               style: TextStyle(color: p.textSecondary, fontSize: 11),
             ),
           ],
@@ -143,6 +145,69 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
             // ── Hero banner ───────────────────────────────────────────────
             _buildHero(p, posterUrl),
             const SizedBox(height: 18),
+            if (widget.isSeries && currentTasks.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PopupMenuButton<String>(
+                  tooltip: 'Manage all downloaded episodes and seasons',
+                  onSelected: (value) {
+                    if (value == 'all') {
+                      _confirmDelete(currentTasks, 'the full series');
+                    } else if (value.startsWith('season:')) {
+                      final season = value.substring('season:'.length);
+                      _confirmDelete(
+                        currentTasks
+                            .where((task) => _seasonOf(task) == season)
+                            .toList(),
+                        season,
+                      );
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'all',
+                      child: Text('Delete all downloads'),
+                    ),
+                    for (final season in seasons)
+                      PopupMenuItem(
+                        value: 'season:$season',
+                        child: Text('Delete $season'),
+                      ),
+                  ],
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: p.card,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: p.border),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.download_for_offline_rounded,
+                            color: p.primary,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'All Download',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_drop_down_rounded),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             if (widget.isSeries && seasons.isNotEmpty) ...[
               _buildSectionTitle('Downloaded seasons', p),
               const SizedBox(height: 8),
@@ -182,7 +247,8 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
                       label: Text(language),
                       selected: _language == language,
                       onSelected: (_) => setState(
-                        () => _language = _language == language ? null : language,
+                        () =>
+                            _language = _language == language ? null : language,
                       ),
                       selectedColor: p.secondary,
                       backgroundColor: p.card,
@@ -190,7 +256,9 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
                         color: _language == language ? p.secondary : p.border,
                       ),
                       labelStyle: TextStyle(
-                        color: _language == language ? p.onSecondary : p.textPrimary,
+                        color: _language == language
+                            ? p.onSecondary
+                            : p.textPrimary,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
                       ),
@@ -230,14 +298,46 @@ class _DownloadedTitlePageState extends State<DownloadedTitlePage> {
     );
   }
 
+  Future<void> _confirmDelete(List<DownloadTask> tasks, String label) async {
+    if (tasks.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete downloaded files?'),
+        content: Text('Delete ${tasks.length} downloaded file(s) from $label?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(
+              foregroundColor: context.palette.critical,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await DownloadManager.instance.deleteTasks(tasks);
+    if (!mounted) return;
+    setState(() {
+      _removedIds.addAll(tasks.map((task) => task.id));
+      if (_season != null && !_seasons.contains(_season))
+        _season = _seasons.firstOrNull;
+    });
+  }
+
   Widget _buildSectionTitle(String label, AppPalette p) => Text(
-        label,
-        style: TextStyle(
-          color: p.textPrimary,
-          fontSize: 13.5,
-          fontWeight: FontWeight.w800,
-        ),
-      );
+    label,
+    style: TextStyle(
+      color: p.textPrimary,
+      fontSize: 13.5,
+      fontWeight: FontWeight.w800,
+    ),
+  );
 
   Widget _buildHero(AppPalette p, String posterUrl) {
     return ClipRRect(

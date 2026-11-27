@@ -3,7 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/movie_model.dart';
 import '../models/movie_source_language.dart';
-import '../screens/movie_player_screen.dart';
+import '../screens/mpv_player_screen.dart';
 import '../services/download_manager.dart';
 import '../services/movie_repository_service.dart';
 import '../services/permission_service.dart';
@@ -773,7 +773,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     Navigator.pop(context);
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => MoviePlayerScreen(
+        builder: (_) => MpvPlayerScreen(
           movie: _movieWithSources(),
           initialSource: _activeSource,
           initialPositionSeconds: resumePosition ?? 0.0,
@@ -786,7 +786,7 @@ class _MovieDetailSheetState extends State<MovieDetailSheet> {
     Navigator.pop(context);
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => MoviePlayerScreen(
+        builder: (_) => MpvPlayerScreen(
           movie: widget.movie,
           initialSource: MovieSource(
             serverName: 'Trailer',

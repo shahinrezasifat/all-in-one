@@ -512,6 +512,7 @@ class DownloadManager extends ChangeNotifier {
       isAudio: isAudio,
       category: isAudio ? 'audio' : 'video',
       originalUrl: video.originalUrl,
+      channelUrl: video.channelUrl,
       streamUrl: format.url,
       preferredFormatId: format.id,
       needsAudioMerge: format.needsAudioMerge,
@@ -591,9 +592,7 @@ class DownloadManager extends ChangeNotifier {
       source,
       customTitle ?? movie.title,
       folder,
-      series: movie.isSeries
-          ? movie.copyWith(sources: const [])
-          : null,
+      series: movie.isSeries ? movie.copyWith(sources: const []) : null,
       seasonName: seasonNumber == null ? null : 'Season $seasonNumber',
     );
     _tasks.insert(0, task);
@@ -641,7 +640,9 @@ class DownloadManager extends ChangeNotifier {
         folder,
         status: DownloadStatus.queued,
         series: details,
-        seasonName: episode.season == null ? seasonName : 'Season ${episode.season}',
+        seasonName: episode.season == null
+            ? seasonName
+            : 'Season ${episode.season}',
         episodeUrl: episode.url,
         language: language,
         resolution: resolution,
@@ -975,7 +976,8 @@ class DownloadManager extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   void _startQueuedDownloads() {
-    final available = SettingsService.instance.maxConcurrent.clamp(1, 5) -
+    final available =
+        SettingsService.instance.maxConcurrent.clamp(1, 5) -
         _runningDownloads.length;
     if (available > 0) {
       final next = _tasks.reversed
@@ -1673,7 +1675,7 @@ class DownloadManager extends ChangeNotifier {
     final path = task.savePath;
     if (path == null || path.isEmpty) return;
     final lower = path.toLowerCase();
-    if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) return;
+    if (lower.endsWith('.mp4')) return;
 
     task.convertStage = 'Converting to MP4…';
     task.convertProgress = 0.0;
@@ -3495,6 +3497,32 @@ class DownloadManager extends ChangeNotifier {
     _tasks.remove(task);
     VirtualFolderService.instance.removeTaskEverywhere(task.id);
     _persistTasks();
+    notifyListeners();
+  }
+
+  /// Deletes a selected movie/series batch and persists the change once.
+  /// Each task is removed from custom folders as well as from disk and the
+  /// Downloads index, so season/full-series deletion cannot leave stale rows.
+  Future<void> deleteTasks(Iterable<DownloadTask> tasks) async {
+    await ready;
+    final ids = tasks.map((task) => task.id).toSet();
+    if (ids.isEmpty) return;
+    final selected = _tasks.where((task) => ids.contains(task.id)).toList();
+    for (final task in selected) {
+      final path = task.savePath;
+      if (path != null && path.isNotEmpty) {
+        final file = File(path);
+        if (file.existsSync()) {
+          try {
+            file.deleteSync();
+          } catch (_) {}
+        }
+        _deleteTempFiles(task);
+      }
+      await VirtualFolderService.instance.removeTaskEverywhere(task.id);
+    }
+    _tasks.removeWhere((task) => ids.contains(task.id));
+    await _persistTasks();
     notifyListeners();
   }
 

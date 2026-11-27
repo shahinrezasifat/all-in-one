@@ -1,18 +1,21 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snaptube_pure/screens/vault_screen.dart';
 import 'package:snaptube_pure/services/player_service.dart';
 import 'package:snaptube_pure/services/vault_service.dart';
-import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 void main() {
   testWidgets('Vault opens its local file in the in-app player', (
     tester,
   ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     SharedPreferences.setMockInitialValues({
       'vault_pin_hash': sha256
           .convert(utf8.encode('snaptube_pure_vault_1234'))
@@ -35,10 +38,34 @@ void main() {
         },
       ]),
     });
-    final previous = VideoPlayerPlatform.instance;
-    final platform = _VideoPlatform();
-    VideoPlayerPlatform.instance = platform;
-    addTearDown(() => VideoPlayerPlatform.instance = previous);
+    final loadedPaths = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const mpvChannel = MethodChannel('snaptube_pure/mpv');
+    messenger.setMockMethodCallHandler(mpvChannel, (call) async {
+      if (call.method == 'load') {
+        loadedPaths.add((call.arguments as Map?)?['path']?.toString() ?? '');
+      }
+      if (call.method == 'getState') {
+        return {
+          'position': 0.0,
+          'duration': 0.0,
+          'playing': true,
+          'tracks': '[]',
+        };
+      }
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(mpvChannel, null));
+    const mpvEvents = MethodChannel('snaptube_pure/mpv_events');
+    messenger.setMockMethodCallHandler(mpvEvents, (call) async => null);
+    addTearDown(() => messenger.setMockMethodCallHandler(mpvEvents, null));
+    const platformViews = MethodChannel('flutter/platform_views');
+    messenger.setMockMethodCallHandler(platformViews, (call) async {
+      if (call.method == 'create') return 0;
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(platformViews, null));
 
     final vault = VaultService.instance;
     expect(await vault.unlock('1234'), isTrue);
@@ -56,17 +83,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
-    expect(platform.dataSource?.sourceType, DataSourceType.file);
+    // In a widget test the native platform view never actually initialises;
+    // mark the bridge ready so the queued libmpv load is flushed.
+    PlayerService.instance.mpv.markReady();
+    await tester.pump();
     expect(
-      Uri.parse(platform.dataSource!.uri!).path,
-      endsWith('/vault/private.mp4'),
-    );
-    expect(platform.playCalls, 1);
-    // The fake video platform records play() but does not emit state events,
-    // so the control may still expose its "Play" tooltip here.
-    expect(
-      find.byIcon(Icons.pause_rounded).evaluate().isNotEmpty ||
-          find.byIcon(Icons.play_arrow_rounded).evaluate().isNotEmpty,
+      loadedPaths.any((path) => path.endsWith('/vault/private.mp4')),
       isTrue,
     );
     // The related-video panel is populated asynchronously from the network and
@@ -76,53 +98,6 @@ void main() {
     // Release the singleton player engine (and its position-polling timer)
     // before the test zone checks for pending timers.
     PlayerService.instance.close();
+    PlayerService.instance.mpv.dispose();
   });
-}
-
-class _VideoPlatform extends VideoPlayerPlatform {
-  int playCalls = 0;
-  DataSource? dataSource;
-
-  @override
-  Future<void> init() async {}
-
-  @override
-  Future<int?> createWithOptions(VideoCreationOptions options) async {
-    dataSource = options.dataSource;
-    return 1;
-  }
-
-  @override
-  Stream<VideoEvent> videoEventsFor(int playerId) => Stream.value(
-    VideoEvent(
-      eventType: VideoEventType.initialized,
-      size: const Size(1280, 720),
-      duration: const Duration(minutes: 2),
-    ),
-  );
-
-  @override
-  Future<void> play(int playerId) async {
-    playCalls++;
-  }
-
-  @override
-  Future<void> pause(int playerId) async {}
-  @override
-  Future<void> setLooping(int playerId, bool looping) async {}
-  @override
-  Future<void> setVolume(int playerId, double volume) async {}
-  @override
-  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
-  @override
-  Future<void> setPreventsDisplaySleepDuringVideoPlayback(
-    int playerId,
-    bool prevent,
-  ) async {}
-  @override
-  Future<Duration> getPosition(int playerId) async => Duration.zero;
-  @override
-  Future<void> dispose(int playerId) async {}
-  @override
-  Widget buildViewWithOptions(VideoViewOptions options) => const SizedBox();
 }

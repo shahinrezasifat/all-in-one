@@ -2,7 +2,8 @@ enum MediaType { video, audio }
 
 class MediaFormat {
   final String id;
-  final String label; // e.g., '1080p FHD', '720p HD', '4K 2160p', '320kbps HQ MP3'
+  final String
+  label; // e.g., '1080p FHD', '720p HD', '4K 2160p', '320kbps HQ MP3'
   final String ext; // 'mp4', 'mp3', 'm4a', 'webm'
   final MediaType type;
   final int? fileSize; // in bytes
@@ -53,8 +54,10 @@ class MediaFormat {
       if (str.contains('128')) return minutes * 1024 * 1024;
       return (minutes * 1200 * 1024).toInt(); // M4A / AAC
     } else {
-      if (str.contains('4K') || str.contains('2160')) return minutes * 85 * 1024 * 1024;
-      if (str.contains('2K') || str.contains('1440')) return minutes * 50 * 1024 * 1024;
+      if (str.contains('4K') || str.contains('2160'))
+        return minutes * 85 * 1024 * 1024;
+      if (str.contains('2K') || str.contains('1440'))
+        return minutes * 50 * 1024 * 1024;
       if (str.contains('1080')) return minutes * 32 * 1024 * 1024;
       if (str.contains('720')) return minutes * 15 * 1024 * 1024;
       if (str.contains('480')) return minutes * 7 * 1024 * 1024;
@@ -121,6 +124,7 @@ class ExtractResult {
   final String thumbnailUrl;
   final String originalUrl;
   final String platform;
+  final String channelUrl;
   final List<MediaFormat> videoFormats;
   final List<MediaFormat> audioFormats;
 
@@ -136,6 +140,7 @@ class ExtractResult {
     required this.thumbnailUrl,
     required this.originalUrl,
     required this.platform,
+    this.channelUrl = '',
     required this.videoFormats,
     required this.audioFormats,
     this.audioLanguages = const [],
@@ -145,7 +150,10 @@ class ExtractResult {
   int get durationSeconds {
     if (duration.isEmpty) return 210;
     try {
-      final parts = duration.split(':').map((p) => int.tryParse(p.trim()) ?? 0).toList();
+      final parts = duration
+          .split(':')
+          .map((p) => int.tryParse(p.trim()) ?? 0)
+          .toList();
       if (parts.length == 3) {
         return parts[0] * 3600 + parts[1] * 60 + parts[2];
       } else if (parts.length == 2) {

@@ -9,9 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snaptube_pure/models/movie_model.dart';
 import 'package:snaptube_pure/screens/movie_title_screen.dart';
+import 'package:snaptube_pure/screens/mpv_player_screen.dart';
 import 'package:snaptube_pure/services/provider_engine/provider_engine_service.dart';
-// ignore: depend_on_referenced_packages
-import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 void main() {
   testWidgets(
@@ -57,10 +56,36 @@ void main() {
       });
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-      final previous = VideoPlayerPlatform.instance;
-      final player = _SelectedSourcePlayer();
-      VideoPlayerPlatform.instance = player;
-      addTearDown(() => VideoPlayerPlatform.instance = previous);
+      // libmpv replaces the old video_player engine: record what it loads.
+      final loadedPaths = <String>[];
+      const mpvChannel = MethodChannel('snaptube_pure/mpv');
+      messenger.setMockMethodCallHandler(mpvChannel, (call) async {
+        if (call.method == 'load') {
+          loadedPaths.add((call.arguments as Map?)?['path']?.toString() ?? '');
+        }
+        if (call.method == 'getState') {
+          return {
+            'position': 0.0,
+            'duration': 0.0,
+            'playing': true,
+            'tracks': '[]',
+          };
+        }
+        return true;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(mpvChannel, null));
+      const mpvEvents = MethodChannel('snaptube_pure/mpv_events');
+      messenger.setMockMethodCallHandler(mpvEvents, (call) async => null);
+      addTearDown(() => messenger.setMockMethodCallHandler(mpvEvents, null));
+      // AndroidView (the libmpv surface) needs a platform-view reply in tests.
+      const platformViews = MethodChannel('flutter/platform_views');
+      messenger.setMockMethodCallHandler(platformViews, (call) async {
+        if (call.method == 'create') return 0;
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(platformViews, null),
+      );
 
       const source = MovieSource(
         serverName: 'Direct',
@@ -119,11 +144,8 @@ void main() {
       await tester.tap(play);
       remote.complete([format]);
       await tester.pumpAndSettle();
-      expect(player.opens, ['https://example.test/selected.webm']);
-      expect(
-        find.textContaining('2160p from Fixture 4K could not play'),
-        findsOneWidget,
-      );
+      expect(loadedPaths, contains('https://example.test/selected.webm'));
+      expect(find.byType(MpvPlayerScreen), findsOneWidget);
       expect(calls, ['resolve']);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -239,28 +261,4 @@ void main() {
       '3840x1608',
     );
   });
-}
-
-class _SelectedSourcePlayer extends VideoPlayerPlatform {
-  final opens = <String?>[];
-
-  @override
-  Future<void> init() async {}
-
-  @override
-  Future<int?> createWithOptions(VideoCreationOptions options) async {
-    opens.add(options.dataSource.uri);
-    return 1;
-  }
-
-  @override
-  Stream<VideoEvent> videoEventsFor(int playerId) => Stream.error(
-    PlatformException(code: 'test-source-unavailable', message: 'Unavailable'),
-  );
-
-  @override
-  Future<void> pause(int playerId) async {}
-
-  @override
-  Future<void> dispose(int playerId) async {}
 }

@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:video_player/video_player.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 
 import '../models/video_item.dart';
 import '../services/bookmark_service.dart';
@@ -16,14 +14,8 @@ import '../services/playback_controls.dart';
 import '../services/search_service.dart';
 import '../theme/app_palette.dart';
 import 'analyze_download_flow.dart';
+import 'mpv_view.dart';
 import 'remote_image.dart';
-
-class _PlayerCaptions implements ClosedCaptionFile {
-  _PlayerCaptions(this.captions);
-
-  @override
-  final List<Caption> captions;
-}
 
 class YouTubePopupPlayer extends StatefulWidget {
   const YouTubePopupPlayer({super.key, this.miniPlayerBottom = 112});
@@ -79,8 +71,6 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
   }
 
   bool _settingsExpanded = false;
-  bool _showCaptions = false;
-  bool _loadingCaptions = false;
   String? _upNextUrl;
   Future<List<VideoItem>>? _upNext;
 
@@ -561,8 +551,8 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
   // ---------------------------------------------------------------------------
   void _showStatsForNerds(BuildContext context, PlayerService player) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final resolution = player.engine?.value.size != null
-        ? '${player.engine!.value.size.width.toInt()} x ${player.engine!.value.size.height.toInt()}'
+    final resolution = player.mpv.width > 0 && player.mpv.height > 0
+        ? '${player.mpv.width} x ${player.mpv.height}'
         : player.selectedQuality;
 
     showDialog(
@@ -605,8 +595,8 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
             _statRow(
               'Hardware Engine',
               player.isEngineActive
-                  ? 'ExoPlayer / Native Decoder'
-                  : 'Simulation Engine',
+                  ? 'libmpv / Native Decoder'
+                  : 'Unavailable',
             ),
             _statRow('Ad Blocker', 'Active (100% VIP Protection)'),
             _statRow(
@@ -1285,10 +1275,8 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
             !player.isResolving &&
             !player.resolveError &&
             player.totalSeconds > 0;
-        final buffered = player.engine?.value.buffered;
-        final bufferedUntil = buffered?.isNotEmpty == true
-            ? buffered!.last.end.inMilliseconds / 1000
-            : null;
+        // libmpv manages its own demuxer cache; no expose-able buffered range.
+        const double? bufferedUntil = null;
         return Listener(
           onPointerDown: (event) => _touchStart(event, player),
           onPointerMove: (event) => _touchMove(event, player),
@@ -1397,7 +1385,7 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (player.isEngineActive && player.engine != null)
+                if (player.isEngineActive)
                   _buildVideoPlayerWithAspect(player)
                 else
                   SmartNetworkImage(
@@ -1697,17 +1685,8 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                     ),
                   ),
 
-                if (_showCaptions && player.engine?.closedCaptionFile != null)
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: _showControls && !player.isLocked ? 74 : 12,
-                    child: IgnorePointer(
-                      child: ClosedCaption(
-                        text: player.engine!.value.caption.text,
-                      ),
-                    ),
-                  ),
+                // Subtitles are rendered natively by libmpv from the stream's
+                // own tracks — no Flutter ClosedCaption overlay is needed.
                 if (player.isLocked)
                   Positioned(
                     right: 6 + insets.right,
@@ -1970,14 +1949,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
                                 active: player.isAudioOnly,
                               ),
                               _controlIcon(
-                                _loadingCaptions
-                                    ? 'Loading subtitles'
-                                    : 'Subtitles',
+                                'Subtitles (libmpv)',
                                 Icons.closed_caption_outlined,
                                 () => _toggleCaptions(player),
-                                active:
-                                    _showCaptions &&
-                                    player.engine?.closedCaptionFile != null,
+                                active: false,
                               ),
                               _controlIcon(
                                 _fullscreen ? 'Exit fullscreen' : 'Fullscreen',
@@ -2005,19 +1980,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
   }
 
   Widget _buildVideoPlayerWithAspect(PlayerService player) {
-    final engine = player.engine!;
-    final size = engine.value.size;
     return ClipRect(
       child: ValueListenableBuilder<double>(
         valueListenable: _zoom,
-        child: FittedBox(
-          fit: _fullscreen ? BoxFit.cover : BoxFit.contain,
-          child: SizedBox(
-            width: size.width > 0 ? size.width : 16,
-            height: size.height > 0 ? size.height : 9,
-            child: VideoPlayer(engine),
-          ),
-        ),
+        child: MpvVideoView(controller: player.mpv),
         builder: (_, scale, video) =>
             Transform.scale(scale: scale, child: video),
       ),
@@ -2042,68 +2008,15 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
     );
   }
 
-  Future<void> _toggleCaptions(PlayerService player) async {
-    if (_loadingCaptions) return;
-    final engine = player.engine;
-    if (engine?.closedCaptionFile != null) {
-      setState(() => _showCaptions = !_showCaptions);
-      return;
-    }
-    final id = yt.VideoId.parseVideoId(player.currentItem?.videoUrl ?? '');
-    if (engine == null || id == null) {
-      _captionUnavailable();
-      return;
-    }
-    final language = Localizations.localeOf(context).languageCode;
-    setState(() => _loadingCaptions = true);
-    final youtube = yt.YoutubeExplode();
-    try {
-      final client = youtube.videos.closedCaptions;
-      final manifest = await client
-          .getManifest(id)
-          .timeout(Duration(seconds: 8));
-      final trackInfo =
-          manifest.getByLanguage(language, autoGenerated: true).firstOrNull ??
-          manifest.getByLanguage('en', autoGenerated: true).firstOrNull ??
-          manifest.tracks.firstOrNull;
-      if (!mounted || !identical(player.engine, engine)) return;
-      if (trackInfo == null) {
-        _captionUnavailable();
-        return;
-      }
-      final track = await client
-          .get(trackInfo)
-          .timeout(Duration(seconds: 8));
-      if (!mounted || !identical(player.engine, engine)) return;
-      if (track.captions.isEmpty) {
-        _captionUnavailable();
-        return;
-      }
-      final captions = [
-        for (final (index, caption) in track.captions.indexed)
-          Caption(
-            number: index + 1,
-            start: caption.offset,
-            end: caption.end,
-            text: caption.text,
-          ),
-      ];
-      await engine.setClosedCaptionFile(
-        Future.value(_PlayerCaptions(captions)),
-      );
-      if (mounted && identical(player.engine, engine))
-        setState(() => _showCaptions = true);
-    } catch (_) {
-      if (mounted && identical(player.engine, engine)) _captionUnavailable();
-    } finally {
-      youtube.close();
-      if (mounted) setState(() => _loadingCaptions = false);
-    }
-  }
-
-  void _captionUnavailable() {
+  void _toggleCaptions(PlayerService player) {
+    // libmpv renders embedded/subtitle tracks natively — there is no separate
+    // Flutter caption overlay to toggle any more.
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Subtitles unavailable for this video')),
+      const SnackBar(
+        content: Text(
+          'Subtitles are handled by libmpv from the stream’s own tracks.',
+        ),
+      ),
     );
   }
 

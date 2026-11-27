@@ -208,14 +208,9 @@ class MediaMuxService {
 
   /// Converts any downloaded video into a real MP4 file.
   ///
-  /// Only ever a LOSSLESS remux (stream copy) — re-encoding would change the
-  /// file size away from what the source published and cost phone CPU/battery,
-  /// so the converted file carries the same bytes the user downloaded. The
-  /// bundled FFmpeg-Kit answers on Android (`-strict -2` lets VP9/AV1/Opus
-  /// legally live inside an MP4); desktop uses an installed ffmpeg binary.
-  /// Returns the produced .mp4 path, or null when the tracks cannot live in
-  /// an MP4 container on this device — the caller then keeps the original
-  /// file and says so honestly.
+  /// First remuxes without quality loss. If the source codecs cannot be
+  /// stored in MP4, transcodes to broadly supported MPEG-4 video/AAC audio.
+  /// Returns null only when FFmpeg is unavailable or both MP4 paths fail.
   Future<String?> convertToMp4(
     String inputPath, {
     ConvertProgress? onProgress,
@@ -244,28 +239,59 @@ class MediaMuxService {
       outPath,
     ];
 
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      final ok = await _runFfmpegKit(
-        remuxArgs,
-        durationMsHint: durationMs,
-        onProgress: onProgress,
-      );
-      if (ok && _isNonEmptyFile(outPath)) {
-        onProgress?.call(1.0);
-        return outPath;
-      }
-      _deleteIfExists(outPath);
+    final binary = Platform.isAndroid || Platform.isIOS || Platform.isMacOS
+        ? null
+        : await _ffmpegBinary();
+    if (!(Platform.isAndroid || Platform.isIOS || Platform.isMacOS) &&
+        binary == null) {
       return null;
     }
 
-    final binary = await _ffmpegBinary();
-    if (binary == null) return null;
-    final ok = await _runFfmpegProcess(
-      binary,
-      remuxArgs,
-      onProgress: onProgress,
-    );
-    if (ok && _isNonEmptyFile(outPath)) {
+    Future<bool> run(List<String> args) async {
+      if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+        return _runFfmpegKit(
+          args,
+          durationMsHint: durationMs,
+          onProgress: onProgress,
+        );
+      }
+      return _runFfmpegProcess(binary!, args, onProgress: onProgress);
+    }
+
+    if (await run(remuxArgs) && _isNonEmptyFile(outPath)) {
+      onProgress?.call(1.0);
+      return outPath;
+    }
+    _deleteIfExists(outPath);
+
+    // Some valid source codecs (for example VP9/AV1 variants) have no MP4
+    // mux path in a platform's FFmpeg build. Encode those into a compatible
+    // MP4 container so normal downloads consistently retain an .mp4 result.
+    final encodeArgs = <String>[
+      '-y',
+      '-v',
+      'error',
+      '-i',
+      inputPath,
+      '-map',
+      '0:v:0?',
+      '-map',
+      '0:a:0?',
+      '-c:v',
+      'mpeg4',
+      '-q:v',
+      '3',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '192k',
+      '-movflags',
+      '+faststart',
+      '-f',
+      'mp4',
+      outPath,
+    ];
+    if (await run(encodeArgs) && _isNonEmptyFile(outPath)) {
       onProgress?.call(1.0);
       return outPath;
     }

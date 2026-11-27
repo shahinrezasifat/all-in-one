@@ -83,28 +83,29 @@ Future<void> analyzeAndPickFormat(
     // Both resolution paths run in parallel
     final jobs = <Future<(int, ExtractResult?)>>[];
     if (!directMedia) {
+      jobs.add(guarded(() => resolveNativeFormats(url)).then((v) => (0, v)));
       jobs.add(
-        guarded(() => resolveNativeFormats(url)).then((v) => (0, v)),
-      );
-      jobs.add(
-        guarded(() => ExtractorService.instance.extract(url)).then((v) => (1, v)),
+        guarded(() => ExtractorService.instance.extract(url))
+            .then((v) => (1, v)),
       );
     } else {
-      jobs.add(
-        guarded(() => resolveNativeFormats(url)).then((v) => (0, v)),
-      );
+      jobs.add(guarded(() => resolveNativeFormats(url)).then((v) => (0, v)));
     }
     final deadline = DateTime.now().add(const Duration(seconds: 10));
     var pending = List<int>.generate(jobs.length, (i) => i);
-    while (pending.isNotEmpty && DateTime.now().isBefore(deadline) && !cancelled) {
+    while (pending.isNotEmpty &&
+        DateTime.now().isBefore(deadline) &&
+        !cancelled) {
       final finished = await Future.any(
         pending.map((i) => jobs[i].then((value) => (i, value))),
       );
       final (index, pair) = finished;
       pending.remove(index);
       final (_, value) = pair;
-      advance(0.55 + (0.32 * (jobs.length - pending.length) / jobs.length),
-          'Fetching stream resolutions');
+      advance(
+        0.55 + (0.32 * (jobs.length - pending.length) / jobs.length),
+        'Fetching stream resolutions',
+      );
       if (usable(value)) {
         result = value;
         break;
@@ -215,9 +216,21 @@ ExtractResult _resultFromYtDlp(
     thumbnailUrl: info.thumbnailUrl ?? '',
     originalUrl: url,
     platform: ExtractorService.instance.detectPlatform(url),
+    channelUrl: _channelUrlFromYtDlp(info.raw),
     videoFormats: videoFormats,
     audioFormats: audioFormats,
   );
+}
+
+String _channelUrlFromYtDlp(Map<String, dynamic>? raw) {
+  if (raw == null) return '';
+  for (final key in ['channel_url', 'uploader_url']) {
+    final value = raw[key]?.toString().trim() ?? '';
+    if (value.startsWith('https://') || value.startsWith('http://')) {
+      return value;
+    }
+  }
+  return '';
 }
 
 String _durationLabel(double? seconds) {
@@ -253,7 +266,10 @@ void _showRetry(
               message,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: AppPalette.current.textPrimary, fontSize: 12.5),
+              style: TextStyle(
+                color: AppPalette.current.textPrimary,
+                fontSize: 12.5,
+              ),
             ),
           ),
         ],
@@ -358,7 +374,9 @@ class AnalyzingOverlay extends StatelessWidget {
                                         color: accent.withValues(alpha: 0.12),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: accent.withValues(alpha: 0.25),
+                                            color: accent.withValues(
+                                              alpha: 0.25,
+                                            ),
                                             blurRadius: 18,
                                             spreadRadius: 2,
                                           ),
@@ -374,15 +392,21 @@ class AnalyzingOverlay extends StatelessWidget {
                                         strokeWidth: 5.5,
                                         strokeCap: StrokeCap.round,
                                         backgroundColor: isDark
-                                            ? Colors.white.withValues(alpha: 0.08)
-                                            : Colors.black.withValues(alpha: 0.06),
+                                            ? Colors.white.withValues(
+                                                alpha: 0.08,
+                                              )
+                                            : Colors.black.withValues(
+                                                alpha: 0.06,
+                                              ),
                                         color: accent,
                                       ),
                                     ),
                                     Text(
                                       '$pctInt%',
                                       style: TextStyle(
-                                        color: isDark ? Colors.white : AppColors.primary,
+                                        color: isDark
+                                            ? Colors.white
+                                            : AppColors.primary,
                                         fontSize: 18,
                                         fontWeight: FontWeight.w900,
                                         letterSpacing: -0.5,
@@ -427,7 +451,8 @@ class AnalyzingOverlay extends StatelessWidget {
 
                   // Animated Stage Subtitle
                   ValueListenableBuilder<String>(
-                    valueListenable: stage ?? ValueNotifier<String>('Starting…'),
+                    valueListenable:
+                        stage ?? ValueNotifier<String>('Starting…'),
                     builder: (context, label, _) => AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
                       transitionBuilder: (child, anim) => FadeTransition(
@@ -437,7 +462,9 @@ class AnalyzingOverlay extends StatelessWidget {
                       child: Container(
                         key: ValueKey<String>(label),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 5),
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(14),
@@ -494,7 +521,9 @@ class AnalyzingOverlay extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 22, vertical: 9),
+                            horizontal: 22,
+                            vertical: 9,
+                          ),
                           decoration: BoxDecoration(
                             color: isDark
                                 ? Colors.white.withValues(alpha: 0.08)

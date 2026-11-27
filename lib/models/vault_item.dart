@@ -27,6 +27,11 @@ class VaultItem {
     this.downloadFolderIds = const [],
   });
 
+  String get thumbnailUrl {
+    final value = downloadRecord?['thumbnailUrl'];
+    return value is String ? value.trim() : '';
+  }
+
   VaultItem copyWith({String? vaultPath}) => VaultItem(
     id: id,
     title: title,
