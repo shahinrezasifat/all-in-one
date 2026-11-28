@@ -23,6 +23,7 @@ import java.io.File
  * changes are streamed back over an EventChannel.
  */
 object MpvBridge {
+    private var appResources: android.content.res.Resources? = null
     private const val METHOD_CHANNEL = "snaptube_pure/mpv"
     private const val EVENT_CHANNEL = "snaptube_pure/mpv_events"
     const val VIEW_TYPE = "snaptube_pure/mpv_view"
@@ -66,6 +67,7 @@ object MpvBridge {
     fun register(flutterEngine: FlutterEngine, context: Context) {
         if (registered) return
         registered = true
+        appResources = context.applicationContext.resources
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         MethodChannel(messenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
             try {
@@ -91,6 +93,17 @@ object MpvBridge {
                 override fun create(context: Context, viewId: Int, args: Any?): PlatformView =
                     MpvPlatformView(context, viewId, args)
             },
+        )
+    }
+
+    private fun applyScreenAspect() {
+        val res = appResources ?: return
+        val w = res.displayMetrics.widthPixels
+        val h = res.displayMetrics.heightPixels
+        if (h <= 0 || w <= 0) return
+        MPVLib.setOptionString(
+            "video-aspect-override",
+            String.format(java.util.Locale.US, "%.4f", w.toDouble() / h),
         )
     }
 
@@ -149,6 +162,11 @@ object MpvBridge {
                         MPVLib.setOptionString(option, color)
                     }
                 }
+            // Default to a screen-filling aspect so no letterbox is visible.
+            val fill = params?.get("fill") as? Boolean == true
+            if (fill) {
+                applyScreenAspect()
+            }
             activeView = view
             if (!observerAdded) {
                 MPVLib.addObserver(observer)
@@ -294,6 +312,18 @@ object MpvBridge {
                     return
                 }
                 MPVLib.setOptionString(name, value)
+                result.success(true)
+            }
+
+            "setZoom" -> {
+                // Fill the surface edge-to-edge (no letterbox), then apply the
+                // user's pinch/slider zoom on top of that baseline.
+                applyScreenAspect()
+                val zoom = call.argument<Number>("zoom")?.toDouble() ?: 1.0
+                MPVLib.setPropertyDouble(
+                    "video-zoom",
+                    Math.log(zoom.coerceIn(1.0, 3.0)) / Math.log(2.0),
+                )
                 result.success(true)
             }
 

@@ -1385,7 +1385,11 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (player.isEngineActive)
+                // The engine flag alone is not enough: the native mpv surface
+                // can still be black for a moment after a load or when the
+                // platform view was recreated. Keep the poster visible until
+                // libmpv reports real playback state (non-zero duration).
+                if (player.isEngineActive && player.totalSeconds > 0)
                   _buildVideoPlayerWithAspect(player)
                 else
                   SmartNetworkImage(
@@ -1981,11 +1985,10 @@ class _YouTubePopupPlayerState extends State<YouTubePopupPlayer> {
 
   Widget _buildVideoPlayerWithAspect(PlayerService player) {
     return ClipRect(
-      child: ValueListenableBuilder<double>(
-        valueListenable: _zoom,
+      child: Transform.scale(
+        scale: _zoom.value,
+        alignment: Alignment.center,
         child: MpvVideoView(controller: player.mpv),
-        builder: (_, scale, video) =>
-            Transform.scale(scale: scale, child: video),
       ),
     );
   }

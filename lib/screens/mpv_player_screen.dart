@@ -148,6 +148,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
     _totalSeconds = _parseDurationSeconds(widget.movie.duration);
 
     _mpv.addListener(_onMpvChanged);
+    // Keep the display awake for the whole time the cinema player is on
+    // screen — including buffering and seek pauses. Releasing it in dispose
+    // covers back/exit and mini-player teardown.
+    unawaited(_playbackControls.keepScreenOn(true));
 
     if (!widget.trailerOnly) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1170,10 +1174,15 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                       final next = (_zoomStart * details.scale).clamp(1.0, 3.0);
                       if ((next - _zoom).abs() > 0.001) {
                         setState(() => _zoom = next);
+                        unawaited(_mpv.setZoom(_zoom));
                       }
                     },
+              // Zoom is applied natively by mpv (video-zoom) so the video can
+              // fill the surface without Flutter letterboxing it. Scaling the
+              // whole Flutter layer here as well would double-zoom and crop
+              // the HUD controls.
               child: Transform.scale(
-                scale: _mini ? 1.0 : _zoom,
+                scale: 1.0,
                 alignment: Alignment.center,
                 child: Stack(
                   fit: StackFit.expand,
@@ -1647,7 +1656,7 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                   TextButton.icon(
                     onPressed: () {
                       setState(() => _zoom = 1.0);
-                      unawaited(_mpv.setOption('video-aspect-override', 'no'));
+                      unawaited(_mpv.setZoom(1.0));
                     },
                     icon: Icon(
                       Icons.crop_free_rounded,
@@ -2152,7 +2161,10 @@ class _MpvPlayerScreenState extends State<MpvPlayerScreen>
                   value: _zoom,
                   min: 1.0,
                   max: 3.0,
-                  onChanged: (v) => setState(() => _zoom = v),
+                  onChanged: (v) {
+                    setState(() => _zoom = v);
+                    unawaited(_mpv.setZoom(v));
+                  },
                 ),
               ),
             ],

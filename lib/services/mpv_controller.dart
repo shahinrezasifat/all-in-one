@@ -348,6 +348,11 @@ class MpvController extends ChangeNotifier {
   Future<void> setOption(String name, String value) =>
       _call('setOption', {'name': name, 'value': value});
 
+  /// Fills the player surface edge-to-edge (no letterbox) and applies [zoom]
+  /// (1.0 = fill, up to 3.0) on top of that baseline.
+  Future<void> setZoom(double zoom) =>
+      _call('setZoom', {'zoom': zoom.clamp(1.0, 3.0)});
+
   Future<void> screenshot() => _call('screenshot');
 
   /// Cancels the throttled rebuild timer. Useful when the owning service is
